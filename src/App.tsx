@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router";
+import { Routes, Route, Navigate } from "react-router";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import Login from "./pages/Login";
 import AdminLayout from "./layouts/AdminLayout";
@@ -17,10 +17,30 @@ import ParentHome from "./pages/ParentHome";
 import RoleGate from "./routes/RoleGate";
 import ChangePassword from "./pages/ChangePassword";
 import Attendance from "./pages/admin/Attendance";
+import { useAuth } from "./context/AuthContext";
+
+const RootHandler = () => {
+  const { user, token } = useAuth();
+
+  if (!token || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  const roleToRoute: Record<string, string> = {
+    super_admin: "/admin/dashboard",
+    branch_admin: "/admin/dashboard",
+    class_teacher: "/admin/broadsheet",
+    subject_teacher: "/subject-teacher",
+    parent: "/parent",
+  };
+
+  return <Navigate to={roleToRoute[user.role] || "/login"} replace />;
+};
 
 function App() {
   return (
     <Routes>
+      <Route path="/" element={<RootHandler />} />
       <Route path="/login" element={<Login />} />
 
       <Route
@@ -33,6 +53,7 @@ function App() {
           </ProtectedRoute>
         }
       >
+        <Route index element={<Navigate to="dashboard" replace />} />
         <Route
           path="dashboard"
           element={
@@ -120,13 +141,15 @@ function App() {
       />
 
       <Route
-  path="/change-password"
-  element={
-    <ProtectedRoute allowedRoles={["super_admin", "branch_admin", "class_teacher", "subject_teacher", "parent"]}>
-      <ChangePassword />
-    </ProtectedRoute>
-  }
-/>
+        path="/change-password"
+        element={
+          <ProtectedRoute allowedRoles={["super_admin", "branch_admin", "class_teacher", "subject_teacher", "parent"]}>
+            <ChangePassword />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

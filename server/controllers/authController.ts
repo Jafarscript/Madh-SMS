@@ -4,10 +4,8 @@ import jwt from "jsonwebtoken";
 import User, { UserRole } from "../models/User";
 import { AuthRequest } from "../middleware/auth";
 
-const JWT_SECRET = process.env.JWT_SECRET || "school-sms-jwt-secret-key-2026";
-
 const generateToken = (id: string, role: string, branch?: string) => {
-  return jwt.sign({ id, role, branch }, JWT_SECRET, {
+  return jwt.sign({ id, role, branch }, process.env.JWT_SECRET as string, {
     expiresIn: "7d",
   });
 };

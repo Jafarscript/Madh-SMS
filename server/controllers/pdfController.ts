@@ -7,6 +7,11 @@ import {
   generateBulkReportCardPdf,
 } from "../utils/generateReportCardPdf";
 
+// Content-Disposition headers must stay ASCII-safe — a student's name may
+// contain Arabic script or other non-ASCII characters, which would crash
+// res.setHeader outright. RFC 5987's filename* syntax lets us send a
+// UTF-8 filename safely via percent-encoding, with a plain ASCII
+// fallback for older clients that don't support it.
 const setPdfDownloadHeaders = (res: Response, rawName: string) => {
   const safeAsciiFallback = "report_card.pdf";
   const encodedName = encodeURIComponent(`${rawName}_report_card.pdf`);
@@ -42,9 +47,7 @@ export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Respons
 // GET /api/report-card/pdf/bulk?class=<classId>&term=<termId>&gradingScale=<scaleId>
 export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
-    const classId = req.query.class as string;
-    const term = req.query.term as string;
-    const gradingScale = req.query.gradingScale as string;
+    const { class: classId, term, gradingScale } = req.query;
 
     if (!classId || !term) {
       return res.status(400).json({ message: "class and term are required" });
@@ -59,23 +62,20 @@ export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response)
     for (const student of students) {
       const data = await buildReportCardData(
         student._id.toString(),
-        term,
-        gradingScale
+        term as string,
+        gradingScale as string
       );
       if (data) reportDataList.push(data);
     }
 
     if (reportDataList.length === 0) {
-      return res.status(404).json({ message: "No report card data could be generated" });
+      return res.status(404).json({ message: "No report card data found for this class" });
     }
 
     const pdfBuffer = await generateBulkReportCardPdf(reportDataList);
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="bulk_report_cards.pdf"'
-    );
+    res.setHeader("Content-Disposition", `attachment; filename="class_report_cards.pdf"`);
     res.send(pdfBuffer);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });

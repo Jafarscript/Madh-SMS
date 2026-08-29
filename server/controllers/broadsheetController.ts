@@ -9,8 +9,7 @@ import { foldCascade } from "../utils/cascadeAverage";
 
 export const getBroadsheet = async (req: AuthRequest, res: Response) => {
   try {
-    const classId = req.query.class as string;
-    const term = req.query.term as string;
+    const { class: classId, term } = req.query;
 
     if (!classId || !term) {
       return res.status(400).json({ message: "class and term are required" });
@@ -27,8 +26,8 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
     const subjectIds = subjects.map((s) => s._id);
 
     const scores = await Score.find({
-      student: { $in: studentIds },
-      subject: { $in: subjectIds },
+      student: { $in: studentIds } as any,
+      subject: { $in: subjectIds } as any,
       term: term as any,
     });
 
@@ -79,6 +78,11 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// Computes each student's overall cascading average (same formula as
+// buildReportCardData: per-subject cascade through terms up to the given
+// term, then averaged across subjects) and ranks the whole class by it.
+// This MUST match buildReportCardData's math exactly, since a student's
+// report card position comes directly from this function's output.
 export const getClassCumulativePositions = async (
   classId: string,
   termId: string
@@ -92,9 +96,9 @@ export const getClassCumulativePositions = async (
   }).sort({ termNumber: 1 });
   const priorTermIds = priorTerms.map((t) => t._id);
 
-  const students = await Student.find({ class: classId as any });
-  const subjects = await Subject.find({ class: classId as any });
-  const totalSubjectsCount = subjects.length;
+  const students = await Student.find({ class: classId });
+  const subjects = await Subject.find({ class: classId });
+  const totalSubjectsCount = subjects.length;   // add this
 
   const scores = await Score.find({
     student: { $in: students.map((s) => s._id) },
@@ -102,6 +106,9 @@ export const getClassCumulativePositions = async (
     term: { $in: priorTermIds },
   });
 
+  // group by student -> subject -> termId, so we can cascade each
+  // subject individually (same as buildReportCardData), not flatten
+  // everything into one undifferentiated list of raw totals
   const byStudentSubject = new Map<string, Map<string, Map<string, number>>>();
   scores.forEach((sc) => {
     const studentKey = sc.student.toString();
@@ -116,6 +123,9 @@ export const getClassCumulativePositions = async (
     const studentKey = s._id.toString();
     const subjMap = byStudentSubject.get(studentKey) || new Map();
 
+    // cascade each subject the same way the report card does, then
+    // average across the FULL subject count — a subject with no score
+    // yet contributes 0, matching buildReportCardData's overallPercentage
     let total = 0;
     subjects.forEach((subject) => {
       const subjectKey = subject._id.toString();

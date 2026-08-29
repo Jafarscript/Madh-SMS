@@ -21,16 +21,22 @@ export const submitScore = async (req: AuthRequest, res: Response) => {
     }
 
     // Enforce: a subject_teacher can only submit scores for subjects
-    // explicitly assigned to them. Admin roles bypass this check.
+    // explicitly assigned to them (if assigned). Admin roles bypass this check.
     if (req.user?.role === "subject_teacher") {
       const teacher = await User.findById(req.user.id);
       const allowedSubjects = (teacher?.subjects || []).map((s) => s.toString());
-      if (!allowedSubjects.includes(subject)) {
+      if (allowedSubjects.length > 0 && !allowedSubjects.includes(subject)) {
         return res.status(403).json({ message: "You are not assigned to this subject" });
       }
       const allowedClasses = (teacher?.classes || []).map((c) => c.toString());
-      if (!allowedClasses.includes(studentDoc.class.toString())) {
+      if (allowedClasses.length > 0 && !allowedClasses.includes(studentDoc.class.toString())) {
         return res.status(403).json({ message: "You are not assigned to this student's class" });
+      }
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const allowedClasses = (teacher?.classes || []).map((c) => c.toString());
+      if (allowedClasses.length > 0 && !allowedClasses.includes(studentDoc.class.toString())) {
+        return res.status(403).json({ message: "You are not assigned to this class" });
       }
     }
 
@@ -65,7 +71,7 @@ export const getScores = async (req: AuthRequest, res: Response) => {
     if (req.user?.role === "subject_teacher") {
       const teacher = await User.findById(req.user.id);
       const allowedSubjects = (teacher?.subjects || []).map((s) => s.toString());
-      if (filter.subject && !allowedSubjects.includes(filter.subject)) {
+      if (allowedSubjects.length > 0 && filter.subject && !allowedSubjects.includes(filter.subject)) {
         return res.status(403).json({ message: "Not authorized for this subject" });
       }
     }

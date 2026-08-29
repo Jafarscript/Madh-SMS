@@ -1,0 +1,246 @@
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useEffect, useState } from "react";
+import api from "../../api/axios";
+import PageHeader from "../../components/PageHeader";
+import { useAuth } from "../../context/AuthContext";
+
+interface Term {
+  _id: string;
+  session: string;
+  termNumber: number;
+  isActive: boolean;
+}
+interface Branch {
+  _id: string;
+  name: string;
+}
+interface SubjectCompletion {
+  subject: string;
+  nameEnglish: string;
+  entered: number;
+  expected: number;
+  complete: boolean;
+}
+interface ClassSummary {
+  class: string;
+  className: string;
+  branch: string;
+  studentCount: number;
+  subjectCount: number;
+  expectedScoreCount: number;
+  actualScoreCount: number;
+  percentComplete: number;
+  subjectCompletion: SubjectCompletion[];
+}
+interface TopStudent {
+  student: string;
+  name: string;
+  total: number;
+}
+interface DashboardData {
+  classSummaries: ClassSummary[];
+  topStudents: TopStudent[];
+  overallSchoolAverage: number;
+  totalClasses: number;
+  totalStudents: number;
+}
+
+const Dashboard = () => {
+  const { user } = useAuth();
+  const [terms, setTerms] = useState<Term[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedTerm, setSelectedTerm] = useState("");
+  const [selectedBranch, setSelectedBranch] = useState("");
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [expandedClass, setExpandedClass] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    api.get("/terms").then((res) => {
+      setTerms(res.data);
+      const active = res.data.find((t: Term) => t.isActive);
+      if (active) setSelectedTerm(active._id);
+    });
+    api.get("/branches").then((res) => setBranches(res.data));
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTerm) return;
+    setLoading(true);
+    const query = selectedBranch
+      ? `?term=${selectedTerm}&branch=${selectedBranch}`
+      : `?term=${selectedTerm}`;
+    api
+      .get(`/dashboard${query}`)
+      .then((res) => setData(res.data))
+      .finally(() => setLoading(false));
+  }, [selectedTerm, selectedBranch]);
+
+  return (
+    <div className="p-8">
+      <PageHeader
+        title="Dashboard"
+        subtitle="Score entry progress, top students, and school performance"
+      />
+
+      <div className="flex gap-4 mb-8 max-w-xl">
+        <div className="flex-1">
+          <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+          <select
+            value={selectedTerm}
+            onChange={(e) => setSelectedTerm(e.target.value)}
+            className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+          >
+            <option value="">Select a term</option>
+            {terms.map((t) => (
+              <option key={t._id} value={t._id}>
+                {t.session} — Term {t.termNumber}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* super_admin can drill into a branch; branch_admin is implicitly
+            scoped server-side already, so this filter is mainly for super_admin */}
+        {user?.role === "super_admin" && (
+          <div className="flex-1">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+            <select
+              value={selectedBranch}
+              onChange={(e) => setSelectedBranch(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+            >
+              <option value="">All branches</option>
+              {branches.map((b) => (
+                <option key={b._id} value={b._id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+
+      {loading && <p className="text-sm text-gray-400">Loading...</p>}
+
+      {data && (
+        <>
+          {/* summary stat cards */}
+          <div className="grid grid-cols-3 gap-4 mb-8 max-w-3xl">
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <p className="text-xs text-gray-500 mb-1">Total Classes</p>
+              <p className="text-2xl font-semibold" style={{ color: "#0B3D2E" }}>
+                {data.totalClasses}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <p className="text-xs text-gray-500 mb-1">Total Students</p>
+              <p className="text-2xl font-semibold" style={{ color: "#0B3D2E" }}>
+                {data.totalStudents}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <p className="text-xs text-gray-500 mb-1">School Average</p>
+              <p className="text-2xl font-semibold" style={{ color: "#0B3D2E" }}>
+                {data.overallSchoolAverage}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6 max-w-6xl">
+            {/* score entry completion, per class, expandable to see per-subject */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h2 className="font-medium text-gray-800 mb-4">Score Entry Progress</h2>
+              <div className="flex flex-col gap-3">
+                {data.classSummaries.map((cs) => (
+                  <div key={cs.class} className="border rounded-lg p-3">
+                    <button
+                      onClick={() =>
+                        setExpandedClass(expandedClass === cs.class ? null : cs.class)
+                      }
+                      className="w-full flex justify-between items-center text-left"
+                    >
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{cs.className}</p>
+                        <p className="text-xs text-gray-400">{cs.branch}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${cs.percentComplete}%`,
+                              backgroundColor:
+                                cs.percentComplete === 100 ? "#0B3D2E" : "#C9A227",
+                            }}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-500 w-10 text-right">
+                          {cs.percentComplete}%
+                        </span>
+                      </div>
+                    </button>
+
+                    {expandedClass === cs.class && (
+                      <div className="mt-3 pt-3 border-t flex flex-col gap-1.5">
+                        {cs.subjectCompletion.map((sc) => (
+                          <div
+                            key={sc.subject}
+                            className="flex justify-between items-center text-xs"
+                          >
+                            <span className="text-gray-600">{sc.nameEnglish}</span>
+                            <span
+                              className={sc.complete ? "text-green-700" : "text-red-600"}
+                            >
+                              {sc.entered}/{sc.expected}{" "}
+                              {sc.complete ? "✓" : "— pending"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {data.classSummaries.length === 0 && (
+                  <p className="text-sm text-gray-400">No classes found.</p>
+                )}
+              </div>
+            </div>
+
+            {/* top students snapshot */}
+            <div className="bg-white rounded-xl shadow-sm p-5">
+              <h2 className="font-medium text-gray-800 mb-4">Top Students This Term</h2>
+              <div className="flex flex-col gap-2">
+                {data.topStudents.map((s, i) => (
+                  <div
+                    key={s.student}
+                    className="flex justify-between items-center py-2 border-b last:border-0"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
+                        style={{
+                          backgroundColor: i < 3 ? "#C9A227" : "#F4F1EA",
+                          color: i < 3 ? "#0B3D2E" : "#6B7280",
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      <span className="text-sm text-gray-800">{s.name}</span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-600">{s.total}</span>
+                  </div>
+                ))}
+                {data.topStudents.length === 0 && (
+                  <p className="text-sm text-gray-400">No scores entered yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default Dashboard;

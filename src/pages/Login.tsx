@@ -13,11 +13,11 @@ const roleToRoute: Record<string, string> = {
 };
 
 const demoAccounts = [
-  { label: "Super Admin", email: "admin@test.com", role: "Super Admin", color: "bg-emerald-800 text-white" },
-  { label: "Class Teacher", email: "lihammedjafar@gmail.com", role: "Class Teacher", color: "bg-amber-800 text-white" },
-  { label: "Branch Admin", email: "ifo@test.com", role: "Branch Admin", color: "bg-teal-800 text-white" },
-  { label: "Subject Teacher", email: "anas@test.com", role: "Subject Teacher", color: "bg-blue-800 text-white" },
-  { label: "Demo Admin", email: "admin@school.com", role: "Super Admin", color: "bg-slate-700 text-white" },
+  { label: "Super Admin", email: "admin@test.com", role: "Super Admin" },
+  { label: "Class Teacher", email: "lihammedjafar@gmail.com", role: "Class Teacher" },
+  { label: "Branch Admin", email: "ifo@test.com", role: "Branch Admin" },
+  { label: "Subject Teacher", email: "anas@test.com", role: "Subject Teacher" },
+  { label: "Demo Admin", email: "admin@school.com", role: "Super Admin" },
 ];
 
 const Login = () => {
@@ -29,29 +29,24 @@ const Login = () => {
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    try {
-      const res = await api.post("/auth/login", { email, password });
-      login(res.data.user, res.data.token);
+  e.preventDefault();
+  setError("");
+  setLoading(true);
+  try {
+    const res = await api.post("/auth/login", { email, password });
+    login(res.data.user, res.data.token);
 
-      if (res.data.user.mustChangePassword) {
-        navigate("/change-password");
-      } else {
-        navigate(roleToRoute[res.data.user.role] || "/");
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Login failed");
-    } finally {
-      setLoading(false);
+    if (res.data.user.mustChangePassword) {
+      navigate("/change-password");
+    } else {
+      navigate(roleToRoute[res.data.user.role] || "/");
     }
-  };
-
-  const handleQuickLogin = (accEmail: string) => {
-    setEmail(accEmail);
-    setPassword("password123");
-  };
+  } catch (err: any) {
+    setError(err.response?.data?.message || "Login failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex" style={{ fontFamily: "Inter, sans-serif" }}>
@@ -88,24 +83,19 @@ const Login = () => {
             معهد التعليم العربي الإسلامي
           </p>
           <p
-            className="mt-2 text-sm tracking-widest uppercase font-medium"
+            className="mt-2 text-sm tracking-widest uppercase"
             style={{ color: "#C9A227" }}
           >
             Institute of Arabic and Islamic Studies
           </p>
         </div>
 
-        <div className="relative z-10 space-y-4">
-          <div className="h-px w-16" style={{ backgroundColor: "#C9A227" }} />
-          <p className="text-sm leading-relaxed" style={{ color: "#D8CFAE" }}>
-            School Management System — Academic records, broadsheets, grading
-            scales, and bilingual term report cards in one unified portal.
+        <div className="relative z-10">
+          <div className="h-px w-16 mb-6" style={{ backgroundColor: "#C9A227" }} />
+          <p className="text-sm" style={{ color: "#D8CFAE" }}>
+            School Management System — Report cards, broadsheets,
+            and results, in one place.
           </p>
-          <div className="pt-2 text-xs text-amber-200/80">
-            ✓ Role-based access control (Admin, Teachers, Parents)<br />
-            ✓ Cumulative score cascading & automatic ranking<br />
-            ✓ Arabic/English bilingual report cards & PDF generation
-          </div>
         </div>
       </div>
 
@@ -114,8 +104,8 @@ const Login = () => {
         className="flex-1 flex items-center justify-center p-6"
         style={{ backgroundColor: "#FAF6EE" }}
       >
-        <div className="w-full max-w-md">
-          {/* arch-topped card */}
+        <div className="w-full max-w-sm">
+          {/* arch-topped card, subtle nod to mihrab shape without overdoing it */}
           <div
             className="relative bg-white shadow-xl"
             style={{
@@ -123,41 +113,19 @@ const Login = () => {
               borderTopRightRadius: "9999px 60px",
               borderBottomLeftRadius: "12px",
               borderBottomRightRadius: "12px",
-              paddingTop: "3rem",
+              paddingTop: "3.5rem",
             }}
           >
             <div className="px-8 pb-8">
               <h1
-                className="text-2xl text-center mb-1 font-serif"
+                className="text-2xl text-center mb-1"
                 style={{ fontFamily: "Playfair Display, serif", color: "#0B3D2E" }}
               >
                 Welcome back
               </h1>
-              <p className="text-center text-sm text-gray-500 mb-6">
-                Sign in to your SMS account
+              <p className="text-center text-sm text-gray-500 mb-8">
+                Sign in to your account
               </p>
-
-              {/* Demo Account Quick Switcher */}
-              <div className="mb-5 p-3 rounded-lg border border-amber-200 bg-amber-50/70 text-xs">
-                <p className="font-semibold text-gray-800 mb-2 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span>
-                  Quick Demo Login (Password: <span className="font-mono text-emerald-800">password123</span>):
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {demoAccounts.map((acc) => (
-                    <button
-                      key={acc.email}
-                      type="button"
-                      onClick={() => handleQuickLogin(acc.email)}
-                      className={`px-2 py-1 rounded text-[11px] font-medium transition cursor-pointer hover:opacity-90 ${
-                        email === acc.email ? "ring-2 ring-emerald-600 font-bold" : "opacity-80"
-                      } ${acc.color}`}
-                    >
-                      {acc.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
 
               {error && (
                 <div
@@ -196,17 +164,38 @@ const Login = () => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-2.5 rounded-lg text-white font-medium transition disabled:opacity-50 cursor-pointer"
+                  className="w-full py-2.5 rounded-lg text-white font-medium transition disabled:opacity-50"
                   style={{ backgroundColor: "#0B3D2E" }}
                 >
                   {loading ? "Signing in..." : "Sign In"}
                 </button>
               </form>
+
+              <div className="mt-6 border-t border-gray-100 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                  Quick Demo Accounts
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {demoAccounts.map((acc) => (
+                    <button
+                      key={acc.email}
+                      type="button"
+                      onClick={() => {
+                        setEmail(acc.email);
+                        setPassword("password123");
+                      }}
+                      className="text-xs px-2.5 py-1 rounded bg-gray-100 hover:bg-emerald-50 hover:text-emerald-800 text-gray-700 transition"
+                    >
+                      {acc.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
           <p className="text-center text-xs text-gray-400 mt-6">
-            School Management System • Institute of Arabic & Islamic Studies
+            School Management System
           </p>
         </div>
       </div>

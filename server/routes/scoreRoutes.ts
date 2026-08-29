@@ -7,7 +7,7 @@ const router = Router();
 router.post(
   "/",
   protect,
-  authorize("super_admin", "branch_admin", "subject_teacher"),
+  authorize("super_admin", "branch_admin", "class_teacher", "subject_teacher"),
   submitScore
 );
 router.get(

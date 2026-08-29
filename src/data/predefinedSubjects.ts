@@ -1,0 +1,15 @@
+export const predefinedSubjects = [
+  { nameEnglish: "Quran Recitation", nameArabic: "التلاوة" },
+  { nameEnglish: "Tajweed", nameArabic: "التجويد" },
+  { nameEnglish: "Hadith", nameArabic: "الحديث" },
+  { nameEnglish: "Islamic Jurisprudence", nameArabic: "الفقه" },
+  { nameEnglish: "History of Prophet", nameArabic: "السيرة" },
+  { nameEnglish: "Grammar", nameArabic: "النحو" },
+  { nameEnglish: "Reading", nameArabic: "القراءة" },
+  { nameEnglish: "Conversation", nameArabic: "المحادثة" },
+  { nameEnglish: "Arabic Language", nameArabic: "العربية" },
+  { nameEnglish: "Poems", nameArabic: "المحفوظات" },
+  { nameEnglish: "Hymns", nameArabic: "الأناشيد" },
+  { nameEnglish: "Islamic History", nameArabic: "التاريخ الإسلامي" },
+  { nameEnglish: "Writing", nameArabic: "الكتابة" },
+];

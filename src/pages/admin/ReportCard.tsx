@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import ReportCardView from "../../components/ReportCardView";
-import { REPORT_CARD_COMMENTS } from "../../constants/reportCardComments";
+import RemarksCommentBankModal from "../../components/RemarksCommentBankModal";
+import { REPORT_CARD_COMMENTS, ReportCardComment } from "../../constants/reportCardComments";
 import { useAuth } from "../../context/AuthContext";
 import type { ReportCardData } from "../../types/reportCard";
+import { MessageSquareQuote, Search, Sparkles } from "lucide-react";
 
 interface ClassItem {
   _id: string;
@@ -70,6 +72,9 @@ const ReportCard = () => {
   const [savingComment, setSavingComment] = useState(false);
   const [resultStatus, setResultStatus] = useState<ResultStatus>("draft");
   const [updatingStatus, setUpdatingStatus] = useState(false);
+
+  // Comment Bank Modal State
+  const [commentBankTarget, setCommentBankTarget] = useState<"classTeacher" | "principal" | null>(null);
 
   useEffect(() => {
     api.get("/classes").then((res) => setClasses(res.data));
@@ -407,27 +412,37 @@ const ReportCard = () => {
           {/* Class Teacher's Comment */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-semibold text-gray-800">
                 Class Teacher's Comment
               </label>
-              <button
-                type="button"
-                onClick={() => setUseCustomClassTeacher((v) => !v)}
-                className="text-xs underline text-gray-500"
-              >
-                {useCustomClassTeacher
-                  ? "Choose from list instead"
-                  : "Write my own instead"}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCommentBankTarget("classTeacher")}
+                  className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200"
+                >
+                  <MessageSquareQuote className="w-3.5 h-3.5" />
+                  Browse Comment Bank
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseCustomClassTeacher((v) => !v)}
+                  className="text-xs underline text-gray-500 hover:text-gray-700"
+                >
+                  {useCustomClassTeacher
+                    ? "Choose from list"
+                    : "Write custom"}
+                </button>
+              </div>
             </div>
 
             {!useCustomClassTeacher ? (
               <select
                 value={classTeacherCommentId}
                 onChange={(e) => setClassTeacherCommentId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
               >
-                <option value="">Select a comment</option>
+                <option value="">Select a comment or use Comment Bank</option>
                 {filteredComments.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.ar} — {c.en}
@@ -439,12 +454,12 @@ const ReportCard = () => {
                 <input
                   dir="rtl"
                   style={{ fontFamily: "Amiri, serif" }}
-                  placeholder="التعليق بالعربية"
+                  placeholder="التعليق بالعربية (Arabic comment)"
                   value={classTeacherCustom.ar}
                   onChange={(e) =>
                     setClassTeacherCustom((p) => ({ ...p, ar: e.target.value }))
                   }
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
                 />
                 <input
                   placeholder="Comment in English"
@@ -452,7 +467,7 @@ const ReportCard = () => {
                   onChange={(e) =>
                     setClassTeacherCustom((p) => ({ ...p, en: e.target.value }))
                   }
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
                 />
               </div>
             )}
@@ -461,38 +476,48 @@ const ReportCard = () => {
               type="button"
               disabled={savingComment}
               onClick={() => handleSaveComment("classTeacherComment")}
-              className="mt-2 px-4 py-2 rounded-lg text-white text-sm disabled:opacity-50"
+              className="mt-3 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 shadow-xs transition"
               style={{ backgroundColor: "#0B3D2E" }}
             >
-              Save
+              {savingComment ? "Saving..." : "Save Class Teacher Remark"}
             </button>
           </div>
 
           {/* Principal's Comment — admins only */}
           {(user?.role === "super_admin" || user?.role === "branch_admin") && (
-            <div>
+            <div className="pt-4 border-t border-gray-100">
               <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-semibold text-gray-800">
                   Principal's Comment
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setUseCustomPrincipal((v) => !v)}
-                  className="text-xs underline text-gray-500"
-                >
-                  {useCustomPrincipal
-                    ? "Choose from list instead"
-                    : "Write my own instead"}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setCommentBankTarget("principal")}
+                    className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 flex items-center gap-1 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200"
+                  >
+                    <MessageSquareQuote className="w-3.5 h-3.5" />
+                    Browse Comment Bank
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseCustomPrincipal((v) => !v)}
+                    className="text-xs underline text-gray-500 hover:text-gray-700"
+                  >
+                    {useCustomPrincipal
+                      ? "Choose from list"
+                      : "Write custom"}
+                  </button>
+                </div>
               </div>
 
               {!useCustomPrincipal ? (
                 <select
                   value={principalCommentId}
                   onChange={(e) => setPrincipalCommentId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
                 >
-                  <option value="">Select a comment</option>
+                  <option value="">Select a comment or use Comment Bank</option>
                   {filteredComments.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.ar} — {c.en}
@@ -504,20 +529,20 @@ const ReportCard = () => {
                   <input
                     dir="rtl"
                     style={{ fontFamily: "Amiri, serif" }}
-                    placeholder="التعليق بالعربية"
+                    placeholder="تعليق المدير بالعربية"
                     value={principalCustom.ar}
                     onChange={(e) =>
                       setPrincipalCustom((p) => ({ ...p, ar: e.target.value }))
                     }
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
                   />
                   <input
-                    placeholder="Comment in English"
+                    placeholder="Principal's comment in English"
                     value={principalCustom.en}
                     onChange={(e) =>
                       setPrincipalCustom((p) => ({ ...p, en: e.target.value }))
                     }
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
                   />
                 </div>
               )}
@@ -526,15 +551,37 @@ const ReportCard = () => {
                 type="button"
                 disabled={savingComment}
                 onClick={() => handleSaveComment("principalComment")}
-                className="mt-2 px-4 py-2 rounded-lg text-white text-sm disabled:opacity-50"
+                className="mt-3 px-4 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50 shadow-xs transition"
                 style={{ backgroundColor: "#0B3D2E" }}
               >
-                Save
+                {savingComment ? "Saving..." : "Save Principal Remark"}
               </button>
             </div>
           )}
         </div>
       )}
+
+      {/* Remarks Comment Bank Modal */}
+      <RemarksCommentBankModal
+        isOpen={commentBankTarget !== null}
+        onClose={() => setCommentBankTarget(null)}
+        studentGender={studentGender}
+        studentName={students.find((s) => s._id === selectedStudent)?.name}
+        currentCommentId={
+          commentBankTarget === "classTeacher"
+            ? classTeacherCommentId
+            : principalCommentId
+        }
+        onSelectComment={(comment: ReportCardComment) => {
+          if (commentBankTarget === "classTeacher") {
+            setClassTeacherCommentId(comment.id);
+            setUseCustomClassTeacher(false);
+          } else if (commentBankTarget === "principal") {
+            setPrincipalCommentId(comment.id);
+            setUseCustomPrincipal(false);
+          }
+        }}
+      />
     </div>
   );
 };
