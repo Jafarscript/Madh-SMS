@@ -1,0 +1,7 @@
+{
+  "name": "School Management System",
+  "description": "Comprehensive school management system for academic tracking, broadsheets, grading, student records, and bilingual report cards.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
