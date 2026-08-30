@@ -19,6 +19,7 @@ import userRoutes from "./routes/userRoutes";
 import reportCardRemarkRoutes from "./routes/reportCardRemarkRoutes";
 import resultPublicationRoutes from "./routes/resultPublicationRoutes";
 import attendanceRoutes from "./routes/attendanceRoutes";
+import reportCardSettingRoutes from "./routes/reportCardSettingRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -26,7 +27,8 @@ connectDB();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ limit: "15mb", extended: true }));
 
 app.get("/", (_req, res) => {
   res.send("School SMS API running");
@@ -43,6 +45,7 @@ app.use("/api/scores", scoreRoutes);
 app.use("/api/broadsheet", broadsheetRoutes);
 app.use("/api/report-card", reportCardRoutes);
 app.use("/api/report-card/pdf", pdfRoutes);
+app.use("/api/report-card-settings", reportCardSettingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/parent-portal", parentPortalRoutes);
 app.use("/api/terms", termRoutes);

@@ -91,8 +91,7 @@ const Terms = () => {
         <button
           type="submit"
           disabled={loading}
-          className="self-start px-5 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: "#0B3D2E" }}
+          className="self-start px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99] transition disabled:opacity-50"
         >
           {loading ? "Adding..." : "Add Term"}
         </button>
@@ -106,7 +105,7 @@ const Terms = () => {
                 {t.session} — Term {t.termNumber}
               </p>
               {t.isActive && (
-                <span className="text-xs text-green-700 bg-green-50 px-2 py-0.5 rounded-full">
+                <span className="text-xs font-semibold text-sky-800 bg-sky-100 border border-sky-200 px-2.5 py-0.5 rounded-full">
                   Active
                 </span>
               )}
@@ -114,7 +113,7 @@ const Terms = () => {
             {!t.isActive && (
               <button
                 onClick={() => handleActivate(t._id)}
-                className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50"
+                className="text-sm font-medium px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-sky-50 hover:text-sky-700 hover:border-sky-300 transition"
               >
                 Set Active
               </button>

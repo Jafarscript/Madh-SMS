@@ -14,12 +14,16 @@ export const generateSingleReportCardPdf = async (data: ReportCardData): Promise
     const page = await browser.newPage();
     const html = buildSingleReportCardHtml(data);
     
-    // 1. Set content with an accepted lifecycle event
+    // Set content and wait for network requests and fonts to finish loading
     await page.setContent(html, { waitUntil: "load" });
-    // 2. Wait for network requests to finish if your HTML loads external fonts/images
     await page.waitForNetworkIdle();
+    await page.evaluateHandle("document.fonts.ready");
 
-    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
     return Buffer.from(pdfBuffer);
   } finally {
     await browser.close();
@@ -32,11 +36,15 @@ export const generateBulkReportCardPdf = async (dataList: ReportCardData[]): Pro
     const page = await browser.newPage();
     const html = buildBulkReportCardHtml(dataList);
     
-    // Apply the same fix here
     await page.setContent(html, { waitUntil: "load" });
     await page.waitForNetworkIdle();
+    await page.evaluateHandle("document.fonts.ready");
 
-    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+    const pdfBuffer = await page.pdf({
+      format: "A4",
+      printBackground: true,
+      preferCSSPageSize: true,
+    });
     return Buffer.from(pdfBuffer);
   } finally {
     await browser.close();

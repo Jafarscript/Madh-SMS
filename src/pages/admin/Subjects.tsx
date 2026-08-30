@@ -169,8 +169,7 @@ const Subjects = () => {
             <button
               type="submit"
               disabled={loading}
-              className="self-start px-5 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-              style={{ backgroundColor: "#0B3D2E" }}
+              className="self-start px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99] transition disabled:opacity-50"
             >
               {loading ? "Adding..." : "Add Subject"}
             </button>
@@ -210,8 +209,7 @@ const Subjects = () => {
               type="button"
               onClick={handleAddPredefined}
               disabled={selectedPredefined.length === 0 || addingPredefined}
-              className="px-5 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-              style={{ backgroundColor: "#0B3D2E" }}
+              className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99] transition disabled:opacity-50"
             >
               {addingPredefined
                 ? "Adding..."

@@ -70,27 +70,35 @@ const ParentHome = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#FAF6EE" }}>
-      <div
-        className="px-8 py-4 flex justify-between items-center"
-        style={{ backgroundColor: "#0B3D2E" }}
-      >
-        <p style={{ fontFamily: "Playfair Display, serif", color: "#F4E4B8" }}>
-          Parent Portal — {user?.name}
-        </p>
-        <button onClick={logout} className="text-sm text-white/70 hover:text-white">
+    <div className="min-h-screen bg-slate-50">
+      <header className="px-6 py-4 flex justify-between items-center bg-gradient-to-r from-sky-950 via-sky-900 to-sky-950 text-white shadow-md border-b border-sky-800/60">
+        <div>
+          <h1
+            className="text-base sm:text-lg font-bold text-white tracking-tight"
+            style={{ fontFamily: "Playfair Display, serif" }}
+          >
+            Parent Portal — {user?.name}
+          </h1>
+          <p className="text-xs text-sky-300/80">Institute of Arabic and Islamic Studies</p>
+        </div>
+        <button
+          onClick={logout}
+          className="text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-lg bg-sky-800/80 hover:bg-sky-700 text-sky-100 hover:text-white border border-sky-700 transition"
+        >
           Log out
         </button>
-      </div>
+      </header>
 
-      <div className="p-8 max-w-3xl mx-auto">
-        <div className="flex justify-between items-end mb-6">
+      <div className="p-4 sm:p-8 max-w-4xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
+            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+              Academic Term
+            </label>
             <select
               value={selectedTerm}
               onChange={(e) => setSelectedTerm(e.target.value)}
-              className="border border-gray-300 rounded-lg px-4 py-2.5 min-w-[220px]"
+              className="border border-slate-300 rounded-xl px-4 py-2.5 min-w-[220px] text-sm font-medium focus:ring-2 focus:ring-sky-500 outline-none"
             >
               {terms.map((t) => (
                 <option key={t._id} value={t._id}>
@@ -103,21 +111,28 @@ const ParentHome = () => {
           <button
             onClick={handleDownload}
             disabled={!reportData || downloading}
-            className="px-5 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-            style={{ backgroundColor: "#0B3D2E" }}
+            className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 active:scale-[0.99] shadow-md shadow-sky-600/20 disabled:opacity-50 transition"
           >
-            {downloading ? "Downloading..." : "Download PDF"}
+            {downloading ? "Downloading PDF..." : "Download Official PDF"}
           </button>
         </div>
 
-        {loading && <p className="text-sm text-gray-400">Loading...</p>}
-        {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+        {loading && (
+          <div className="text-center py-12 text-sm text-slate-500 font-medium">
+            Loading student report card...
+          </div>
+        )}
+        {error && (
+          <div className="p-4 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl mb-6 font-medium">
+            {error}
+          </div>
+        )}
 
-       {reportData && (
-  <div className="max-w-3xl mx-auto">
-    <ReportCardView data={reportData} />
-  </div>
-)}
+        {reportData && (
+          <div className="max-w-4xl mx-auto shadow-sm rounded-2xl overflow-hidden">
+            <ReportCardView data={reportData} />
+          </div>
+        )}
       </div>
     </div>
   );

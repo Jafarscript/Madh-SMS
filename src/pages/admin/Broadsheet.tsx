@@ -8,6 +8,7 @@ interface ClassItem {
   _id: string;
   name: string;
   arm?: string;
+  branch?: { _id: string; name: string } | string;
 }
 interface Term {
   _id: string;
@@ -129,12 +130,21 @@ const Broadsheet = () => {
             className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
           >
             <option value="">Select a class</option>
-            {classes.map((c) => (
-              <option key={c._id} value={c._id}>
-                {c.name}
-                {c.arm ? ` — الشعبة ${c.arm}` : ""}
-              </option>
-            ))}
+            {classes.map((c) => {
+              const branchName =
+                typeof c.branch === "object" && c.branch !== null
+                  ? c.branch.name
+                  : typeof c.branch === "string" && c.branch
+                  ? c.branch
+                  : "";
+              return (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                  {c.arm ? ` (${c.arm})` : ""}
+                  {branchName ? ` — ${branchName}` : ""}
+                </option>
+              );
+            })}
           </select>
         </div>
         <div className="flex-1">

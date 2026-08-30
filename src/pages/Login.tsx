@@ -49,15 +49,14 @@ const Login = () => {
 };
 
   return (
-    <div className="min-h-screen flex" style={{ fontFamily: "Inter, sans-serif" }}>
+    <div className="min-h-screen flex bg-slate-50" style={{ fontFamily: "Inter, sans-serif" }}>
       {/* LEFT — identity panel */}
       <div
-        className="hidden md:flex md:w-5/12 relative flex-col justify-between p-12 overflow-hidden"
-        style={{ backgroundColor: "#0B3D2E" }}
+        className="hidden md:flex md:w-5/12 relative flex-col justify-between p-12 overflow-hidden bg-gradient-to-br from-sky-950 via-[#072d4a] to-sky-900 text-white"
       >
-        {/* repeating geometric star pattern, low opacity, purely atmospheric */}
+        {/* repeating geometric star pattern, low opacity */}
         <svg
-          className="absolute inset-0 w-full h-full opacity-[0.08]"
+          className="absolute inset-0 w-full h-full opacity-[0.07]"
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
@@ -67,7 +66,7 @@ const Login = () => {
               height="60"
               patternUnits="userSpaceOnUse"
             >
-              <g fill="none" stroke="#C9A227" strokeWidth="1">
+              <g fill="none" stroke="#38bdf8" strokeWidth="1">
                 <path d="M30 5 L36 22 L54 22 L40 33 L45 51 L30 40 L15 51 L20 33 L6 22 L24 22 Z" />
               </g>
             </pattern>
@@ -77,102 +76,91 @@ const Login = () => {
 
         <div className="relative z-10 text-center">
           <p
-            className="text-3xl leading-tight"
-            style={{ fontFamily: "Amiri, serif", color: "#F4E4B8" }}
+            className="text-3xl leading-tight text-white font-bold"
+            style={{ fontFamily: "Amiri, serif" }}
           >
             معهد التعليم العربي الإسلامي
           </p>
           <p
-            className="mt-2 text-sm tracking-widest uppercase"
-            style={{ color: "#C9A227" }}
+            className="mt-2 text-xs tracking-widest uppercase text-sky-300 font-semibold"
           >
             Institute of Arabic and Islamic Studies
           </p>
         </div>
 
         <div className="relative z-10">
-          <div className="h-px w-16 mb-6" style={{ backgroundColor: "#C9A227" }} />
-          <p className="text-sm" style={{ color: "#D8CFAE" }}>
-            School Management System — Report cards, broadsheets,
-            and results, in one place.
+          <div className="h-0.5 w-16 mb-6 bg-sky-400/60" />
+          <p className="text-sm text-sky-100/80 leading-relaxed">
+            School Management System — High-precision report cards, broadsheets,
+            and academic grading in one unified portal.
           </p>
         </div>
       </div>
 
       {/* RIGHT — login form */}
       <div
-        className="flex-1 flex items-center justify-center p-6"
-        style={{ backgroundColor: "#FAF6EE" }}
+        className="flex-1 flex items-center justify-center p-6 bg-slate-50"
       >
         <div className="w-full max-w-sm">
-          {/* arch-topped card, subtle nod to mihrab shape without overdoing it */}
-          <div
-            className="relative bg-white shadow-xl"
-            style={{
-              borderTopLeftRadius: "9999px 60px",
-              borderTopRightRadius: "9999px 60px",
-              borderBottomLeftRadius: "12px",
-              borderBottomRightRadius: "12px",
-              paddingTop: "3.5rem",
-            }}
-          >
-            <div className="px-8 pb-8">
+          {/* card */}
+          <div className="relative bg-white shadow-xl rounded-2xl border border-slate-100 p-8">
+            <div>
               <h1
-                className="text-2xl text-center mb-1"
-                style={{ fontFamily: "Playfair Display, serif", color: "#0B3D2E" }}
+                className="text-2xl text-center font-bold text-slate-900 mb-1"
+                style={{ fontFamily: "Playfair Display, serif" }}
               >
                 Welcome back
               </h1>
-              <p className="text-center text-sm text-gray-500 mb-8">
+              <p className="text-center text-sm text-slate-500 mb-8">
                 Sign in to your account
               </p>
 
               {error && (
                 <div
-                  className="text-sm mb-4 px-3 py-2 rounded"
-                  style={{ backgroundColor: "#FDECEC", color: "#B42318" }}
+                  className="text-sm mb-4 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700"
                 >
                   {error}
                 </div>
               )}
 
-              <form onSubmit={handleSubmit}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 mb-4 outline-none transition focus:ring-2"
-                  style={{ ["--tw-ring-color" as any]: "#C9A227" }}
-                />
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                  />
+                </div>
 
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 mb-6 outline-none transition focus:ring-2"
-                  style={{ ["--tw-ring-color" as any]: "#C9A227" }}
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-sky-500 focus:border-sky-500"
+                  />
+                </div>
 
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full py-2.5 rounded-lg text-white font-medium transition disabled:opacity-50"
-                  style={{ backgroundColor: "#0B3D2E" }}
+                  className="w-full py-2.5 mt-2 rounded-xl text-white font-semibold bg-sky-600 hover:bg-sky-700 active:scale-[0.99] shadow-md shadow-sky-600/20 transition disabled:opacity-50"
                 >
                   {loading ? "Signing in..." : "Sign In"}
                 </button>
               </form>
 
-              <div className="mt-6 border-t border-gray-100 pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+              <div className="mt-8 border-t border-slate-100 pt-5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">
                   Quick Demo Accounts
                 </p>
                 <div className="flex flex-wrap gap-1.5">
@@ -184,7 +172,7 @@ const Login = () => {
                         setEmail(acc.email);
                         setPassword("password123");
                       }}
-                      className="text-xs px-2.5 py-1 rounded bg-gray-100 hover:bg-emerald-50 hover:text-emerald-800 text-gray-700 transition"
+                      className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-sky-50 hover:text-sky-700 text-slate-700 border border-slate-200/80 transition font-medium"
                     >
                       {acc.label}
                     </button>
@@ -194,7 +182,7 @@ const Login = () => {
             </div>
           </div>
 
-          <p className="text-center text-xs text-gray-400 mt-6">
+          <p className="text-center text-xs text-slate-400 mt-6">
             School Management System
           </p>
         </div>

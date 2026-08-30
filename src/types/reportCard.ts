@@ -29,6 +29,34 @@ export interface ReportCardComment {
   ar: string;
 }
 
+export interface ReportCardTemplateSettings {
+  schoolNameArabic?: string;
+  schoolNameEnglish?: string;
+  address?: string;
+  logoBase64?: string;
+  primaryColor?: string;
+  headerColor?: string;
+  showPrincipalSignature?: boolean;
+  principalSignatureBase64?: string;
+  showStamp?: boolean;
+  stampBase64?: string;
+  watermarkText?: string;
+}
+
+export interface ReportCardAttendance {
+  timesSchoolOpened?: number | null;
+  timesPresent?: number | null;
+  timesAbsent?: number | null;
+  dateResumed?: string | null;
+  dateClosed?: string | null;
+  nextResumption?: string | null;
+  schoolDays?: number | null;
+  presentDays?: number | null;
+  absentDays?: number | null;
+  lateDays?: number;
+  percentage?: number | null;
+}
+
 export interface ReportCardData {
   student: {
     name: string;
@@ -45,13 +73,8 @@ export interface ReportCardData {
   result: string;
   totalStudentsInClass: number;
   termAverages: TermAverage[];
-  attendance: {
-    schoolDays: number;
-    presentDays: number;
-    absentDays: number;
-    lateDays: number;
-    percentage: number | null;
-  };
+  attendance: ReportCardAttendance;
   classTeacherComment: ReportCardComment | null;
   principalComment: ReportCardComment | null;
+  templateSettings?: ReportCardTemplateSettings | null;
 }

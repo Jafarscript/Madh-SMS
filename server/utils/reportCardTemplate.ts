@@ -39,6 +39,20 @@ interface ReportCardComment {
   ar: string;
 }
 
+export interface ReportCardTemplateSettings {
+  schoolNameArabic?: string;
+  schoolNameEnglish?: string;
+  address?: string;
+  logoBase64?: string;
+  primaryColor?: string;
+  headerColor?: string;
+  showPrincipalSignature?: boolean;
+  principalSignatureBase64?: string;
+  showStamp?: boolean;
+  stampBase64?: string;
+  watermarkText?: string;
+}
+
 export interface ReportCardData {
   student: {
     name: string;
@@ -55,9 +69,22 @@ export interface ReportCardData {
   result: string;
   totalStudentsInClass: number;
   termAverages: TermAverage[];
-  attendance: { schoolDays: number; presentDays: number; absentDays: number; lateDays: number; percentage: number | null };
+  attendance: {
+    timesSchoolOpened?: number | null;
+    timesPresent?: number | null;
+    timesAbsent?: number | null;
+    dateResumed?: string | null;
+    dateClosed?: string | null;
+    nextResumption?: string | null;
+    schoolDays?: number | null;
+    presentDays?: number | null;
+    absentDays?: number | null;
+    lateDays?: number;
+    percentage?: number | null;
+  };
   classTeacherComment: ReportCardComment | null;
   principalComment: ReportCardComment | null;
+  templateSettings?: ReportCardTemplateSettings | null;
 }
 
 // CSS values here deliberately mirror the Tailwind classes used in
@@ -66,89 +93,178 @@ export interface ReportCardData {
 // so the on-screen view and the downloaded PDF look the same, not two
 // independently-drifting layouts.
 const sharedStyles = `
-  @font-face {
-    font-family: 'Amiri';
-    src: url(data:font/ttf;base64,${fontBase64}) format('truetype');
+  @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap');
+
+  @page {
+    size: A4 portrait;
+    margin: 6mm 7mm;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Times New Roman', serif; color: #111; }
-  .arabic { font-family: 'Amiri', serif; direction: rtl; }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    color: #111827;
+    background: #ffffff;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .arabic {
+    font-family: 'Amiri', 'Traditional Arabic', serif;
+    direction: rtl;
+  }
 
   .sheet {
-    width: 780px;
+    width: 100%;
+    max-width: 100%;
     margin: 0 auto;
-    border: 4px solid #16a34a;
+    border: 4px solid var(--primary-color, #16a34a);
     border-radius: 2px;
-    padding: 16px;
+    padding: 14px 16px;
+    background: #ffffff;
     page-break-after: always;
+    page-break-inside: avoid;
+    position: relative;
   }
   .sheet:last-child { page-break-after: auto; }
 
-  .header { text-align: center; position: relative; margin-bottom: 8px; }
+  .header { text-align: center; position: relative; margin-bottom: 10px; min-height: 60px; }
   .header .logo {
-    position: absolute; top: 0; right: 0; width: 64px; height: 64px;
+    position: absolute; top: 0; right: 0; width: 62px; height: 62px;
     border-radius: 4px; object-fit: contain;
   }
-  .header .school-name-ar {
-    font-family: 'Amiri', serif; font-size: 24px; color: #1e3a8a; font-weight: bold;
+  .header .logo-placeholder {
+    position: absolute; top: 0; right: 0; width: 62px; height: 62px;
+    border-radius: 4px; background: #F4F1EA; color: #9ca3af;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
   }
-  .header .school-name-en { font-size: 12px; font-weight: bold; margin-top: 4px; }
-  .header .address { font-size: 10px; font-weight: bold; margin-top: 2px; color: #374151; }
+  .header .school-name-ar {
+    font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 24px; color: var(--header-color, #1e3a8a); font-weight: bold; line-height: 1.2;
+  }
+  .header .school-name-en { font-size: 12px; font-weight: bold; margin-top: 3px; color: #111827; }
+  .header .address { font-size: 10px; font-weight: bold; margin-top: 2px; color: #374151; line-height: 1.3; white-space: pre-line; }
 
   .title-bar {
-    text-align: center; font-size: 12px; font-weight: bold; color: #1e3a8a;
-    margin: 8px 0; display: flex; justify-content: center; gap: 8px;
+    text-align: center; font-size: 12px; font-weight: bold; color: var(--header-color, #1e3a8a);
+    margin: 6px 0 10px 0; display: flex; justify-content: center; align-items: center; gap: 8px;
   }
-  .title-bar .ar { font-family: 'Amiri', serif; }
+  .title-bar .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 13px; }
 
-  .info-section { display: flex; border: 1px solid #000; margin-bottom: 8px; font-size: 10px; }
-  .attendance { flex: 1; border-right: 1px solid #000; }
+  .info-section { display: flex; border: 1px solid #000; margin-bottom: 10px; font-size: 10px; }
+  .attendance { flex: 1; border-right: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; }
   .attendance-row {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 4px 8px; border-bottom: 1px solid #e5e7eb;
+    padding: 3.5px 6px; border-bottom: 1px solid #e5e7eb; font-size: 10px;
   }
   .attendance-row:last-child { border-bottom: none; }
-  .attendance-row .ar { font-family: 'Amiri', serif; }
+  .attendance-row.attendance-header { font-weight: bold; background: #f9fafb; border-bottom: 1px solid #000; }
+  .attendance-row .en-label { width: 44%; text-align: left; font-weight: 500; color: #111827; line-height: 1.2; }
+  .attendance-row .mid-val { width: 20%; text-align: center; font-weight: bold; color: #000; font-size: 10.5px; }
+  .attendance-row .ar-label { width: 36%; text-align: right; font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 11.5px; color: #111827; line-height: 1.2; }
 
   .student-info { flex: 1; }
-  .student-info-row { display: flex; border-bottom: 1px solid #000; height: 36px; }
+  .student-info-row { display: flex; border-bottom: 1px solid #000; height: 35px; }
   .student-info-row:last-child { border-bottom: none; }
   .student-info-row .value {
     flex: 2; display: flex; align-items: center; justify-content: center;
-    font-weight: bold; font-size: 14px; border-right: 1px solid #000;
+    font-weight: bold; font-size: 13.5px; border-right: 1px solid #000; color: #111827;
   }
   .student-info-row .label {
     flex: 1; display: flex; align-items: center; justify-content: center;
     font-size: 10px; font-weight: bold; text-align: center; line-height: 1.2;
   }
 
-  table.subjects { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 8px; }
-  table.subjects th, table.subjects td { border: 1px solid #000; padding: 4px; text-align: center; }
-  table.subjects th { font-size: 10px; font-weight: bold; background: #fafafa; }
+  table.subjects { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; }
+  table.subjects th, table.subjects td { border: 1px solid #000; padding: 4.5px 5px; text-align: center; }
+  table.subjects th { font-size: 10px; font-weight: bold; background: #fafafa; line-height: 1.2; }
   table.subjects td.subject-name { text-align: left; font-weight: bold; }
-  table.subjects td.subject-name .ar { font-family: 'Amiri', serif; float: right; }
+  table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 11px; }
   table.subjects tr.total-row td { font-weight: bold; }
 
-  .bottom-section { display: flex; margin-bottom: 8px; border: 1px solid #000; font-size: 10px; }
-  .bottom-box { flex: 1; border-right: 1px solid #000; }
+  .bottom-section { display: flex; margin-bottom: 10px; border: 1px solid #000; font-size: 10px; }
+  .bottom-box { flex: 1; border-right: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; }
   .bottom-box:last-child { border-right: none; }
-  .bottom-box .row { display: flex; border-bottom: 1px solid #000; height: 32px; }
+  .bottom-box .row { display: flex; border-bottom: 1px solid #000; height: 34px; }
   .bottom-box .row:last-child { border-bottom: none; }
   .bottom-box .row .label {
     flex: 1; display: flex; align-items: center; justify-content: center;
-    font-weight: bold; background: #fafafa; text-align: center;
+    font-weight: bold; background: #fafafa; text-align: center; line-height: 1.2;
   }
   .bottom-box .row .val {
     flex: 1; display: flex; align-items: center; justify-content: center;
+    font-weight: bold; font-size: 11.5px;
+  }
+  .term-averages-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+    height: 100%;
+  }
+  .term-averages-table td {
+    padding: 3.5px 8px;
+    vertical-align: middle;
+  }
+  .term-averages-table tr.term-row {
+    border-bottom: 1px solid #000;
+  }
+  .term-averages-table .term-name-cell {
+    text-align: left;
+    white-space: nowrap;
+  }
+  .term-averages-table .term-name-cell .en {
+    font-weight: 500;
+    font-size: 9.5px;
+    color: #111827;
+  }
+  .term-averages-table .term-name-cell .ar {
+    font-family: 'Amiri', 'Traditional Arabic', serif;
+    font-size: 11.5px;
+    margin: 0 4px;
+    color: #111827;
+  }
+  .term-averages-table .term-name-cell .colon {
+    font-weight: bold;
+    font-size: 10px;
+    color: #111827;
+  }
+  .term-averages-table .term-val-cell {
+    text-align: right;
+    font-weight: bold;
+    font-size: 11px;
+    color: #111827;
+    white-space: nowrap;
+  }
+  .term-averages-table tr.cumulative-row {
+    background: #fafafa;
+    border-top: 1px solid #000;
     font-weight: bold;
   }
-  .bottom-box .plain-row { padding: 4px 8px; border-bottom: 1px solid #000; }
-  .bottom-box .plain-row:last-child {
-    border-bottom: none; display: flex; justify-content: space-between; font-weight: bold;
+  .term-averages-table tr.cumulative-row td {
+    padding: 4px 8px;
+  }
+  .term-averages-table tr.cumulative-row .cum-label {
+    text-align: left;
+    font-weight: bold;
+    font-size: 9.5px;
+    color: #111827;
+  }
+  .term-averages-table tr.cumulative-row .cum-val {
+    text-align: right;
+    font-weight: bold;
+    font-size: 11px;
+    color: #111827;
+    white-space: nowrap;
   }
 
-  .comment-section { border: 1px solid #000; font-size: 10px; }
-  .comment-row { display: flex; border-bottom: 1px solid #000; min-height: 36px; }
+  .comment-section { border: 1px solid #000; font-size: 10px; position: relative; }
+  .comment-row { display: flex; border-bottom: 1px solid #000; min-height: 42px; position: relative; }
   .comment-row:last-child { border-bottom: none; }
   .comment-row .comment-label {
     flex: 1; display: flex; align-items: center; justify-content: center;
@@ -156,19 +272,46 @@ const sharedStyles = `
   }
   .comment-row .comment-value {
     flex: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: 4px;
+    text-align: center; padding: 4px 10px; position: relative;
   }
-  .comment-row .comment-value .ar { font-family: 'Amiri', serif; font-size: 11px; }
-  .comment-row .comment-value .en { font-size: 10px; margin-top: 2px; }
+  .comment-row .comment-value .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 11.5px; }
+  .comment-row .comment-value .en { font-size: 10px; margin-top: 1px; }
   .comment-row .comment-value .empty { color: #d1d5db; }
+  .comment-row .comment-value .signature-img {
+    max-height: 32px; max-width: 120px; object-fit: contain; margin-top: 2px;
+  }
+  .comment-row .stamp-img {
+    position: absolute; right: 15px; bottom: 2px; max-height: 40px; max-width: 80px; opacity: 0.85; pointer-events: none;
+  }
 `;
 
 const ordinalEn = ["1ST", "2ND", "3RD"];
 const ordinalAr = ["الأولى", "الثانية", "الثالثة"];
 
-const renderComment = (comment: ReportCardComment | null): string => {
-  if (!comment) return `<span class="empty">—</span>`;
-  return `<span class="ar">${comment.ar}</span><span class="en">${comment.en}</span>`;
+const renderComment = (
+  comment: ReportCardComment | null,
+  isPrincipal: boolean = false,
+  signatureBase64?: string,
+  showStamp?: boolean,
+  stampBase64?: string
+): string => {
+  let content = "";
+  if (!comment) {
+    content = `<span class="empty">—</span>`;
+  } else {
+    content = `<span class="ar">${comment.ar}</span><span class="en">${comment.en}</span>`;
+  }
+
+  if (isPrincipal) {
+    if (signatureBase64) {
+      content += `<img class="signature-img" src="${signatureBase64.startsWith("data:") ? signatureBase64 : `data:image/png;base64,${signatureBase64}`}" alt="Signature" />`;
+    }
+    if (showStamp && stampBase64) {
+      content += `<img class="stamp-img" src="${stampBase64.startsWith("data:") ? stampBase64 : `data:image/png;base64,${stampBase64}`}" alt="Stamp" />`;
+    }
+  }
+
+  return content;
 };
 
 const buildSheetHtml = (data: ReportCardData): string => {
@@ -185,7 +328,24 @@ const buildSheetHtml = (data: ReportCardData): string => {
     classTeacherComment,
     principalComment,
     attendance,
+    templateSettings,
   } = data;
+
+  const schoolNameAr =
+    templateSettings?.schoolNameArabic || "معهد التعليم العربي الإسلامي";
+  const schoolNameEn =
+    templateSettings?.schoolNameEnglish || "INSTITUTE OF ARABIC AND ISLAMIC STUDIES";
+  const schoolAddress =
+    templateSettings?.address ||
+    "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665";
+  const formattedAddress = schoolAddress.replace(/\n/g, "<br/>");
+
+  const effectiveLogo =
+    templateSettings?.logoBase64 ||
+    (logoBase64 ? `data:image/png;base64,${logoBase64}` : "");
+
+  const primaryColor = templateSettings?.primaryColor || "#16a34a";
+  const headerColor = templateSettings?.headerColor || "#1e3a8a";
 
   const showCascadeColumns = term.termNumber === 2 || term.termNumber === 3;
 
@@ -207,26 +367,40 @@ const buildSheetHtml = (data: ReportCardData): string => {
   const termAverageRows = termAverages
     .map(
       (t) => `
-      <div class="plain-row">
-        ${ordinalEn[t.termNumber - 1]} ${ordinalAr[t.termNumber - 1]} : ${t.average ?? "-"}
-      </div>`
+      <tr class="term-row">
+        <td class="term-name-cell">
+          <span class="en">${ordinalEn[t.termNumber - 1]}</span>
+          <span class="ar arabic" dir="rtl">${ordinalAr[t.termNumber - 1]}</span>
+          <span class="colon">:</span>
+        </td>
+        <td class="term-val-cell">${t.average ?? "-"}</td>
+      </tr>`
     )
     .join("");
 
-  // Same fix as the frontend: pull the CURRENT term's own average out of
-  // termAverages instead of displaying overallPercentage directly — the
-  // two are now mathematically identical after the backend denominator
-  // fix, but this keeps the value tied to the row it's summarizing.
-  const currentTermAverage =
-    termAverages.find((t) => t.termNumber === term.termNumber)?.average ?? overallPercentage;
+  const formatVal = (val: any) => {
+    if (val === undefined || val === null || val === "") return "-";
+    return String(val);
+  };
+
+  const openedVal = formatVal(attendance?.timesSchoolOpened ?? attendance?.schoolDays);
+  const presentVal = formatVal(attendance?.timesPresent ?? attendance?.presentDays);
+  const absentVal = formatVal(attendance?.timesAbsent ?? attendance?.absentDays);
+  const resumedVal = formatVal(attendance?.dateResumed);
+  const closedVal = formatVal(attendance?.dateClosed);
+  const nextResumptionVal = formatVal(attendance?.nextResumption);
 
   return `
-    <div class="sheet">
+    <div class="sheet" style="--primary-color: ${primaryColor}; --header-color: ${headerColor};">
       <div class="header">
-        ${logoBase64 ? `<img class="logo" src="data:image/png;base64,${logoBase64}" />` : ""}
-        <div class="school-name-ar">معهد التعليم العربي الإسلامي</div>
-        <div class="school-name-en">INSTITUTE OF ARABIC AND ISLAMIC STUDIES</div>
-        <div class="address">18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,<br/>49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665</div>
+        ${
+          effectiveLogo
+            ? `<img class="logo" src="${effectiveLogo.startsWith("data:") ? effectiveLogo : `data:image/png;base64,${effectiveLogo}`}" />`
+            : `<div class="logo-placeholder">logo</div>`
+        }
+        <div class="school-name-ar">${schoolNameAr}</div>
+        <div class="school-name-en">${schoolNameEn}</div>
+        <div class="address">${formattedAddress}</div>
       </div>
 
       <div class="title-bar">
@@ -236,13 +410,41 @@ const buildSheetHtml = (data: ReportCardData): string => {
 
       <div class="info-section">
         <div class="attendance">
-          <div class="attendance-row"><span class="ar">الحضور والغياب</span><span>ATTENDANCE</span></div>
-          <div class="attendance-row"><span class="ar">عدد أيام الدوام</span><span>No. of times school opened: <b>${attendance.schoolDays}</b></span></div>
-          <div class="attendance-row"><span class="ar">نسبة الحضور</span><span>No. of times present: <b>${attendance.presentDays}</b></span></div>
-          <div class="attendance-row"><span class="ar">نسبة الغياب</span><span>No. of times absent: <b>${attendance.absentDays}</b></span></div>
-          <div class="attendance-row"><span class="ar">بدء الدراسة</span><span>Date School resumed</span></div>
-          <div class="attendance-row"><span class="ar">ختم الدراسة</span><span>Date School closes</span></div>
-          <div class="attendance-row"><span class="ar">العودة إلى الدراسة</span><span>Next resumption</span></div>
+          <div class="attendance-row attendance-header">
+            <span class="en-label">ATTENDANCE</span>
+            <span class="mid-val"></span>
+            <span class="ar-label">الحضور والغياب</span>
+          </div>
+          <div class="attendance-row">
+            <span class="en-label">No. of times school opened</span>
+            <span class="mid-val">${openedVal}</span>
+            <span class="ar-label">عدد أيام الدوام</span>
+          </div>
+          <div class="attendance-row">
+            <span class="en-label">No. of times present</span>
+            <span class="mid-val">${presentVal}</span>
+            <span class="ar-label">عدد أيام الحضور</span>
+          </div>
+          <div class="attendance-row">
+            <span class="en-label">No. of times absent</span>
+            <span class="mid-val">${absentVal}</span>
+            <span class="ar-label">عدد أيام الغياب</span>
+          </div>
+          <div class="attendance-row">
+            <span class="en-label">Date School resumed</span>
+            <span class="mid-val">${resumedVal}</span>
+            <span class="ar-label">بدء الدراسة</span>
+          </div>
+          <div class="attendance-row">
+            <span class="en-label">Date School closes</span>
+            <span class="mid-val">${closedVal}</span>
+            <span class="ar-label">ختم الدراسة</span>
+          </div>
+          <div class="attendance-row">
+            <span class="en-label">Next resumption</span>
+            <span class="mid-val">${nextResumptionVal}</span>
+            <span class="ar-label">العودة إلى الدراسة</span>
+          </div>
         </div>
         <div class="student-info">
           <div class="student-info-row">
@@ -309,15 +511,28 @@ const buildSheetHtml = (data: ReportCardData): string => {
       <div class="bottom-section">
         <div class="bottom-box">
           <div class="row"><div class="label">الترتيب<br/>POSITION</div><div class="val">${position ?? "-"}</div></div>
-          <div class="row"><div class="label">النتيجة<br/>RESULT</div><div class="val">${result}</div></div>
+          <div class="row"><div class="label">النتيجة<br/>RESULT</div><div class="val" style="color: ${result === "Pass" ? "#0B3D2E" : "#B42318"}; font-weight: bold;">${result}</div></div>
         </div>
         <div class="bottom-box">
-          ${termAverageRows}
-          <div class="plain-row"><span>CUMULATIVE AVERAGE</span><span>${overallTotal}</span></div>
+          <table class="term-averages-table">
+            <tbody>
+              ${termAverageRows}
+              <tr class="cumulative-row">
+                <td class="cum-label">CUMULATIVE AVERAGE</td>
+                <td class="cum-val">${overallTotal}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <div class="bottom-box">
           <div class="row"><div class="label">النسبة المئوية<br/>PERCENTAGE</div><div class="val">${overallPercentage}%</div></div>
-          <div class="row"><div class="label">التقدير<br/>GRADE</div><div class="val">${subjects[0]?.remark ?? "-"}</div></div>
+          <div class="row">
+            <div class="label">التقدير<br/>GRADE</div>
+            <div class="val">
+              ${subjects[0]?.remark ?? "-"}
+              ${subjects[0]?.remarkArabic ? `<span class="arabic" style="margin-left: 4px; font-family: 'Amiri', 'Traditional Arabic', serif;">${subjects[0].remarkArabic}</span>` : ""}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -328,7 +543,13 @@ const buildSheetHtml = (data: ReportCardData): string => {
         </div>
         <div class="comment-row">
           <div class="comment-label">تعليق و توقيع الوكيل<br/>PRINCIPAL'S COMMENT AND SIGNATURE</div>
-          <div class="comment-value">${renderComment(principalComment)}</div>
+          <div class="comment-value">${renderComment(
+            principalComment,
+            true,
+            templateSettings?.showPrincipalSignature ? templateSettings.principalSignatureBase64 : undefined,
+            templateSettings?.showStamp,
+            templateSettings?.stampBase64
+          )}</div>
         </div>
       </div>
     </div>
@@ -336,11 +557,33 @@ const buildSheetHtml = (data: ReportCardData): string => {
 };
 
 export const buildSingleReportCardHtml = (data: ReportCardData): string => `
-  <html><head><style>${sharedStyles}</style></head>
-  <body>${buildSheetHtml(data)}</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Report Card - ${data.student.name}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>${sharedStyles}</style>
+</head>
+<body>${buildSheetHtml(data)}</body>
+</html>
 `;
 
 export const buildBulkReportCardHtml = (dataList: ReportCardData[]): string => `
-  <html><head><style>${sharedStyles}</style></head>
-  <body>${dataList.map(buildSheetHtml).join("")}</body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Class Report Cards</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>${sharedStyles}</style>
+</head>
+<body>${dataList.map(buildSheetHtml).join("")}</body>
+</html>
 `;

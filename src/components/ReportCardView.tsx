@@ -8,15 +8,10 @@ const termWordAr = (n: number) =>
 const ordinalEn = ["1ST", "2ND", "3RD"];
 const ordinalAr = ["الأولى", "الثانية", "الثالثة"];
 
-const attendanceRows = [
-  { ar: "الحضور والغياب", en: "ATTENDANCE" },
-  { ar: "عدد أيام الدوام", en: "No. of times school opened" },
-  { ar: "نسبة الحضور", en: "No. of times present" },
-  { ar: "نسبة الغياب", en: "No. of times absent" },
-  { ar: "بدء الدراسة", en: "Date School resumed" },
-  { ar: "ختم الدراسة", en: "Date School closes" },
-  { ar: "العودة إلى الدراسة", en: "Next resumption" },
-];
+const formatVal = (val: any) => {
+  if (val === undefined || val === null || val === "") return "-";
+  return String(val);
+};
 
 const ReportCardView = ({ data }: { data: ReportCardData }) => {
   const {
@@ -32,41 +27,102 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
     totalStudentsInClass,
     termAverages,
     attendance,
+    templateSettings,
   } = data;
+
+  const schoolNameAr =
+    templateSettings?.schoolNameArabic || "معهد التعليم العربي الإسلامي";
+  const schoolNameEn =
+    templateSettings?.schoolNameEnglish ||
+    "INSTITUTE OF ARABIC AND ISLAMIC STUDIES";
+  const schoolAddress =
+    templateSettings?.address ||
+    "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665";
+  const primaryColor = templateSettings?.primaryColor || "#16a34a";
+  const headerColor = templateSettings?.headerColor || "#1e3a8a";
+
+  const attendanceList = [
+    {
+      en: "ATTENDANCE",
+      mid: "",
+      ar: "الحضور والغياب",
+      isHeader: true,
+    },
+    {
+      en: "No. of times school opened",
+      mid: formatVal(attendance?.timesSchoolOpened ?? attendance?.schoolDays),
+      ar: "عدد أيام الدوام",
+      isHeader: false,
+    },
+    {
+      en: "No. of times present",
+      mid: formatVal(attendance?.timesPresent ?? attendance?.presentDays),
+      ar: "عدد أيام الحضور",
+      isHeader: false,
+    },
+    {
+      en: "No. of times absent",
+      mid: formatVal(attendance?.timesAbsent ?? attendance?.absentDays),
+      ar: "عدد أيام الغياب",
+      isHeader: false,
+    },
+    {
+      en: "Date School resumed",
+      mid: formatVal(attendance?.dateResumed),
+      ar: "بدء الدراسة",
+      isHeader: false,
+    },
+    {
+      en: "Date School closes",
+      mid: formatVal(attendance?.dateClosed),
+      ar: "ختم الدراسة",
+      isHeader: false,
+    },
+    {
+      en: "Next resumption",
+      mid: formatVal(attendance?.nextResumption),
+      ar: "العودة إلى الدراسة",
+      isHeader: false,
+    },
+  ];
 
   return (
     <div
-      className="border-4 rounded-sm p-4 bg-white"
-      style={{ borderColor: "#16a34a" }}
+      className="border-4 rounded-sm p-4 bg-white relative"
+      style={{ borderColor: primaryColor }}
     >
       {/* header */}
-      <div className="relative text-center mb-2">
-        <div
-          className="absolute top-0 right-0 w-16 h-16 rounded flex items-center justify-center text-xs text-gray-400"
-          style={{ backgroundColor: "#F4F1EA" }}
-        >
-          logo
-        </div>
+      <div className="relative text-center mb-2 min-h-[60px]">
+        {templateSettings?.logoBase64 ? (
+          <img
+            src={templateSettings.logoBase64}
+            alt="School Logo"
+            className="absolute top-0 right-0 w-16 h-16 object-contain rounded"
+          />
+        ) : (
+          <div
+            className="absolute top-0 right-0 w-16 h-16 rounded flex items-center justify-center text-xs text-gray-400"
+            style={{ backgroundColor: "#F4F1EA" }}
+          >
+            logo
+          </div>
+        )}
         <p
           className="text-2xl font-bold"
-          style={{ fontFamily: "Amiri, serif", color: "#1e3a8a" }}
+          style={{ fontFamily: "Amiri, serif", color: headerColor }}
         >
-          معهد التعليم العربي الإسلامي
+          {schoolNameAr}
         </p>
-        <p className="text-xs font-bold mt-1">
-          INSTITUTE OF ARABIC AND ISLAMIC STUDIES
-        </p>
-        <p className="text-[10px] font-bold mt-0.5 text-gray-700">
-          18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,
-          <br />
-          49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665
+        <p className="text-xs font-bold mt-1 text-gray-900">{schoolNameEn}</p>
+        <p className="text-[10px] font-bold mt-0.5 text-gray-700 whitespace-pre-line leading-tight">
+          {schoolAddress}
         </p>
       </div>
 
       {/* title bar */}
       <div
         className="text-center text-xs font-bold py-1 mb-2 flex justify-center gap-2"
-        style={{ color: "#1e3a8a" }}
+        style={{ color: headerColor }}
       >
         <span style={{ fontFamily: "Amiri, serif" }}>
           كشف درجات الفترة {termWordAr(term.termNumber)}
@@ -79,18 +135,32 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
 
       {/* info section */}
       <div className="flex border border-black mb-2 text-[10px]">
-        <div className="flex-1 border-r border-black">
-          {attendanceRows.map((row, i) => (
+        <div className="flex-1 border-r border-black flex flex-col justify-between">
+          {attendanceList.map((row, i) => (
             <div
               key={i}
-              className="flex justify-between items-center px-2 py-1 border-b border-gray-200 last:border-0"
+              className={`flex items-center justify-between px-2 py-1 border-b ${
+                row.isHeader
+                  ? "border-black font-bold bg-gray-50"
+                  : "border-gray-200 last:border-0"
+              }`}
             >
-              <span style={{ fontFamily: "Amiri, serif" }}>{row.ar}</span>
-              <span>
+              {/* English on the left side */}
+              <span className="w-[44%] text-left font-medium text-gray-900 leading-tight">
                 {row.en}
-                {i === 1 && `: ${attendance.schoolDays}`}
-                {i === 2 && `: ${attendance.presentDays}`}
-                {i === 3 && `: ${attendance.absentDays}`}
+              </span>
+
+              {/* Value in the middle always in English */}
+              <span className="w-[20%] text-center font-bold text-gray-900 text-[11px]">
+                {row.mid}
+              </span>
+
+              {/* Arabic on the right side */}
+              <span
+                className="w-[36%] text-right font-medium text-gray-900 text-[11px] leading-tight"
+                style={{ fontFamily: "Amiri, serif" }}
+              >
+                {row.ar}
               </span>
             </div>
           ))}
@@ -332,23 +402,37 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
             </div>
           </div>
         </div>
-        <div className="flex-1 border-r border-black">
-          {termAverages.map((t) => (
-            <div
-              key={t.termNumber}
-              className="px-2 py-1 border-b flex justify-between border-black"
-            >
-              <span>
-                {ordinalEn[t.termNumber - 1]} {ordinalAr[t.termNumber - 1]}{" "}
-                :{" "}
-              </span>
-              <span>{t.average ?? "-"}</span>
-            </div>
-          ))}
-          <div className="px-2 py-1 flex justify-between font-bold">
-            <span>CUMULATIVE AVERAGE</span>
-            <span>{overallTotal}</span>
-          </div>
+        <div className="flex-1 border-r border-black flex flex-col justify-between">
+          <table className="w-full text-[10px] border-collapse h-full">
+            <tbody>
+              {termAverages.map((t) => (
+                <tr key={t.termNumber} className="border-b border-black">
+                  <td className="px-2 py-1 text-left whitespace-nowrap align-middle">
+                    <span className="font-semibold text-gray-900">{ordinalEn[t.termNumber - 1]}</span>
+                    <span
+                      className="font-medium text-gray-900 text-[11px] mx-1.5"
+                      style={{ fontFamily: "Amiri, serif" }}
+                      dir="rtl"
+                    >
+                      {ordinalAr[t.termNumber - 1]}
+                    </span>
+                    <span className="font-bold">:</span>
+                  </td>
+                  <td className="px-2 py-1 text-right font-bold text-gray-900 text-[11px] whitespace-nowrap align-middle">
+                    {t.average ?? "-"}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-gray-50 font-bold border-t border-black">
+                <td className="px-2 py-1.5 text-left font-bold text-gray-900 text-[10px]">
+                  CUMULATIVE AVERAGE
+                </td>
+                <td className="px-2 py-1.5 text-right font-bold text-gray-900 text-[11px] whitespace-nowrap">
+                  {overallTotal}
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
         <div className="flex-1">
           <div className="flex border-b border-black h-8">
@@ -406,13 +490,13 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
             )}
           </div>
         </div>
-        <div className="flex min-h-9">
+        <div className="flex min-h-9 relative">
           <div className="flex-1 flex items-center justify-center text-center font-bold border-r border-black p-1">
             تعليق و توقيع الوكيل
             <br />
             PRINCIPAL'S COMMENT AND SIGNATURE
           </div>
-          <div className="flex-2 flex flex-col items-center justify-center p-1 text-center">
+          <div className="flex-2 flex flex-col items-center justify-center p-1 text-center relative">
             {principalComment ? (
               <>
                 <p style={{ fontFamily: "Amiri, serif" }}>
@@ -422,6 +506,20 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
               </>
             ) : (
               <span className="text-gray-300">—</span>
+            )}
+            {templateSettings?.showPrincipalSignature && templateSettings.principalSignatureBase64 && (
+              <img
+                src={templateSettings.principalSignatureBase64}
+                alt="Principal Signature"
+                className="max-h-8 max-w-[120px] object-contain mt-1"
+              />
+            )}
+            {templateSettings?.showStamp && templateSettings.stampBase64 && (
+              <img
+                src={templateSettings.stampBase64}
+                alt="School Stamp"
+                className="absolute right-4 bottom-1 max-h-10 max-w-[80px] object-contain opacity-80 pointer-events-none"
+              />
             )}
           </div>
         </div>

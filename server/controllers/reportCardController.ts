@@ -9,6 +9,8 @@ import { getClassCumulativePositions } from "./broadsheetController";
 import { foldCascade } from "../utils/cascadeAverage";
 import ReportCardRemark from "../models/ReportCardRemark";
 import Attendance from "../models/Attendance";
+import AttendanceSetting from "../models/AttendanceSetting";
+import ReportCardSetting from "../models/ReportCardSetting";
 
 // Returns the full report card data object, or null if the student/term
 // can't be found. No `req`/`res` here on purpose — this is a plain function
@@ -184,13 +186,44 @@ const principalComment =
   };
 });
 
-  const attendanceRecords = await Attendance.find({ student: studentId, class: classId, term: termId }).select("date status");
-  const schoolDays = (await Attendance.distinct("date", { class: classId, term: termId })).length;
-  const presentDays = attendanceRecords.filter((record) => record.status === "present" || record.status === "late").length;
-  const absentDays = attendanceRecords.filter((record) => record.status === "absent").length;
-  const lateDays = attendanceRecords.filter((record) => record.status === "late").length;
-  const attendancePercentage = schoolDays > 0 ? Math.round((presentDays / schoolDays) * 10000) / 100 : null;
+  const classBranchId = (student.class as any)?.branch;
+  const [attSettingClass, attSettingBranch, attSettingGlobal, attDoc, templateSetting] =
+    await Promise.all([
+      AttendanceSetting.findOne({ class: classId, term: termId }),
+      classBranchId
+        ? AttendanceSetting.findOne({
+            branch: classBranchId,
+            term: termId,
+            class: { $exists: false },
+          })
+        : null,
+      AttendanceSetting.findOne({
+        term: termId,
+        class: { $exists: false },
+        branch: { $exists: false },
+      }),
+      Attendance.findOne({ student: studentId, term: termId }),
+      ReportCardSetting.findOne(),
+    ]);
 
+  const activeAttSetting = attSettingClass || attSettingBranch || attSettingGlobal;
+  const timesSchoolOpened =
+    activeAttSetting?.timesSchoolOpened !== undefined && activeAttSetting?.timesSchoolOpened !== null
+      ? activeAttSetting.timesSchoolOpened
+      : (currentTerm as any).timesSchoolOpened ?? null;
+
+  const dateResumed = activeAttSetting?.dateResumed || (currentTerm as any).dateResumed || "";
+  const dateClosed = activeAttSetting?.dateClosed || (currentTerm as any).dateClosed || "";
+  const nextResumption = activeAttSetting?.nextResumption || (currentTerm as any).nextResumption || "";
+
+  const timesPresent =
+    attDoc?.timesPresent !== undefined && attDoc?.timesPresent !== null
+      ? attDoc.timesPresent
+      : null;
+  const timesAbsent =
+    attDoc?.timesAbsent !== undefined && attDoc?.timesAbsent !== null
+      ? attDoc.timesAbsent
+      : null;
 
   return {
     student: {
@@ -212,9 +245,34 @@ const principalComment =
     result: overallPercentage >= 50 ? "Pass" : "Fail",
     totalStudentsInClass,
     termAverages,
-    attendance: { schoolDays, presentDays, absentDays, lateDays, percentage: attendancePercentage },
+    attendance: {
+      timesSchoolOpened,
+      timesPresent,
+      timesAbsent,
+      dateResumed,
+      dateClosed,
+      nextResumption,
+      schoolDays: timesSchoolOpened,
+      presentDays: timesPresent,
+      absentDays: timesAbsent,
+    },
     classTeacherComment,   // { id, en, ar } | null
     principalComment,
+    templateSettings: templateSetting
+      ? {
+          schoolNameArabic: templateSetting.schoolNameArabic,
+          schoolNameEnglish: templateSetting.schoolNameEnglish,
+          address: templateSetting.address,
+          logoBase64: templateSetting.logoBase64,
+          primaryColor: templateSetting.primaryColor,
+          headerColor: templateSetting.headerColor,
+          showPrincipalSignature: templateSetting.showPrincipalSignature,
+          principalSignatureBase64: templateSetting.principalSignatureBase64,
+          showStamp: templateSetting.showStamp,
+          stampBase64: templateSetting.stampBase64,
+          watermarkText: templateSetting.watermarkText,
+        }
+      : null,
   };
 };
 

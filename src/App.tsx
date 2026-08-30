@@ -12,6 +12,7 @@ import Users from "./pages/admin/Users";
 import SubjectTeacherHome from "./pages/SubjectTeacherHome";
 import Broadsheet from "./pages/admin/Broadsheet";
 import ReportCard from "./pages/admin/ReportCard";
+import ResultPublishing from "./pages/admin/ResultPublishing";
 import Dashboard from "./pages/admin/Dashboard";
 import ParentHome from "./pages/ParentHome";
 import RoleGate from "./routes/RoleGate";
@@ -121,6 +122,14 @@ function App() {
         <Route path="broadsheet" element={<Broadsheet />} />
         <Route path="attendance" element={<Attendance />} />
         <Route path="report-cards" element={<ReportCard />} />
+        <Route
+          path="publishing"
+          element={
+            <RoleGate allowedRoles={["super_admin", "branch_admin"]}>
+              <ResultPublishing />
+            </RoleGate>
+          }
+        />
       </Route>
 
       <Route

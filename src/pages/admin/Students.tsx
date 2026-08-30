@@ -263,8 +263,7 @@ const Students = () => {
             <button
               type="submit"
               disabled={loading}
-              className="self-start px-5 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-              style={{ backgroundColor: "#0B3D2E" }}
+              className="self-start px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99] transition disabled:opacity-50"
             >
               {loading ? "Adding..." : "Add Student"}
             </button>
@@ -318,14 +317,13 @@ const Students = () => {
                       <button
                         onClick={() => saveEdit(s._id)}
                         disabled={savingEdit}
-                        className="text-sm px-3 py-1.5 rounded-lg text-white disabled:opacity-50"
-                        style={{ backgroundColor: "#0B3D2E" }}
+                        className="text-sm px-3.5 py-1.5 rounded-lg text-white font-medium bg-sky-600 hover:bg-sky-700 disabled:opacity-50 transition"
                       >
                         {savingEdit ? "Saving..." : "Save"}
                       </button>
                       <button
                         onClick={cancelEdit}
-                        className="text-sm px-3 py-1.5 rounded-lg border border-gray-300"
+                        className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
                       >
                         Cancel
                       </button>
@@ -346,8 +344,7 @@ const Students = () => {
                       <div className="flex gap-3">
                         <button
                           onClick={() => startEdit(s)}
-                          className="text-sm hover:underline"
-                          style={{ color: "#0B3D2E" }}
+                          className="text-sm font-medium text-sky-600 hover:text-sky-800 hover:underline"
                         >
                           Edit
                         </button>

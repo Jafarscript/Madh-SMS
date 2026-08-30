@@ -394,8 +394,7 @@ const Users = () => {
         <button
           type="submit"
           disabled={loading}
-          className="self-start px-5 py-2.5 rounded-lg text-white text-sm font-medium disabled:opacity-50"
-          style={{ backgroundColor: "#0B3D2E" }}
+          className="self-start px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99] transition disabled:opacity-50"
         >
           {loading ? "Creating..." : "Create Account"}
         </button>
@@ -403,23 +402,21 @@ const Users = () => {
       {/* reset password result — separate from the create-account generatedPassword box */}
       {resetPasswordResult && (
         <div
-          className="flex items-center justify-between px-4 py-3 rounded-lg text-sm mt-4"
-          style={{ backgroundColor: "#FEF3C7" }}
+          className="flex items-center justify-between px-4 py-3 rounded-xl text-sm mt-4 bg-amber-50 border border-amber-200"
         >
           <div>
-            <p className="text-gray-600 text-xs mb-1">
+            <p className="text-amber-800 text-xs font-medium mb-1">
               New password for {resetPasswordResult.name} (share this — old one
               no longer works)
             </p>
-            <p className="font-mono font-semibold text-gray-800">
+            <p className="font-mono font-bold text-slate-800">
               {resetPasswordResult.password}
             </p>
           </div>
           <button
             type="button"
             onClick={() => handleCopy(resetPasswordResult.password)}
-            className="text-xs px-3 py-1.5 rounded-lg text-white cursor-pointer"
-            style={{ backgroundColor: "#0B3D2E" }}
+            className="text-xs px-3 py-1.5 rounded-lg text-white font-medium bg-sky-600 hover:bg-sky-700 transition cursor-pointer"
           >
             {copied ? "Copied" : "Copy"}
           </button>
@@ -469,8 +466,7 @@ const Users = () => {
                   <button
                     onClick={() => handleResetPassword(u._id, u.name)}
                     disabled={resettingId === u._id}
-                    className="text-sm hover:underline disabled:opacity-50"
-                    style={{ color: "#0B3D2E" }}
+                    className="text-sm font-medium text-sky-600 hover:text-sky-800 hover:underline disabled:opacity-50"
                   >
                     {resettingId === u._id ? "Resetting..." : "Reset Password"}
                   </button>

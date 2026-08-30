@@ -16,6 +16,8 @@ import {
   Award,
   Users,
   Percent,
+  Lock,
+  ShieldAlert,
 } from "lucide-react";
 import BulkScoreUploadModal from "../components/BulkScoreUploadModal";
 
@@ -68,6 +70,9 @@ const SubjectTeacherHome = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
 
+  // Result publication & security state
+  const [resultStatus, setResultStatus] = useState<"draft" | "published" | "locked">("draft");
+
   // Bulk Upload Modal state
   const [showBulkUpload, setShowBulkUpload] = useState(false);
 
@@ -96,6 +101,7 @@ const SubjectTeacherHome = () => {
   useEffect(() => {
     if (!selectedSubject || !selectedTerm) {
       setStudents([]);
+      setResultStatus("draft");
       return;
     }
     const subject = subjects.find((s) => s._id === selectedSubject);
@@ -105,24 +111,35 @@ const SubjectTeacherHome = () => {
       const studentsRes = await api.get(`/students?class=${subject.class}`);
       setStudents(studentsRes.data);
 
-      const scoresRes = await api.get(
-        `/scores?subject=${selectedSubject}&term=${selectedTerm}`
-      );
-      const scoreMap: Record<string, { ca: number; exam: number }> = {};
-      const initialEntries: Record<string, ScoreEntry> = {};
-      scoresRes.data.forEach((sc: any) => {
-        if (!sc.student) return;
-        scoreMap[sc.student._id] = { ca: sc.ca, exam: sc.exam };
-        initialEntries[sc.student._id] = { ca: String(sc.ca), exam: String(sc.exam) };
-      });
-      setExistingScores(scoreMap);
-      setEntries(initialEntries);
+      const [scoresRes, pubRes] = await Promise.allSettled([
+        api.get(`/scores?subject=${selectedSubject}&term=${selectedTerm}`),
+        api.get(`/result-publications?class=${subject.class}&term=${selectedTerm}`),
+      ]);
+
+      if (pubRes.status === "fulfilled") {
+        setResultStatus(pubRes.value.data?.status || "draft");
+      } else {
+        setResultStatus("draft");
+      }
+
+      if (scoresRes.status === "fulfilled") {
+        const scoreMap: Record<string, { ca: number; exam: number }> = {};
+        const initialEntries: Record<string, ScoreEntry> = {};
+        scoresRes.value.data.forEach((sc: any) => {
+          if (!sc.student) return;
+          scoreMap[sc.student._id] = { ca: sc.ca, exam: sc.exam };
+          initialEntries[sc.student._id] = { ca: String(sc.ca), exam: String(sc.exam) };
+        });
+        setExistingScores(scoreMap);
+        setEntries(initialEntries);
+      }
     };
     loadRoster();
   }, [selectedSubject, selectedTerm, subjects]);
 
   const selectedSubjectObj = subjects.find((s) => s._id === selectedSubject);
   const selectedClassObj = selectedSubjectObj ? classesById[selectedSubjectObj.class] : null;
+  const isClassLocked = resultStatus === "locked";
 
   // stable, sorted order
   const sortedStudents = useMemo(() => {
@@ -396,41 +413,38 @@ const SubjectTeacherHome = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#FAF6EE" }}>
+    <div className="min-h-screen bg-slate-50">
       {/* Top Navbar */}
-      <div
-        className="px-4 sm:px-8 py-4 flex justify-between items-center shadow-xs"
-        style={{ backgroundColor: "#0B3D2E" }}
-      >
+      <header className="px-4 sm:px-8 py-4 flex justify-between items-center bg-gradient-to-r from-sky-950 via-sky-900 to-sky-950 text-white shadow-md border-b border-sky-800/60">
         <div>
-          <p
-            className="text-sm sm:text-lg font-bold truncate"
-            style={{ fontFamily: "Playfair Display, serif", color: "#F4E4B8" }}
+          <h1
+            className="text-sm sm:text-lg font-bold truncate text-white"
+            style={{ fontFamily: "Playfair Display, serif" }}
           >
             Subject Teacher Portal — {user?.name}
-          </p>
-          <p className="text-xs text-white/60">Manage marks, bulk imports, and score distribution</p>
+          </h1>
+          <p className="text-xs text-sky-300/80">Manage marks, bulk imports, and score distribution</p>
         </div>
         <button
           onClick={logout}
-          className="text-xs sm:text-sm text-white/80 hover:text-white bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg shrink-0 ml-2 transition"
+          className="text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-lg bg-sky-800/80 hover:bg-sky-700 text-sky-100 hover:text-white border border-sky-700 transition"
         >
           Log out
         </button>
-      </div>
+      </header>
 
       <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6">
         {/* Subject & Term Selectors */}
-        <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-200/80">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                 Select Subject
               </label>
               <select
                 value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value)}
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 bg-white text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-sky-500 outline-none transition font-medium"
               >
                 <option value="">-- Choose a subject --</option>
                 {subjects.map((s) => (
@@ -441,13 +455,13 @@ const SubjectTeacherHome = () => {
               </select>
             </div>
             <div className="flex-1">
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                 Academic Term
               </label>
               <select
                 value={selectedTerm}
                 onChange={(e) => setSelectedTerm(e.target.value)}
-                className="w-full border border-gray-300 rounded-xl px-4 py-2.5 bg-white text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500 outline-none transition"
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-sky-500 outline-none transition font-medium"
               >
                 <option value="">-- Choose a term --</option>
                 {terms.map((t) => (
@@ -461,91 +475,111 @@ const SubjectTeacherHome = () => {
         </div>
 
         {error && (
-          <div className="p-3.5 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl flex items-center gap-2">
+          <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl flex items-center gap-2 font-medium">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
         )}
         {savedMsg && (
-          <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-xl flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <div className="p-3.5 bg-sky-50 border border-sky-200 text-sky-800 text-sm rounded-xl flex items-center gap-2 font-medium">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-sky-600" />
             <span>{savedMsg}</span>
           </div>
         )}
 
         {selectedSubject && selectedTerm && (
           <>
+            {/* Lock Status Alert */}
+            {isClassLocked && (
+              <div className="p-4 bg-amber-50 border border-amber-300 text-amber-900 rounded-2xl flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-amber-100 rounded-xl text-amber-800 shrink-0">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Class Results are Locked</p>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      The administration has locked the results for this class and term. Score entry is frozen in read-only mode.
+                    </p>
+                  </div>
+                </div>
+                <span className="px-3 py-1 bg-amber-200/90 text-amber-950 text-xs font-bold rounded-lg shrink-0 flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5" /> Read-Only
+                </span>
+              </div>
+            )}
+
             {/* Live Analytics Dashboard Banner */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-gray-500 text-xs font-medium mb-1">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
                   <span>Submissions</span>
-                  <Users className="w-4 h-4 text-emerald-700" />
+                  <Users className="w-4 h-4 text-sky-600" />
                 </div>
-                <div className="text-xl font-bold text-gray-900">
+                <div className="text-xl font-bold text-slate-900">
                   {classStats.completedCount} / {classStats.totalStudents}
                 </div>
-                <div className="w-full bg-gray-100 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div className="w-full bg-slate-100 h-1.5 rounded-full mt-2 overflow-hidden">
                   <div
-                    className="bg-emerald-700 h-full rounded-full transition-all duration-300"
+                    className="bg-sky-600 h-full rounded-full transition-all duration-300"
                     style={{ width: `${classStats.completionRate}%` }}
                   />
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-gray-500 text-xs font-medium mb-1">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
                   <span>Class Average</span>
-                  <TrendingUp className="w-4 h-4 text-blue-700" />
+                  <TrendingUp className="w-4 h-4 text-sky-600" />
                 </div>
-                <div className="text-xl font-bold text-gray-900">
+                <div className="text-xl font-bold text-slate-900">
                   {classStats.average}
-                  <span className="text-xs font-normal text-gray-500 ml-1">/ 100</span>
+                  <span className="text-xs font-normal text-slate-500 ml-1">/ 100</span>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1">Based on saved & entered marks</p>
+                <p className="text-[11px] text-slate-500 mt-1">Based on saved & entered marks</p>
               </div>
 
-              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-gray-500 text-xs font-medium mb-1">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
                   <span>Score Range</span>
-                  <Award className="w-4 h-4 text-amber-700" />
+                  <Award className="w-4 h-4 text-amber-600" />
                 </div>
-                <div className="text-xl font-bold text-gray-900">
-                  {classStats.highest} <span className="text-xs font-normal text-gray-400">high</span> / {classStats.lowest} <span className="text-xs font-normal text-gray-400">low</span>
+                <div className="text-xl font-bold text-slate-900">
+                  {classStats.highest} <span className="text-xs font-normal text-slate-400">high</span> / {classStats.lowest} <span className="text-xs font-normal text-slate-400">low</span>
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1">Highest & lowest scores</p>
+                <p className="text-[11px] text-slate-500 mt-1">Highest & lowest scores</p>
               </div>
 
-              <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-2xs">
-                <div className="flex items-center justify-between text-gray-500 text-xs font-medium mb-1">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between text-slate-500 text-xs font-medium mb-1">
                   <span>Pass Rate (≥40)</span>
-                  <Percent className="w-4 h-4 text-emerald-700" />
+                  <Percent className="w-4 h-4 text-sky-600" />
                 </div>
-                <div className="text-xl font-bold text-emerald-800">
+                <div className="text-xl font-bold text-sky-700">
                   {classStats.passRate}
                 </div>
-                <p className="text-[11px] text-gray-500 mt-1">Passing standard</p>
+                <p className="text-[11px] text-slate-500 mt-1">Passing standard</p>
               </div>
             </div>
 
             {/* Actions & Filters Bar */}
-            <div className="bg-white p-4 rounded-2xl border border-gray-200/80 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
               {/* Left: Class info & search */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
                 {selectedClassObj && (
-                  <div className="px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-200 text-xs font-semibold text-emerald-950 shrink-0">
+                  <div className="px-3 py-1.5 bg-sky-50 rounded-lg border border-sky-200 text-xs font-semibold text-sky-950 shrink-0">
                     {selectedClassObj.name} {selectedClassObj.arm ? `— ${selectedClassObj.arm}` : ""}
                   </div>
                 )}
                 {/* Search */}
                 <div className="relative flex-1 max-w-xs">
-                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     placeholder="Search student or number..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-3 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-emerald-500 outline-none"
+                    className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-sky-500 outline-none"
                   />
                 </div>
                 {/* Filters */}
@@ -553,7 +587,7 @@ const SubjectTeacherHome = () => {
                   <button
                     onClick={() => setFilterType("all")}
                     className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                      filterType === "all" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      filterType === "all" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
                     All ({sortedStudents.length})
@@ -561,7 +595,7 @@ const SubjectTeacherHome = () => {
                   <button
                     onClick={() => setFilterType("missing")}
                     className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                      filterType === "missing" ? "bg-amber-700 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      filterType === "missing" ? "bg-amber-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
                     Missing ({sortedStudents.length - classStats.completedCount})
@@ -569,7 +603,7 @@ const SubjectTeacherHome = () => {
                   <button
                     onClick={() => setFilterType("completed")}
                     className={`px-2.5 py-1 rounded-lg font-medium transition ${
-                      filterType === "completed" ? "bg-emerald-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                      filterType === "completed" ? "bg-sky-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                     }`}
                   >
                     Completed ({classStats.completedCount})
@@ -581,15 +615,17 @@ const SubjectTeacherHome = () => {
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   onClick={() => setShowBulkUpload(true)}
-                  className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition shadow-2xs"
+                  disabled={isClassLocked}
+                  className="px-3.5 py-2 bg-sky-50 hover:bg-sky-100 text-sky-900 border border-sky-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-700" />
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-sky-700" />
                   Bulk Upload CSV
                 </button>
 
                 <button
                   onClick={handleRevertAll}
-                  className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition"
+                  disabled={isClassLocked}
+                  className="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Revert Unsaved Changes"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -597,20 +633,19 @@ const SubjectTeacherHome = () => {
 
                 <button
                   onClick={handleSaveAll}
-                  disabled={savingAll}
-                  className="px-5 py-2 rounded-xl text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition"
-                  style={{ backgroundColor: "#0B3D2E" }}
+                  disabled={savingAll || isClassLocked}
+                  className="px-5 py-2 rounded-xl text-white text-xs font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-sm transition disabled:cursor-not-allowed bg-sky-600 hover:bg-sky-700 active:scale-[0.99]"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" />
-                  {savingAll ? "Saving all..." : `Save All (${classStats.completedCount})`}
+                  {isClassLocked ? "Locked (Read-Only)" : savingAll ? "Saving all..." : `Save All (${classStats.completedCount})`}
                 </button>
               </div>
             </div>
 
             {/* Quick Scoring Banner */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between text-xs text-emerald-900">
+            <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 flex items-center justify-between text-xs text-sky-950">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-emerald-700 shrink-0" />
+                <Sparkles className="w-4 h-4 text-sky-600 shrink-0" />
                 <span>
                   <strong>Tip:</strong> Typing in <strong>Total (100)</strong> automatically calculates <strong>CA (40%)</strong> and <strong>Exam (60%)</strong> to nearest whole number. You can also use arrow keys to navigate like a spreadsheet.
                 </span>
@@ -618,26 +653,26 @@ const SubjectTeacherHome = () => {
             </div>
 
             {/* Desktop / tablet: Spreadsheet table */}
-            <div className="hidden sm:block bg-white rounded-2xl shadow-xs border border-gray-200/80 overflow-hidden">
+            <div className="hidden sm:block bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left border-b border-gray-100" style={{ backgroundColor: "#F4F1EA" }}>
-                      <th className="p-3.5 font-semibold text-gray-600 w-14 text-center">No.</th>
-                      <th className="p-3.5 font-semibold text-gray-700">Student Name</th>
-                      <th className="p-3.5 font-semibold text-emerald-900 w-36 bg-emerald-100/40">
+                    <tr className="text-left border-b border-slate-200 bg-slate-50">
+                      <th className="p-3.5 font-semibold text-slate-600 w-14 text-center">No.</th>
+                      <th className="p-3.5 font-semibold text-slate-700">Student Name</th>
+                      <th className="p-3.5 font-semibold text-sky-950 w-36 bg-sky-50 border-r border-sky-100">
                         Total (100)
-                        <span className="block text-[10px] text-emerald-700 font-normal">Auto 40/60 Split</span>
+                        <span className="block text-[10px] text-sky-600 font-normal">Auto 40/60 Split</span>
                       </th>
-                      <th className="p-3.5 font-semibold text-gray-700 w-32">
+                      <th className="p-3.5 font-semibold text-slate-700 w-32">
                         CA Test (40)
-                        <span className="block text-[10px] text-gray-400 font-normal">Max: 40</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Max: 40</span>
                       </th>
-                      <th className="p-3.5 font-semibold text-gray-700 w-32">
+                      <th className="p-3.5 font-semibold text-slate-700 w-32">
                         Exam (60)
-                        <span className="block text-[10px] text-gray-400 font-normal">Max: 60</span>
+                        <span className="block text-[10px] text-slate-400 font-normal">Max: 60</span>
                       </th>
-                      <th className="p-3.5 font-semibold text-gray-500 text-center w-28">Status</th>
+                      <th className="p-3.5 font-semibold text-slate-500 text-center w-28">Status</th>
                       <th className="p-3.5 w-24 text-right"></th>
                     </tr>
                   </thead>
@@ -695,10 +730,11 @@ const SubjectTeacherHome = () => {
                                 min={0}
                                 max={100}
                                 placeholder="0-100"
+                                disabled={isClassLocked || saving === s._id}
                                 value={totalVal}
                                 onChange={(e) => handleChange(s._id, "total", e.target.value)}
                                 onKeyDown={(e) => handleKeyDown(e, rowIndex, "total", s._id)}
-                                className={`w-24 border rounded-lg px-2.5 py-1.5 text-emerald-950 font-bold text-center bg-white outline-none transition ${
+                                className={`w-24 border rounded-lg px-2.5 py-1.5 text-emerald-950 font-bold text-center bg-white outline-none transition disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed ${
                                   isTotalInvalid
                                     ? "border-red-500 focus:ring-2 focus:ring-red-500"
                                     : "border-emerald-300 focus:ring-2 focus:ring-emerald-500"
@@ -717,10 +753,11 @@ const SubjectTeacherHome = () => {
                                   min={0}
                                   max={40}
                                   placeholder="0-40"
+                                  disabled={isClassLocked || saving === s._id}
                                   value={entry.ca}
                                   onChange={(e) => handleChange(s._id, "ca", e.target.value)}
                                   onKeyDown={(e) => handleKeyDown(e, rowIndex, "ca", s._id)}
-                                  className={`w-20 border rounded-lg px-2.5 py-1.5 text-center outline-none transition ${
+                                  className={`w-20 border rounded-lg px-2.5 py-1.5 text-center outline-none transition disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed ${
                                     isCaInvalid
                                       ? "border-red-500 bg-red-50 focus:ring-2 focus:ring-red-500 text-red-900 font-bold"
                                       : "border-gray-300 focus:ring-2 focus:ring-emerald-500"
@@ -743,10 +780,11 @@ const SubjectTeacherHome = () => {
                                   min={0}
                                   max={60}
                                   placeholder="0-60"
+                                  disabled={isClassLocked || saving === s._id}
                                   value={entry.exam}
                                   onChange={(e) => handleChange(s._id, "exam", e.target.value)}
                                   onKeyDown={(e) => handleKeyDown(e, rowIndex, "exam", s._id)}
-                                  className={`w-20 border rounded-lg px-2.5 py-1.5 text-center outline-none transition ${
+                                  className={`w-20 border rounded-lg px-2.5 py-1.5 text-center outline-none transition disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed ${
                                     isExamInvalid
                                       ? "border-red-500 bg-red-50 focus:ring-2 focus:ring-red-500 text-red-900 font-bold"
                                       : "border-gray-300 focus:ring-2 focus:ring-emerald-500"
@@ -785,11 +823,13 @@ const SubjectTeacherHome = () => {
                             <td className="p-3.5 text-right">
                               <button
                                 onClick={() => handleSave(s._id)}
-                                disabled={saving === s._id || isCaInvalid || isExamInvalid || isTotalInvalid || isIncomplete}
-                                className="text-xs px-3.5 py-1.5 rounded-lg text-white font-medium disabled:opacity-40 shadow-xs transition"
-                                style={{ backgroundColor: "#0B3D2E" }}
+                                disabled={isClassLocked || saving === s._id || isCaInvalid || isExamInvalid || isTotalInvalid || isIncomplete}
+                                className="text-xs px-3.5 py-1.5 rounded-lg text-white font-medium disabled:opacity-40 shadow-xs transition disabled:cursor-not-allowed"
+                                style={{ backgroundColor: isClassLocked ? "#9CA3AF" : "#0B3D2E" }}
                               >
-                                {saving === s._id
+                                {isClassLocked
+                                  ? "Locked"
+                                  : saving === s._id
                                   ? "Saving..."
                                   : isSaved
                                   ? "Update"
@@ -842,10 +882,11 @@ const SubjectTeacherHome = () => {
                           max={100}
                           placeholder="e.g. 75"
                           inputMode="numeric"
+                          disabled={isClassLocked || saving === s._id}
                           value={totalVal}
                           onChange={(e) => handleChange(s._id, "total", e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, rowIndex, "total", s._id)}
-                          className="w-full border border-emerald-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none font-bold"
+                          className="w-full border border-emerald-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none font-bold disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
                         />
                       </div>
 
@@ -860,10 +901,11 @@ const SubjectTeacherHome = () => {
                             min={0}
                             max={40}
                             inputMode="numeric"
+                            disabled={isClassLocked || saving === s._id}
                             value={entry.ca}
                             onChange={(e) => handleChange(s._id, "ca", e.target.value)}
                             onKeyDown={(e) => handleKeyDown(e, rowIndex, "ca", s._id)}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
                           />
                         </div>
                         <div className="flex-1">
@@ -876,19 +918,22 @@ const SubjectTeacherHome = () => {
                             min={0}
                             max={60}
                             inputMode="numeric"
+                            disabled={isClassLocked || saving === s._id}
                             value={entry.exam}
                             onChange={(e) => handleChange(s._id, "exam", e.target.value)}
                             onKeyDown={(e) => handleKeyDown(e, rowIndex, "exam", s._id)}
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
                           />
                         </div>
                         <button
                           onClick={() => handleSave(s._id)}
-                          disabled={saving === s._id}
-                          className="px-4 py-2.5 rounded-lg text-white text-xs font-bold disabled:opacity-50 shrink-0 shadow-xs"
-                          style={{ backgroundColor: "#0B3D2E" }}
+                          disabled={isClassLocked || saving === s._id}
+                          className="px-4 py-2.5 rounded-lg text-white text-xs font-bold disabled:opacity-50 shrink-0 shadow-xs disabled:cursor-not-allowed"
+                          style={{ backgroundColor: isClassLocked ? "#9CA3AF" : "#0B3D2E" }}
                         >
-                          {saving === s._id
+                          {isClassLocked
+                            ? "Locked"
+                            : saving === s._id
                             ? "..."
                             : isSaved
                             ? "Update"

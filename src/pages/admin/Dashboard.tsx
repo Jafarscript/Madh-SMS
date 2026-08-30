@@ -126,34 +126,35 @@ const Dashboard = () => {
       {data && (
         <>
           {/* summary stat cards */}
-          <div className="grid grid-cols-3 gap-4 mb-8 max-w-3xl">
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <p className="text-xs text-gray-500 mb-1">Total Classes</p>
-              <p className="text-2xl font-semibold" style={{ color: "#0B3D2E" }}>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 max-w-4xl">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Classes</p>
+              <p className="text-3xl font-bold text-slate-900">
                 {data.totalClasses}
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <p className="text-xs text-gray-500 mb-1">Total Students</p>
-              <p className="text-2xl font-semibold" style={{ color: "#0B3D2E" }}>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Students</p>
+              <p className="text-3xl font-bold text-sky-700">
                 {data.totalStudents}
               </p>
             </div>
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <p className="text-xs text-gray-500 mb-1">School Average</p>
-              <p className="text-2xl font-semibold" style={{ color: "#0B3D2E" }}>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">School Average</p>
+              <p className="text-3xl font-bold text-slate-900">
                 {data.overallSchoolAverage}
+                <span className="text-xs font-normal text-slate-400 ml-1">/ 100</span>
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-6 max-w-6xl">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl">
             {/* score entry completion, per class, expandable to see per-subject */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <h2 className="font-medium text-gray-800 mb-4">Score Entry Progress</h2>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+              <h2 className="font-bold text-base text-slate-900 mb-4">Score Entry Progress</h2>
               <div className="flex flex-col gap-3">
                 {data.classSummaries.map((cs) => (
-                  <div key={cs.class} className="border rounded-lg p-3">
+                  <div key={cs.class} className="border border-slate-200 rounded-xl p-3.5 hover:border-sky-300 transition">
                     <button
                       onClick={() =>
                         setExpandedClass(expandedClass === cs.class ? null : cs.class)
@@ -161,36 +162,36 @@ const Dashboard = () => {
                       className="w-full flex justify-between items-center text-left"
                     >
                       <div>
-                        <p className="text-sm font-medium text-gray-800">{cs.className}</p>
-                        <p className="text-xs text-gray-400">{cs.branch}</p>
+                        <p className="text-sm font-semibold text-slate-800">{cs.className}</p>
+                        <p className="text-xs text-slate-400 font-medium">{cs.branch}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <div className="w-24 h-2 rounded-full bg-gray-100 overflow-hidden">
+                        <div className="w-24 h-2 rounded-full bg-slate-100 overflow-hidden">
                           <div
-                            className="h-full rounded-full"
+                            className="h-full rounded-full transition-all duration-300"
                             style={{
                               width: `${cs.percentComplete}%`,
                               backgroundColor:
-                                cs.percentComplete === 100 ? "#0B3D2E" : "#C9A227",
+                                cs.percentComplete === 100 ? "#0284c7" : "#0ea5e9",
                             }}
                           />
                         </div>
-                        <span className="text-xs text-gray-500 w-10 text-right">
+                        <span className="text-xs font-bold text-slate-600 w-10 text-right">
                           {cs.percentComplete}%
                         </span>
                       </div>
                     </button>
 
                     {expandedClass === cs.class && (
-                      <div className="mt-3 pt-3 border-t flex flex-col gap-1.5">
+                      <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-1.5">
                         {cs.subjectCompletion.map((sc) => (
                           <div
                             key={sc.subject}
                             className="flex justify-between items-center text-xs"
                           >
-                            <span className="text-gray-600">{sc.nameEnglish}</span>
+                            <span className="text-slate-600 font-medium">{sc.nameEnglish}</span>
                             <span
-                              className={sc.complete ? "text-green-700" : "text-red-600"}
+                              className={`font-semibold ${sc.complete ? "text-sky-700" : "text-amber-600"}`}
                             >
                               {sc.entered}/{sc.expected}{" "}
                               {sc.complete ? "✓" : "— pending"}
@@ -202,37 +203,41 @@ const Dashboard = () => {
                   </div>
                 ))}
                 {data.classSummaries.length === 0 && (
-                  <p className="text-sm text-gray-400">No classes found.</p>
+                  <p className="text-sm text-slate-400">No classes found.</p>
                 )}
               </div>
             </div>
 
             {/* top students snapshot */}
-            <div className="bg-white rounded-xl shadow-sm p-5">
-              <h2 className="font-medium text-gray-800 mb-4">Top Students This Term</h2>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+              <h2 className="font-bold text-base text-slate-900 mb-4">Top Students This Term</h2>
               <div className="flex flex-col gap-2">
                 {data.topStudents.map((s, i) => (
                   <div
                     key={s.student}
-                    className="flex justify-between items-center py-2 border-b last:border-0"
+                    className="flex justify-between items-center py-2.5 border-b border-slate-100 last:border-0"
                   >
                     <div className="flex items-center gap-3">
                       <span
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium"
-                        style={{
-                          backgroundColor: i < 3 ? "#C9A227" : "#F4F1EA",
-                          color: i < 3 ? "#0B3D2E" : "#6B7280",
-                        }}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          i === 0
+                            ? "bg-amber-100 text-amber-800 border border-amber-300"
+                            : i === 1
+                            ? "bg-slate-200 text-slate-700 border border-slate-300"
+                            : i === 2
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
                       >
                         {i + 1}
                       </span>
-                      <span className="text-sm text-gray-800">{s.name}</span>
+                      <span className="text-sm font-medium text-slate-800">{s.name}</span>
                     </div>
-                    <span className="text-sm font-medium text-gray-600">{s.total}</span>
+                    <span className="text-sm font-bold text-sky-800">{s.total}</span>
                   </div>
                 ))}
                 {data.topStudents.length === 0 && (
-                  <p className="text-sm text-gray-400">No scores entered yet.</p>
+                  <p className="text-sm text-slate-400">No scores entered yet.</p>
                 )}
               </div>
             </div>
