@@ -47,6 +47,31 @@ const ParentHome = () => {
       .finally(() => setLoading(false));
   }, [selectedTerm]);
 
+  const openPrintWindow = (html: string) => {
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!selectedTerm) return;
+    try {
+      const res = await api.get(`/parent-portal/report-card/pdf?term=${selectedTerm}&format=html`, {
+        responseType: "text",
+      });
+      openPrintWindow(res.data);
+    } catch {
+      setError("Failed to open printable report card");
+    }
+  };
+
   const handleDownload = async () => {
     if (!selectedTerm) return;
     setDownloading(true);
@@ -54,7 +79,14 @@ const ParentHome = () => {
       const res = await api.get(`/parent-portal/report-card/pdf?term=${selectedTerm}`, {
         responseType: "blob",
       });
-      const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+      const contentType = String(res.headers["content-type"] || "");
+      if (contentType.includes("text/html")) {
+        const text = await res.data.text();
+        openPrintWindow(text);
+        return;
+      }
+
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
       const link = document.createElement("a");
       link.href = blobUrl;
       link.download = `${reportData?.student.name || "report-card"}.pdf`;
@@ -63,7 +95,7 @@ const ParentHome = () => {
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch {
-      setError("Failed to download PDF");
+      handlePrint();
     } finally {
       setDownloading(false);
     }
@@ -108,13 +140,22 @@ const ParentHome = () => {
             </select>
           </div>
 
-          <button
-            onClick={handleDownload}
-            disabled={!reportData || downloading}
-            className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 active:scale-[0.99] shadow-md shadow-sky-600/20 disabled:opacity-50 transition"
-          >
-            {downloading ? "Downloading PDF..." : "Download Official PDF"}
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={handleDownload}
+              disabled={!reportData || downloading}
+              className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 active:scale-[0.99] shadow-md shadow-sky-600/20 disabled:opacity-50 transition"
+            >
+              {downloading ? "Downloading PDF..." : "Download Official PDF"}
+            </button>
+            <button
+              onClick={handlePrint}
+              disabled={!reportData}
+              className="px-5 py-2.5 rounded-xl text-sky-700 text-sm font-semibold border border-sky-600 hover:bg-sky-50 active:scale-[0.99] shadow-xs disabled:opacity-50 transition"
+            >
+              Print / Save as PDF
+            </button>
+          </div>
         </div>
 
         {loading && (

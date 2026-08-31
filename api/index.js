@@ -1773,9 +1773,6 @@ var reportCardRoutes_default = router9;
 // server/routes/pdfRoutes.ts
 import { Router as Router10 } from "express";
 
-// server/utils/generateReportCardPdf.ts
-import puppeteer from "puppeteer";
-
 // server/utils/reportCardTemplate.ts
 import fs from "fs";
 import path from "path";
@@ -2236,42 +2233,52 @@ var buildBulkReportCardHtml = (dataList) => `
 // server/utils/generateReportCardPdf.ts
 var launchOptions = {
   headless: true,
-  args: ["--no-sandbox", "--disable-setuid-sandbox"]
+  args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--single-process", "--no-zygote"]
 };
 var generateSingleReportCardPdf = async (data) => {
-  const browser = await puppeteer.launch(launchOptions);
   try {
-    const page = await browser.newPage();
-    const html = buildSingleReportCardHtml(data);
-    await page.setContent(html, { waitUntil: "load" });
-    await page.waitForNetworkIdle();
-    await page.evaluateHandle("document.fonts.ready");
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      preferCSSPageSize: true
-    });
-    return Buffer.from(pdfBuffer);
-  } finally {
-    await browser.close();
+    const puppeteer = await import("puppeteer");
+    const browser = await puppeteer.default.launch(launchOptions);
+    try {
+      const page = await browser.newPage();
+      const html = buildSingleReportCardHtml(data);
+      await page.setContent(html, { waitUntil: "load" });
+      await page.evaluateHandle("document.fonts.ready");
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: true
+      });
+      return Buffer.from(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
+  } catch (err) {
+    console.warn("Puppeteer PDF generation not available in current environment, falling back to HTML print rendering:", err.message);
+    return null;
   }
 };
 var generateBulkReportCardPdf = async (dataList) => {
-  const browser = await puppeteer.launch(launchOptions);
   try {
-    const page = await browser.newPage();
-    const html = buildBulkReportCardHtml(dataList);
-    await page.setContent(html, { waitUntil: "load" });
-    await page.waitForNetworkIdle();
-    await page.evaluateHandle("document.fonts.ready");
-    const pdfBuffer = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      preferCSSPageSize: true
-    });
-    return Buffer.from(pdfBuffer);
-  } finally {
-    await browser.close();
+    const puppeteer = await import("puppeteer");
+    const browser = await puppeteer.default.launch(launchOptions);
+    try {
+      const page = await browser.newPage();
+      const html = buildBulkReportCardHtml(dataList);
+      await page.setContent(html, { waitUntil: "load" });
+      await page.evaluateHandle("document.fonts.ready");
+      const pdfBuffer = await page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: true
+      });
+      return Buffer.from(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
+  } catch (err) {
+    console.warn("Puppeteer PDF generation not available in current environment, falling back to HTML print rendering:", err.message);
+    return null;
   }
 };
 
@@ -2287,23 +2294,33 @@ var setPdfDownloadHeaders = (res, rawName) => {
 };
 var downloadSingleReportCardPdf = async (req, res) => {
   try {
-    const { student: studentId, term, gradingScale } = req.query;
+    const { student: studentId, term, gradingScale, format } = req.query;
     const reportData = await buildReportCardData(
       studentId,
       term,
       gradingScale
     );
     if (!reportData) return res.status(404).json({ message: "Report card data not found" });
+    if (format === "html") {
+      const html2 = buildSingleReportCardHtml(reportData);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html2);
+    }
     const pdfBuffer = await generateSingleReportCardPdf(reportData);
-    setPdfDownloadHeaders(res, reportData.student.name);
-    res.send(pdfBuffer);
+    if (pdfBuffer) {
+      setPdfDownloadHeaders(res, reportData.student.name);
+      return res.send(pdfBuffer);
+    }
+    const html = buildSingleReportCardHtml(reportData);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 var downloadBulkReportCardPdf = async (req, res) => {
   try {
-    const { class: classId, term, gradingScale } = req.query;
+    const { class: classId, term, gradingScale, format } = req.query;
     if (!classId || !term) {
       return res.status(400).json({ message: "class and term are required" });
     }
@@ -2323,10 +2340,20 @@ var downloadBulkReportCardPdf = async (req, res) => {
     if (reportDataList.length === 0) {
       return res.status(404).json({ message: "No report card data found for this class" });
     }
+    if (format === "html") {
+      const html2 = buildBulkReportCardHtml(reportDataList);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html2);
+    }
     const pdfBuffer = await generateBulkReportCardPdf(reportDataList);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="class_report_cards.pdf"`);
-    res.send(pdfBuffer);
+    if (pdfBuffer) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="class_report_cards.pdf"`);
+      return res.send(pdfBuffer);
+    }
+    const html = buildBulkReportCardHtml(reportDataList);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -2464,7 +2491,7 @@ var getMyChildReportCard = async (req, res) => {
 };
 var downloadMyChildReportCardPdf = async (req, res) => {
   try {
-    const { term, gradingScale } = req.query;
+    const { term, gradingScale, format } = req.query;
     if (!term) return res.status(400).json({ message: "term is required" });
     const studentId = await getLinkedStudentId(req.user.id);
     if (!studentId) {
@@ -2475,15 +2502,25 @@ var downloadMyChildReportCardPdf = async (req, res) => {
     }
     const data = await buildReportCardData(studentId, term, gradingScale);
     if (!data) return res.status(404).json({ message: "Report card not found" });
+    if (format === "html") {
+      const html2 = buildSingleReportCardHtml(data);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html2);
+    }
     const pdfBuffer = await generateSingleReportCardPdf(data);
-    const safeAsciiFallback = "report_card.pdf";
-    const encodedName = encodeURIComponent(`${data.student.name}_report_card.pdf`);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${safeAsciiFallback}"; filename*=UTF-8''${encodedName}`
-    );
-    res.send(pdfBuffer);
+    if (pdfBuffer) {
+      const safeAsciiFallback = "report_card.pdf";
+      const encodedName = encodeURIComponent(`${data.student.name}_report_card.pdf`);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${safeAsciiFallback}"; filename*=UTF-8''${encodedName}`
+      );
+      return res.send(pdfBuffer);
+    }
+    const html = buildSingleReportCardHtml(data);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }

@@ -6,12 +6,11 @@ import {
   generateSingleReportCardPdf,
   generateBulkReportCardPdf,
 } from "../utils/generateReportCardPdf";
+import {
+  buildSingleReportCardHtml,
+  buildBulkReportCardHtml,
+} from "../utils/reportCardTemplate";
 
-// Content-Disposition headers must stay ASCII-safe — a student's name may
-// contain Arabic script or other non-ASCII characters, which would crash
-// res.setHeader outright. RFC 5987's filename* syntax lets us send a
-// UTF-8 filename safely via percent-encoding, with a plain ASCII
-// fallback for older clients that don't support it.
 const setPdfDownloadHeaders = (res: Response, rawName: string) => {
   const safeAsciiFallback = "report_card.pdf";
   const encodedName = encodeURIComponent(`${rawName}_report_card.pdf`);
@@ -22,10 +21,10 @@ const setPdfDownloadHeaders = (res: Response, rawName: string) => {
   );
 };
 
-// GET /api/report-card/pdf/single?student=<id>&term=<termId>&gradingScale=<scaleId>
+// GET /api/report-card/pdf/single?student=<id>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>
 export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
-    const { student: studentId, term, gradingScale } = req.query;
+    const { student: studentId, term, gradingScale, format } = req.query;
 
     const reportData = await buildReportCardData(
       studentId as string,
@@ -35,19 +34,32 @@ export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Respons
 
     if (!reportData) return res.status(404).json({ message: "Report card data not found" });
 
+    if (format === "html") {
+      const html = buildSingleReportCardHtml(reportData);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    }
+
     const pdfBuffer = await generateSingleReportCardPdf(reportData);
 
-    setPdfDownloadHeaders(res, reportData.student.name);
-    res.send(pdfBuffer);
+    if (pdfBuffer) {
+      setPdfDownloadHeaders(res, reportData.student.name);
+      return res.send(pdfBuffer);
+    }
+
+    // Fallback: If Chromium is not available on serverless, return the standalone printable HTML
+    const html = buildSingleReportCardHtml(reportData);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
   }
 };
 
-// GET /api/report-card/pdf/bulk?class=<classId>&term=<termId>&gradingScale=<scaleId>
+// GET /api/report-card/pdf/bulk?class=<classId>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>
 export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
-    const { class: classId, term, gradingScale } = req.query;
+    const { class: classId, term, gradingScale, format } = req.query;
 
     if (!classId || !term) {
       return res.status(400).json({ message: "class and term are required" });
@@ -72,11 +84,24 @@ export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response)
       return res.status(404).json({ message: "No report card data found for this class" });
     }
 
+    if (format === "html") {
+      const html = buildBulkReportCardHtml(reportDataList);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    }
+
     const pdfBuffer = await generateBulkReportCardPdf(reportDataList);
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="class_report_cards.pdf"`);
-    res.send(pdfBuffer);
+    if (pdfBuffer) {
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="class_report_cards.pdf"`);
+      return res.send(pdfBuffer);
+    }
+
+    // Fallback: Standalone multi-page printable HTML
+    const html = buildBulkReportCardHtml(reportDataList);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
   }

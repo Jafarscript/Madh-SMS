@@ -4,6 +4,7 @@ import Term from "../models/Term";
 import { AuthRequest } from "../middleware/auth";
 import { buildReportCardData } from "./reportCardController";
 import { generateSingleReportCardPdf } from "../utils/generateReportCardPdf";
+import { buildSingleReportCardHtml } from "../utils/reportCardTemplate";
 import { isStudentResultPublished } from "./resultPublicationController";
 
 const getLinkedStudentId = async (userId: string): Promise<string | null> => {
@@ -35,10 +36,10 @@ export const getMyChildReportCard = async (req: AuthRequest, res: Response) => {
   }
 };
 
-// GET /api/parent-portal/report-card/pdf?term=<termId>&gradingScale=<scaleId>
+// GET /api/parent-portal/report-card/pdf?term=<termId>&gradingScale=<scaleId>&format=<pdf|html>
 export const downloadMyChildReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
-    const { term, gradingScale } = req.query;
+    const { term, gradingScale, format } = req.query;
     if (!term) return res.status(400).json({ message: "term is required" });
 
     const studentId = await getLinkedStudentId(req.user!.id);
@@ -52,21 +53,34 @@ export const downloadMyChildReportCardPdf = async (req: AuthRequest, res: Respon
     const data = await buildReportCardData(studentId, term as string, gradingScale as string);
     if (!data) return res.status(404).json({ message: "Report card not found" });
 
+    if (format === "html") {
+      const html = buildSingleReportCardHtml(data);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    }
+
     const pdfBuffer = await generateSingleReportCardPdf(data);
 
-    // same ASCII-safe header handling as the admin download route
-    const safeAsciiFallback = "report_card.pdf";
-    const encodedName = encodeURIComponent(`${data.student.name}_report_card.pdf`);
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename="${safeAsciiFallback}"; filename*=UTF-8''${encodedName}`
-    );
-    res.send(pdfBuffer);
+    if (pdfBuffer) {
+      const safeAsciiFallback = "report_card.pdf";
+      const encodedName = encodeURIComponent(`${data.student.name}_report_card.pdf`);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${safeAsciiFallback}"; filename*=UTF-8''${encodedName}`
+      );
+      return res.send(pdfBuffer);
+    }
+
+    // Fallback: Return printable standalone HTML
+    const html = buildSingleReportCardHtml(data);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(html);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
   }
 };
+
 
 // GET /api/parent-portal/terms
 export const getAvailableTerms = async (_req: AuthRequest, res: Response) => {

@@ -192,11 +192,33 @@ const ReportCard = () => {
     }
   };
 
+  const openPrintWindow = (html: string) => {
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+      }, 500);
+    }
+  };
+
   // downloads a single PDF by requesting it as a blob, then triggering
-  // a browser download — needed because this is an authenticated request
+  // a browser download — if the backend returned HTML (e.g. serverless fallback),
+  // opens a high-fidelity print window to Save as PDF natively.
   const downloadBlob = async (url: string, filename: string) => {
     const res = await api.get(url, { responseType: "blob" });
-    const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+    const contentType = String(res.headers["content-type"] || "");
+
+    if (contentType.includes("text/html")) {
+      const text = await res.data.text();
+      openPrintWindow(text);
+      return;
+    }
+
+    const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
     const link = document.createElement("a");
     link.href = blobUrl;
     link.download = filename;
@@ -204,6 +226,35 @@ const ReportCard = () => {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(blobUrl);
+  };
+
+  const handlePrintSingle = async () => {
+    if (!canView) return;
+    try {
+      const res = await api.get(
+        `/report-card/pdf/single?student=${selectedStudent}&term=${selectedTerm}&gradingScale=${selectedScale}&format=html`,
+        { responseType: "text" }
+      );
+      openPrintWindow(res.data);
+    } catch {
+      setError("Failed to generate printable report card");
+    }
+  };
+
+  const handlePrintBulk = async () => {
+    if (!selectedClass || !selectedTerm || !selectedScale) {
+      setError("Select a class, term, and grading scale first");
+      return;
+    }
+    try {
+      const res = await api.get(
+        `/report-card/pdf/bulk?class=${selectedClass}&term=${selectedTerm}&gradingScale=${selectedScale}&format=html`,
+        { responseType: "text" }
+      );
+      openPrintWindow(res.data);
+    } catch {
+      setError("Failed to generate bulk printable report cards");
+    }
   };
 
   const handleDownloadSingle = async () => {
@@ -215,7 +266,8 @@ const ReportCard = () => {
         `${reportData?.student.name || "report-card"}.pdf`,
       );
     } catch {
-      setError("Failed to download PDF");
+      // If direct PDF failed, fallback to print view
+      handlePrintSingle();
     } finally {
       setDownloading(false);
     }
@@ -234,7 +286,7 @@ const ReportCard = () => {
         `class-report-cards.pdf`,
       );
     } catch {
-      setError("Failed to download bulk PDF");
+      handlePrintBulk();
     } finally {
       setBulkDownloading(false);
     }
@@ -496,20 +548,39 @@ const ReportCard = () => {
               id="download-single-pdf-btn"
               onClick={handleDownloadSingle}
               disabled={!canView || downloading}
+              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
+            >
+              {downloading ? "Preparing PDF..." : "Download PDF (A4)"}
+            </button>
+
+            <button
+              id="print-single-pdf-btn"
+              onClick={handlePrintSingle}
+              disabled={!canView}
               className="px-4 py-2 rounded-xl border border-sky-600 text-sky-700 text-xs font-semibold hover:bg-sky-50 shadow-xs transition disabled:opacity-50"
             >
-              {downloading ? "Preparing A4 PDF..." : "Download Single PDF (A4)"}
+              Print / Save as PDF
             </button>
           </div>
 
-          <button
-            id="download-bulk-pdf-btn"
-            onClick={handleDownloadBulk}
-            disabled={!selectedClass || !selectedTerm || bulkDownloading}
-            className="px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50 bg-amber-500 hover:bg-amber-600 text-white"
-          >
-            {bulkDownloading ? "Generating Class PDFs..." : "Download Whole Class (Bulk A4 PDF)"}
-          </button>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              id="download-bulk-pdf-btn"
+              onClick={handleDownloadBulk}
+              disabled={!selectedClass || !selectedTerm || bulkDownloading}
+              className="px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50 bg-amber-500 hover:bg-amber-600 text-white"
+            >
+              {bulkDownloading ? "Generating Class PDFs..." : "Download Class (Bulk PDF)"}
+            </button>
+            <button
+              id="print-bulk-pdf-btn"
+              onClick={handlePrintBulk}
+              disabled={!selectedClass || !selectedTerm}
+              className="px-4 py-2 rounded-xl border border-amber-600 text-amber-700 text-xs font-semibold hover:bg-amber-50 shadow-xs transition disabled:opacity-50"
+            >
+              Print Whole Class
+            </button>
+          </div>
         </div>
 
         {/* Publication Status */}
