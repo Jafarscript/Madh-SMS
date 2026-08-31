@@ -3,10 +3,16 @@ import { MongoMemoryServer } from "mongodb-memory-server";
 import { seedDatabase } from "../seed";
 
 let mongoServer: MongoMemoryServer | null = null;
+let isConnected = false;
 
 const connectDB = async (): Promise<void> => {
+  // Check if mongoose already has an active connection (readyState 1 = connected, 2 = connecting)
+  if (mongoose.connection.readyState >= 1) {
+    return;
+  }
+
   try {
-    const mongoUri = process.env.MONGO_URI?.trim();
+    const mongoUri = (process.env.MONGODB_URI || process.env.MONGO_URI)?.trim();
     if (mongoUri) {
       try {
         console.log("Connecting to MongoDB Atlas...");
@@ -15,7 +21,10 @@ const connectDB = async (): Promise<void> => {
           connectTimeoutMS: 5000,
         });
         console.log(`MongoDB connected successfully: ${conn.connection.host}`);
-        await seedDatabase();
+        if (!isConnected) {
+          isConnected = true;
+          await seedDatabase();
+        }
         return;
       } catch (externalErr) {
         console.warn(
@@ -24,9 +33,9 @@ const connectDB = async (): Promise<void> => {
       }
     }
 
-    // In-memory Mongo Database for seamless zero-config local execution
-    console.log("Starting in-memory MongoDB server...");
-    try {
+    // In-memory Mongo Database for local development/fallback
+    if (!mongoServer) {
+      console.log("Starting in-memory MongoDB server...");
       mongoServer = await MongoMemoryServer.create();
       const uri = mongoServer.getUri();
       await mongoose.connect(uri, {
@@ -34,11 +43,10 @@ const connectDB = async (): Promise<void> => {
         connectTimeoutMS: 5000,
       });
       console.log(`In-memory MongoDB connected: ${uri}`);
-
-      // Seed with initial data
-      await seedDatabase();
-    } catch (memErr) {
-      console.error(`In-memory MongoDB start failed: ${(memErr as Error).message}`);
+      if (!isConnected) {
+        isConnected = true;
+        await seedDatabase();
+      }
     }
   } catch (error) {
     console.error(`DB Connection Error: ${error}`);
