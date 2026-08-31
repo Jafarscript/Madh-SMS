@@ -323,7 +323,8 @@ const Users = () => {
                 {classes.map((c) => (
                   <option key={c._id} value={c._id}>
                     {c.name}
-                    {c.arm ? ` — الشعبة  ${c.arm}` : ""}
+                    {c.arm ? ` — الشعبة  ${c.arm}` : ""}{" "}
+                    {(c as any).branch?.name ? `(${(c as any).branch.name})` : ""}
                   </option>
                 ))}
               </select>

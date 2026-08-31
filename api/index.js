@@ -632,11 +632,23 @@ var getClasses = async (req, res) => {
 };
 var updateClass = async (req, res) => {
   try {
+    const { name, arm, branch } = req.body;
+    const updateData = {};
+    if (name !== void 0) updateData.name = name;
+    if (branch !== void 0) updateData.branch = branch;
+    const updateQuery = { $set: updateData };
+    if (arm !== void 0) {
+      if (typeof arm === "string" && arm.trim()) {
+        updateData.arm = arm.trim();
+      } else {
+        updateQuery.$unset = { arm: 1 };
+      }
+    }
     const updated = await Class_default.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateQuery,
       { new: true }
-    );
+    ).populate("branch", "name");
     if (!updated) return res.status(404).json({ message: "Class not found" });
     res.status(200).json(updated);
   } catch (err) {

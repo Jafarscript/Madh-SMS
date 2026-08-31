@@ -25,6 +25,12 @@ const Classes = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editArm, setEditArm] = useState("");
+  const [editBranchId, setEditBranchId] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const fetchData = async () => {
     const [classRes, branchRes] = await Promise.all([
       api.get("/classes"),
@@ -61,6 +67,47 @@ const Classes = () => {
     }
   };
 
+  const startEdit = (classItem: ClassItem) => {
+    setEditingId(classItem._id);
+    setEditName(classItem.name);
+    setEditArm(classItem.arm || "");
+    setEditBranchId(classItem.branch?._id || "");
+    setError("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditName("");
+    setEditArm("");
+    setEditBranchId("");
+  };
+
+  const handleSaveEdit = async (id: string) => {
+    if (!editName.trim()) {
+      setError("Class name cannot be empty");
+      return;
+    }
+    if (!editBranchId) {
+      setError("Branch must be selected");
+      return;
+    }
+    setSavingEdit(true);
+    setError("");
+    try {
+      await api.put(`/classes/${id}`, {
+        name: editName.trim(),
+        arm: editArm.trim(),
+        branch: editBranchId,
+      });
+      await fetchData();
+      cancelEdit();
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to update class");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!confirm("Delete this class? This cannot be undone.")) return;
     await api.delete(`/classes/${id}`);
@@ -71,7 +118,7 @@ const Classes = () => {
     <div className="p-8 max-w-3xl">
       <PageHeader
         title="Classes & Arms"
-        subtitle="Create classes; add an arm only if this class is split (e.g. A / B)"
+        subtitle="Manage and edit classes; add an arm only if this class is split (e.g. A / B)"
       />
 
       <form
@@ -139,20 +186,92 @@ const Classes = () => {
           <p className="p-6 text-sm text-gray-400">No classes yet — add one above.</p>
         )}
         {classes.map((c) => (
-          <div key={c._id} className="p-4 flex justify-between items-center">
-            <div>
-              <p className="font-medium text-gray-800">
-                {c.name}
-                {c.arm && <span className="text-gray-400"> — الشعبة  {c.arm}</span>}
-              </p>
-              <p className="text-sm text-gray-500">{c.branch?.name}</p>
-            </div>
-            <button
-              onClick={() => handleDelete(c._id)}
-              className="text-sm text-red-600 hover:underline"
-            >
-              Delete
-            </button>
+          <div key={c._id} className="p-4">
+            {editingId === c._id ? (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      Branch
+                    </label>
+                    <select
+                      value={editBranchId}
+                      onChange={(e) => setEditBranchId(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                    >
+                      <option value="">Select branch</option>
+                      {branches.map((b) => (
+                        <option key={b._id} value={b._id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      Class Name
+                    </label>
+                    <input
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                      placeholder="Class name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      الشعبة (optional)
+                    </label>
+                    <input
+                      value={editArm}
+                      onChange={(e) => setEditArm(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                      placeholder="e.g. A"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end items-center mt-1">
+                  <button
+                    onClick={() => handleSaveEdit(c._id)}
+                    disabled={savingEdit}
+                    className="px-4 py-1.5 rounded-lg text-white text-xs font-semibold bg-sky-600 hover:bg-sky-700 disabled:opacity-50 transition shadow-xs"
+                  >
+                    {savingEdit ? "Saving..." : "Save Changes"}
+                  </button>
+                  <button
+                    onClick={cancelEdit}
+                    disabled={savingEdit}
+                    className="px-4 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-xs font-medium hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-between items-center">
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {c.name}
+                    {c.arm && <span className="text-gray-500 font-normal"> — الشعبة {c.arm}</span>}
+                  </p>
+                  <p className="text-xs font-medium text-sky-700 mt-0.5">{c.branch?.name || "No branch"}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => startEdit(c)}
+                    className="text-sm font-medium text-sky-600 hover:text-sky-800 hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => handleDelete(c._id)}
+                    className="text-sm text-red-600 hover:text-red-800 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>

@@ -47,11 +47,25 @@ export const getClasses = async (req: AuthRequest, res: Response) => {
 
 export const updateClass = async (req: AuthRequest, res: Response) => {
   try {
+    const { name, arm, branch } = req.body;
+    const updateData: Record<string, any> = {};
+    if (name !== undefined) updateData.name = name;
+    if (branch !== undefined) updateData.branch = branch;
+
+    const updateQuery: Record<string, any> = { $set: updateData };
+    if (arm !== undefined) {
+      if (typeof arm === "string" && arm.trim()) {
+        updateData.arm = arm.trim();
+      } else {
+        updateQuery.$unset = { arm: 1 };
+      }
+    }
+
     const updated = await ClassModel.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateQuery,
       { new: true },
-    );
+    ).populate("branch", "name");
     if (!updated) return res.status(404).json({ message: "Class not found" });
     res.status(200).json(updated);
   } catch (err) {
