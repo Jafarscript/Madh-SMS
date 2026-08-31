@@ -2,11 +2,15 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const currentDir =
+  typeof __dirname !== "undefined"
+    ? __dirname
+    : typeof import.meta?.url === "string"
+      ? path.dirname(fileURLToPath(import.meta.url))
+      : process.cwd();
 
-const LOGO_PATH = path.join(__dirname, "../assets/logo.png");
-const FONT_PATH = path.join(__dirname, "../assets/fonts/Amiri-Regular.ttf");
+const LOGO_PATH = path.join(currentDir, "../assets/logo.png");
+const FONT_PATH = path.join(currentDir, "../assets/fonts/Amiri-Regular.ttf");
 
 const logoBase64 = fs.existsSync(LOGO_PATH)
   ? fs.readFileSync(LOGO_PATH).toString("base64")
