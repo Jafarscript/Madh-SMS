@@ -43,6 +43,7 @@ export const buildReportCardData = async (
   const subjects = await Subject.find({
     class: (student.class as any)._id,
   }).sort({
+    order: 1,
     nameEnglish: 1,
   });
 

@@ -88,6 +88,13 @@ const navItemsConfig: NavItemConfig[] = [
     group: "people",
   },
   {
+    to: "/admin/score-entry",
+    label: "Score Entry",
+    roles: ["super_admin", "branch_admin", "class_teacher"],
+    icon: BookOpen,
+    group: "performance",
+  },
+  {
     to: "/admin/broadsheet",
     label: "Broadsheet",
     roles: ["super_admin", "branch_admin", "class_teacher"],

@@ -119,6 +119,7 @@ function App() {
             </RoleGate>
           }
         />
+        <Route path="score-entry" element={<SubjectTeacherHome />} />
         <Route path="broadsheet" element={<Broadsheet />} />
         <Route path="attendance" element={<Attendance />} />
         <Route path="report-cards" element={<ReportCard />} />
@@ -135,7 +136,7 @@ function App() {
       <Route
         path="/subject-teacher"
         element={
-          <ProtectedRoute allowedRoles={["subject_teacher"]}>
+          <ProtectedRoute allowedRoles={["subject_teacher", "class_teacher"]}>
             <SubjectTeacherHome />
           </ProtectedRoute>
         }

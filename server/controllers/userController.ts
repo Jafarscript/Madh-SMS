@@ -29,12 +29,63 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
     const users = await User.find(filter)
       .select("-password")
       .populate("branch", "name")
-      .populate("classes", "name arm")
-      .populate("subjects", "nameEnglish")
+      .populate({
+        path: "classes",
+        select: "name arm branch",
+        populate: { path: "branch", select: "name" },
+      })
+      .populate({
+        path: "subjects",
+        select: "nameEnglish nameArabic class",
+        populate: {
+          path: "class",
+          select: "name arm branch",
+          populate: { path: "branch", select: "name" },
+        },
+      })
       .populate("linkedStudent", "name")
       .sort({ name: 1 });
 
     res.status(200).json(users);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: (err as Error).message });
+  }
+};
+
+// PUT /api/users/:id
+export const updateUser = async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, email, role, branch, classes, subjects, linkedStudent } = req.body;
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // If changing email, check for uniqueness
+    if (email && email !== user.email) {
+      const existing = await User.findOne({ email });
+      if (existing) {
+        return res.status(400).json({ message: "Email already in use by another user" });
+      }
+      user.email = email;
+    }
+
+    if (name) user.name = name;
+    if (role) user.role = role;
+    user.branch = branch || undefined;
+    user.classes = classes || [];
+    user.subjects = subjects || [];
+    user.linkedStudent = linkedStudent || undefined;
+
+    await user.save();
+
+    const updated = await User.findById(user._id)
+      .select("-password")
+      .populate("branch", "name")
+      .populate("classes", "name arm branch")
+      .populate("subjects", "nameEnglish nameArabic class")
+      .populate("linkedStudent", "name");
+
+    res.status(200).json({ message: "User updated successfully", user: updated });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
   }

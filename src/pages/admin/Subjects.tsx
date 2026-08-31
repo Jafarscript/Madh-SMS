@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
+import { ArrowUp, ArrowDown, ArrowUpDown, GripVertical, Check, RefreshCw } from "lucide-react";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import { predefinedSubjects } from "../../data/predefinedSubjects";
@@ -23,6 +24,7 @@ interface Subject {
   nameEnglish: string;
   nameArabic?: string;
   class: string;
+  order?: number;
 }
 
 const Subjects = () => {
@@ -38,7 +40,8 @@ const Subjects = () => {
   const [nameArabic, setNameArabic] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selectedPredefined, setSelectedPredefined] = useState<string[]>([]); // holds nameEnglish values
+  const [successMessage, setSuccessMessage] = useState("");
+  const [selectedPredefined, setSelectedPredefined] = useState<string[]>([]);
   const [addingPredefined, setAddingPredefined] = useState(false);
 
   // Subject editing state
@@ -47,33 +50,45 @@ const Subjects = () => {
   const [editNameArabic, setEditNameArabic] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Modal / Reordering state
+  const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
+  const [reorderedList, setReorderedList] = useState<Subject[]>([]);
+  const [savingReorder, setSavingReorder] = useState(false);
+
   useEffect(() => {
-    Promise.all([
-      api.get("/classes"),
-      api.get("/branches"),
-    ]).then(([classRes, branchRes]) => {
+    Promise.all([api.get("/classes"), api.get("/branches")]).then(([classRes, branchRes]) => {
       setClasses(classRes.data);
       setBranches(branchRes.data);
     });
   }, []);
 
-  // Filter classes based on selected branch
   const filteredClasses = selectedBranch
     ? classes.filter((c) => c.branch?._id === selectedBranch)
     : classes;
 
   const currentClassObj = classes.find((c) => c._id === selectedClass);
 
-  // subjects are per-class, so re-fetch every time the selected class changes
   useEffect(() => {
     if (!selectedClass) {
       setSubjects([]);
       return;
     }
-    api
-      .get(`/subjects?class=${selectedClass}`)
-      .then((res) => setSubjects(res.data));
+    fetchSubjects();
   }, [selectedClass]);
+
+  const fetchSubjects = async () => {
+    try {
+      const res = await api.get(`/subjects?class=${selectedClass}`);
+      setSubjects(res.data);
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
+
+  const showSuccess = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(""), 3500);
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,8 +106,8 @@ const Subjects = () => {
       });
       setNameEnglish("");
       setNameArabic("");
-      const res = await api.get(`/subjects?class=${selectedClass}`);
-      setSubjects(res.data);
+      await fetchSubjects();
+      showSuccess("Subject added successfully");
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to create subject");
     } finally {
@@ -124,9 +139,9 @@ const Subjects = () => {
         nameEnglish: editNameEnglish.trim(),
         nameArabic: editNameArabic.trim() || "",
       });
-      const res = await api.get(`/subjects?class=${selectedClass}`);
-      setSubjects(res.data);
+      await fetchSubjects();
       cancelEditSubject();
+      showSuccess("Subject updated successfully");
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to update subject");
     } finally {
@@ -135,17 +150,21 @@ const Subjects = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this subject?")) return;
-    await api.delete(`/subjects/${id}`);
-    const res = await api.get(`/subjects?class=${selectedClass}`);
-    setSubjects(res.data);
+    if (!confirm("Delete this subject? Scores entered for this subject in this class may be affected.")) return;
+    try {
+      await api.delete(`/subjects/${id}`);
+      await fetchSubjects();
+      showSuccess("Subject deleted");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to delete subject");
+    }
   };
 
   const togglePredefined = (nameEnglishVal: string) => {
     setSelectedPredefined((prev) =>
       prev.includes(nameEnglishVal)
         ? prev.filter((n) => n !== nameEnglishVal)
-        : [...prev, nameEnglishVal],
+        : [...prev, nameEnglishVal]
     );
   };
 
@@ -155,15 +174,15 @@ const Subjects = () => {
     setError("");
     try {
       const toAdd = predefinedSubjects.filter((s) =>
-        selectedPredefined.includes(s.nameEnglish),
+        selectedPredefined.includes(s.nameEnglish)
       );
       await api.post("/subjects/bulk", {
         class: selectedClass,
         subjects: toAdd,
       });
       setSelectedPredefined([]);
-      const res = await api.get(`/subjects?class=${selectedClass}`);
-      setSubjects(res.data);
+      await fetchSubjects();
+      showSuccess(`Added ${toAdd.length} subjects to class`);
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to add subjects");
     } finally {
@@ -171,15 +190,77 @@ const Subjects = () => {
     }
   };
 
+  // Quick single step Move Up / Down
+  const handleQuickMove = async (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= subjects.length) return;
+
+    const newList = [...subjects];
+    const [moved] = newList.splice(index, 1);
+    newList.splice(targetIndex, 0, moved);
+
+    setSubjects(newList);
+    try {
+      await api.put("/subjects/reorder", {
+        class: selectedClass,
+        subjectIds: newList.map((s) => s._id),
+      });
+      showSuccess("Subject order updated for report cards & broadsheet");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to save subject order");
+      fetchSubjects();
+    }
+  };
+
+  // Open Reorder Modal
+  const openReorderModal = () => {
+    setReorderedList([...subjects]);
+    setIsReorderModalOpen(true);
+  };
+
+  const moveModalItem = (index: number, direction: "up" | "down") => {
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= reorderedList.length) return;
+
+    const newList = [...reorderedList];
+    const [moved] = newList.splice(index, 1);
+    newList.splice(targetIndex, 0, moved);
+    setReorderedList(newList);
+  };
+
+  const handleSaveReorderModal = async () => {
+    setSavingReorder(true);
+    try {
+      await api.put("/subjects/reorder", {
+        class: selectedClass,
+        subjectIds: reorderedList.map((s) => s._id),
+      });
+      setSubjects(reorderedList);
+      setIsReorderModalOpen(false);
+      showSuccess("Subject order saved! Report cards will reflect this sequence.");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to save subject order");
+    } finally {
+      setSavingReorder(false);
+    }
+  };
+
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-8 max-w-4xl">
       <PageHeader
-        title="Subjects"
-        subtitle="Subjects are assigned per class — pick a branch and class to manage its curriculum"
+        title="Subjects & Curriculum Order"
+        subtitle="Manage class subjects and set custom order for Report Cards & Broadsheets"
       />
 
+      {successMessage && (
+        <div className="mb-6 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-medium flex items-center gap-2">
+          <Check className="w-4 h-4 text-emerald-600" />
+          {successMessage}
+        </div>
+      )}
+
       <div className="bg-white p-5 rounded-xl shadow-xs border border-gray-100 mb-6 flex flex-col sm:flex-row gap-4">
-        {/* Branch Filter for Super Admin (and all admins) */}
+        {/* Branch Filter */}
         <div className="flex-1">
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">
             {isSuperAdmin ? "Branch (Super Admin Filter)" : "Branch"}
@@ -188,7 +269,6 @@ const Subjects = () => {
             value={selectedBranch}
             onChange={(e) => {
               setSelectedBranch(e.target.value);
-              // if selected class is not in the new branch filter, reset selected class
               if (e.target.value) {
                 const isStillValid = classes.some(
                   (c) => c._id === selectedClass && c.branch?._id === e.target.value
@@ -207,7 +287,7 @@ const Subjects = () => {
           </select>
         </div>
 
-        {/* Class Selector with clear branch context */}
+        {/* Class Selector */}
         <div className="flex-1">
           <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">
             Class
@@ -231,7 +311,7 @@ const Subjects = () => {
       {currentClassObj && (
         <div className="mb-6 p-3.5 bg-sky-50 border border-sky-100 rounded-xl flex items-center justify-between text-xs text-sky-900">
           <div className="flex items-center gap-2">
-            <span className="font-semibold text-sky-800">Active Working Branch:</span>
+            <span className="font-semibold text-sky-800">Active Branch:</span>
             <span className="px-2.5 py-1 bg-white font-medium rounded-md shadow-2xs text-sky-700 border border-sky-200">
               {currentClassObj.branch?.name || "General"}
             </span>
@@ -247,26 +327,30 @@ const Subjects = () => {
 
       {selectedClass && (
         <>
+          {/* Add Subject Form */}
           <form
             onSubmit={handleCreate}
-            className="bg-white p-6 rounded-xl shadow-sm mb-8 flex flex-col gap-4"
+            className="bg-white p-6 rounded-xl shadow-sm mb-8 flex flex-col gap-4 border border-gray-100"
           >
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+            <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">
+              Add New Custom Subject
+            </h3>
+            {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Subject name (English)
                 </label>
                 <input
                   value={nameEnglish}
                   onChange={(e) => setNameEnglish(e.target.value)}
                   required
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
-                  placeholder="e.g. Hadith"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500"
+                  placeholder="e.g. Science of Hadith"
                 />
               </div>
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Subject name (Arabic)
                 </label>
                 <input
@@ -274,8 +358,8 @@ const Subjects = () => {
                   onChange={(e) => setNameArabic(e.target.value)}
                   dir="rtl"
                   style={{ fontFamily: "Amiri, serif" }}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
-                  placeholder="الحديث"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-sky-500 text-lg"
+                  placeholder="مصطلح الحديث"
                 />
               </div>
             </div>
@@ -288,11 +372,17 @@ const Subjects = () => {
             </button>
           </form>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm mb-6">
+          {/* Predefined Subjects Picker */}
+          <div className="bg-white p-6 rounded-xl shadow-sm mb-8 border border-gray-100">
             <div className="flex justify-between items-center mb-3">
-              <label className="block text-sm font-semibold text-gray-700">
-                Add from predefined subjects
-              </label>
+              <div>
+                <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider">
+                  Quick Add from Predefined Curriculum
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Select Islamic & Arabic studies subjects to add directly to this class
+                </p>
+              </div>
               <div className="flex gap-2 text-xs">
                 <button
                   type="button"
@@ -319,19 +409,15 @@ const Subjects = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mb-4 max-h-64 overflow-y-auto p-2 border border-gray-100 rounded-lg bg-gray-50/50">
               {predefinedSubjects
-                // hide ones already added to this class, so the list doesn't
-                // let you accidentally create duplicates
-                .filter(
-                  (p) => !subjects.some((s) => s.nameEnglish === p.nameEnglish),
-                )
+                .filter((p) => !subjects.some((s) => s.nameEnglish === p.nameEnglish))
                 .map((p) => {
                   const isChecked = selectedPredefined.includes(p.nameEnglish);
                   return (
                     <label
                       key={p.nameEnglish}
-                      className={`flex items-center gap-2 p-2 rounded-lg border text-sm cursor-pointer transition select-none ${
+                      className={`flex items-center gap-2 p-2.5 rounded-lg border text-sm cursor-pointer transition select-none ${
                         isChecked
-                          ? "bg-sky-50 border-sky-300 text-sky-900 font-medium"
+                          ? "bg-sky-50 border-sky-300 text-sky-900 font-medium shadow-2xs"
                           : "bg-white border-gray-200 text-gray-700 hover:border-gray-300"
                       }`}
                     >
@@ -339,12 +425,12 @@ const Subjects = () => {
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => togglePredefined(p.nameEnglish)}
-                        className="rounded text-sky-600 focus:ring-sky-500"
+                        className="rounded text-sky-600 focus:ring-sky-500 w-4 h-4"
                       />
-                      <span className="truncate flex-1">{p.nameEnglish}</span>
+                      <span className="truncate flex-1 text-xs">{p.nameEnglish}</span>
                       <span
                         style={{ fontFamily: "Amiri, serif" }}
-                        className="text-xs text-gray-500 ml-1"
+                        className="text-sm font-semibold text-emerald-800 ml-1"
                         dir="rtl"
                       >
                         {p.nameArabic}
@@ -365,21 +451,37 @@ const Subjects = () => {
             </button>
           </div>
 
-          <p className="text-sm text-gray-500 mb-3">
-            Subjects registered for this class:
-          </p>
+          {/* Subjects Table with Order Badges & Reordering */}
+          <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">
+                Registered Subjects ({subjects.length})
+              </h3>
+              <p className="text-xs text-gray-500">
+                Subjects appear on report cards and broadsheets in this exact sequential order (#1 to #{subjects.length}).
+              </p>
+            </div>
 
-          <div className="bg-white rounded-xl shadow-sm divide-y">
+            {subjects.length > 1 && (
+              <button
+                type="button"
+                onClick={openReorderModal}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold shadow-xs transition active:scale-95"
+              >
+                <ArrowUpDown className="w-4 h-4" />
+                Arrange Report Card Order
+              </button>
+            )}
+          </div>
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 divide-y overflow-hidden">
             {subjects.length === 0 && (
-              <p className="p-6 text-sm text-gray-400">
-                No subjects for this class yet.
+              <p className="p-8 text-sm text-gray-400 text-center">
+                No subjects registered for this class yet. Add from above.
               </p>
             )}
-            {subjects.map((s) => (
-              <div
-                key={s._id}
-                className="p-4"
-              >
+            {subjects.map((s, index) => (
+              <div key={s._id} className="p-4 transition hover:bg-slate-50/50">
                 {editingSubjectId === s._id ? (
                   <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -403,7 +505,7 @@ const Subjects = () => {
                           onChange={(e) => setEditNameArabic(e.target.value)}
                           dir="rtl"
                           style={{ fontFamily: "Amiri, serif" }}
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden text-base"
                           placeholder="الفقه"
                         />
                       </div>
@@ -426,28 +528,61 @@ const Subjects = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-between items-center">
-                    <p className="font-medium text-gray-800">
-                      {s.nameEnglish}
-                      {s.nameArabic && (
-                        <span
-                          className="text-gray-500 ml-2"
-                          style={{ fontFamily: "Amiri, serif" }}
-                        >
-                          {s.nameArabic}
-                        </span>
-                      )}
-                    </p>
+                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
+                      {/* Order indicator */}
+                      <span className="w-7 h-7 rounded-lg bg-sky-50 text-sky-700 font-bold text-xs flex items-center justify-center border border-sky-200">
+                        {index + 1}
+                      </span>
+
+                      <div>
+                        <span className="font-semibold text-gray-800 text-sm">
+                          {s.nameEnglish}
+                        </span>
+                        {s.nameArabic && (
+                          <span
+                            className="text-emerald-800 font-medium ml-2.5 text-base"
+                            style={{ fontFamily: "Amiri, serif" }}
+                            dir="rtl"
+                          >
+                            {s.nameArabic}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Up/Down Quick Shift */}
+                      <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleQuickMove(index, "up")}
+                          disabled={index === 0}
+                          className="p-1 text-gray-500 hover:text-gray-900 disabled:opacity-30 transition rounded hover:bg-white"
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickMove(index, "down")}
+                          disabled={index === subjects.length - 1}
+                          className="p-1 text-gray-500 hover:text-gray-900 disabled:opacity-30 transition rounded hover:bg-white"
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
                       <button
                         onClick={() => startEditSubject(s)}
-                        className="text-sm font-medium text-sky-600 hover:text-sky-800 hover:underline"
+                        className="px-2.5 py-1 text-xs font-medium text-sky-700 hover:bg-sky-50 rounded-lg border border-sky-200 transition"
                       >
                         Edit
                       </button>
                       <button
                         onClick={() => handleDelete(s._id)}
-                        className="text-sm text-red-600 hover:underline"
+                        className="px-2.5 py-1 text-xs font-medium text-rose-700 hover:bg-rose-50 rounded-lg border border-rose-200 transition"
                       >
                         Delete
                       </button>
@@ -458,6 +593,99 @@ const Subjects = () => {
             ))}
           </div>
         </>
+      )}
+
+      {/* Arrange Order Modal */}
+      {isReorderModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100 mb-4">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">
+                  Arrange Subjects Order (ترتيب المواد)
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Reorder subjects to match your school's curriculum sequence on report cards.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 mb-4">
+              {reorderedList.map((item, idx) => (
+                <div
+                  key={item._id}
+                  className="flex items-center justify-between p-3 rounded-xl border border-gray-200 bg-slate-50/70 hover:bg-slate-100/80 transition"
+                >
+                  <div className="flex items-center gap-3">
+                    <GripVertical className="w-4 h-4 text-gray-400" />
+                    <span className="w-6 h-6 rounded-md bg-white text-gray-800 font-bold text-xs flex items-center justify-center border border-gray-300">
+                      {idx + 1}
+                    </span>
+                    <div>
+                      <div className="text-sm font-semibold text-gray-800">
+                        {item.nameEnglish}
+                      </div>
+                      {item.nameArabic && (
+                        <div
+                          className="text-xs text-emerald-800 font-medium"
+                          style={{ fontFamily: "Amiri, serif" }}
+                        >
+                          {item.nameArabic}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveModalItem(idx, "up")}
+                      disabled={idx === 0}
+                      className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-sky-50 hover:text-sky-700 hover:border-sky-300 disabled:opacity-30 transition"
+                      title="Move up"
+                    >
+                      <ArrowUp className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveModalItem(idx, "down")}
+                      disabled={idx === reorderedList.length - 1}
+                      className="p-1.5 rounded-lg bg-white border border-gray-200 text-gray-700 hover:bg-sky-50 hover:text-sky-700 hover:border-sky-300 disabled:opacity-30 transition"
+                      title="Move down"
+                    >
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsReorderModalOpen(false)}
+                disabled={savingReorder}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-100 rounded-xl transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveReorderModal}
+                disabled={savingReorder}
+                className="px-5 py-2 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-md shadow-sky-600/20 transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {savingReorder ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving...
+                  </>
+                ) : (
+                  "Save Order"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

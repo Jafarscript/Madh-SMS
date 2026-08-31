@@ -35,8 +35,15 @@ export const submitScore = async (req: AuthRequest, res: Response) => {
     } else if (req.user?.role === "class_teacher") {
       const teacher = await User.findById(req.user.id);
       const allowedClasses = (teacher?.classes || []).map((c) => c.toString());
-      if (allowedClasses.length > 0 && !allowedClasses.includes(studentDoc.class.toString())) {
-        return res.status(403).json({ message: "You are not assigned to this class" });
+      const allowedSubjects = (teacher?.subjects || []).map((s) => s.toString());
+      
+      const isInAllowedClass = allowedClasses.includes(studentDoc.class.toString());
+      const isAllowedSubject = allowedSubjects.includes(subject);
+
+      // A class teacher can submit scores if the student is in their managed class
+      // OR if they are assigned as subject teacher for this subject
+      if (!isInAllowedClass && !isAllowedSubject && (allowedClasses.length > 0 || allowedSubjects.length > 0)) {
+        return res.status(403).json({ message: "You are not assigned to this class or subject" });
       }
     }
 

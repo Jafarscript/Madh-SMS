@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/set-state-in-effect */
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useLocation } from "react-router";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import PageHeader from "../components/PageHeader";
 import {
   Upload,
   Download,
@@ -18,6 +20,7 @@ import {
   Percent,
   Lock,
   ShieldAlert,
+  BookOpen,
 } from "lucide-react";
 import BulkScoreUploadModal from "../components/BulkScoreUploadModal";
 
@@ -53,6 +56,9 @@ type FilterType = "all" | "missing" | "completed" | "at_risk";
 
 const SubjectTeacherHome = () => {
   const { user, logout } = useAuth();
+  const location = useLocation();
+  const isEmbeddedInAdmin = location.pathname.startsWith("/admin");
+
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [classesById, setClassesById] = useState<Record<string, ClassItem>>({});
   const [selectedSubject, setSelectedSubject] = useState("");
@@ -80,7 +86,60 @@ const SubjectTeacherHome = () => {
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
-    api.get("/auth/me").then((res) => setSubjects(res.data.subjects || []));
+    const loadSubjects = async () => {
+      try {
+        const meRes = await api.get("/auth/me");
+        const userData = meRes.data;
+        const assignedSubjects: Subject[] = (userData.subjects || []).map((s: any) => ({
+          _id: s._id,
+          nameEnglish: s.nameEnglish,
+          nameArabic: s.nameArabic,
+          class: typeof s.class === "object" ? s.class?._id : s.class,
+        }));
+
+        // If user is class_teacher: load their assigned subjects AND subjects from their managed classes
+        if (userData.role === "class_teacher" && userData.classes && userData.classes.length > 0) {
+          const classSubjectPromises = userData.classes.map((c: any) => {
+            const classId = typeof c === "object" ? c._id : c;
+            return api.get(`/subjects?class=${classId}`);
+          });
+          const results = await Promise.allSettled(classSubjectPromises);
+          const fromClasses: Subject[] = [];
+          results.forEach((r) => {
+            if (r.status === "fulfilled" && Array.isArray(r.value.data)) {
+              r.value.data.forEach((subj: any) => {
+                fromClasses.push({
+                  _id: subj._id,
+                  nameEnglish: subj.nameEnglish,
+                  nameArabic: subj.nameArabic,
+                  class: typeof subj.class === "object" ? subj.class?._id : subj.class,
+                });
+              });
+            }
+          });
+
+          // Combine assigned subjects + class subjects without duplicate IDs
+          const combinedMap = new Map<string, Subject>();
+          assignedSubjects.forEach((s) => combinedMap.set(s._id, s));
+          fromClasses.forEach((s) => combinedMap.set(s._id, s));
+          setSubjects(Array.from(combinedMap.values()));
+        } else if (userData.role === "super_admin" || userData.role === "branch_admin") {
+          const allRes = await api.get("/subjects");
+          const allSubjs: Subject[] = (allRes.data || []).map((subj: any) => ({
+            _id: subj._id,
+            nameEnglish: subj.nameEnglish,
+            nameArabic: subj.nameArabic,
+            class: typeof subj.class === "object" ? subj.class?._id : subj.class,
+          }));
+          setSubjects(allSubjs);
+        } else {
+          setSubjects(assignedSubjects);
+        }
+      } catch (err) {
+        console.error("Failed to load subjects", err);
+      }
+    };
+    loadSubjects();
   }, []);
 
   useEffect(() => {
@@ -413,27 +472,34 @@ const SubjectTeacherHome = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Top Navbar */}
-      <header className="px-4 sm:px-8 py-4 flex justify-between items-center bg-gradient-to-r from-sky-950 via-sky-900 to-sky-950 text-white shadow-md border-b border-sky-800/60">
-        <div>
-          <h1
-            className="text-sm sm:text-lg font-bold truncate text-white"
-            style={{ fontFamily: "Playfair Display, serif" }}
+    <div className={isEmbeddedInAdmin ? "p-4 sm:p-8 max-w-6xl mx-auto space-y-6" : "min-h-screen bg-slate-50"}>
+      {/* Top Navbar for Standalone Subject Teacher View */}
+      {!isEmbeddedInAdmin ? (
+        <header className="px-4 sm:px-8 py-4 flex justify-between items-center bg-gradient-to-r from-sky-950 via-sky-900 to-sky-950 text-white shadow-md border-b border-sky-800/60">
+          <div>
+            <h1
+              className="text-sm sm:text-lg font-bold truncate text-white"
+              style={{ fontFamily: "Playfair Display, serif" }}
+            >
+              Subject Teacher Portal — {user?.name}
+            </h1>
+            <p className="text-xs text-sky-300/80">Manage marks, bulk imports, and score distribution</p>
+          </div>
+          <button
+            onClick={logout}
+            className="text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-lg bg-sky-800/80 hover:bg-sky-700 text-sky-100 hover:text-white border border-sky-700 transition"
           >
-            Subject Teacher Portal — {user?.name}
-          </h1>
-          <p className="text-xs text-sky-300/80">Manage marks, bulk imports, and score distribution</p>
-        </div>
-        <button
-          onClick={logout}
-          className="text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-lg bg-sky-800/80 hover:bg-sky-700 text-sky-100 hover:text-white border border-sky-700 transition"
-        >
-          Log out
-        </button>
-      </header>
+            Log out
+          </button>
+        </header>
+      ) : (
+        <PageHeader
+          title="Subject Score Entry"
+          subtitle="Record and update continuous assessment (CA) and examination marks for your classes and subjects"
+        />
+      )}
 
-      <div className="p-4 sm:p-8 max-w-6xl mx-auto space-y-6">
+      <div className={isEmbeddedInAdmin ? "space-y-6" : "p-4 sm:p-8 max-w-6xl mx-auto space-y-6"}>
         {/* Subject & Term Selectors */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex flex-col sm:flex-row gap-4">
@@ -447,11 +513,15 @@ const SubjectTeacherHome = () => {
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-sky-500 outline-none transition font-medium"
               >
                 <option value="">-- Choose a subject --</option>
-                {subjects.map((s) => (
-                  <option key={s._id} value={s._id}>
-                    {s.nameEnglish} {s.nameArabic ? `(${s.nameArabic})` : ""}
-                  </option>
-                ))}
+                {subjects.map((s) => {
+                  const classItem = classesById[s.class];
+                  return (
+                    <option key={s._id} value={s._id}>
+                      {s.nameEnglish} {s.nameArabic ? `(${s.nameArabic})` : ""}{" "}
+                      {classItem ? `— ${classItem.name}${classItem.arm ? ` (${classItem.arm})` : ""}` : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div className="flex-1">

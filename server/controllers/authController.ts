@@ -112,8 +112,19 @@ export const getMe = async (req: AuthRequest, res: Response) => {
   try {
     const user = await User.findById(req.user!.id)
       .select("-password")
-      .populate("subjects")
-      .populate("classes")
+      .populate({
+        path: "subjects",
+        populate: {
+          path: "class",
+          select: "name arm branch",
+          populate: { path: "branch", select: "name" },
+        },
+      })
+      .populate({
+        path: "classes",
+        select: "name arm branch",
+        populate: { path: "branch", select: "name" },
+      })
       .populate("branch");
     res.status(200).json(user);
   } catch (err) {
