@@ -1,8 +1,6 @@
 import mongoose from "mongoose";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import { seedDatabase } from "../seed";
 
-let mongoServer: MongoMemoryServer | null = null;
 let isConnected = false;
 
 const connectDB = async (): Promise<void> => {
@@ -28,15 +26,19 @@ const connectDB = async (): Promise<void> => {
         return;
       } catch (externalErr) {
         console.warn(
-          `External MongoDB connection failed (${(externalErr as Error).message}). Falling back to in-memory MongoDB...`
+          `External MongoDB connection failed (${(externalErr as Error).message}).`
         );
+        if (process.env.NODE_ENV === "production") {
+          throw externalErr;
+        }
       }
     }
 
-    // In-memory Mongo Database for local development/fallback
-    if (!mongoServer) {
-      console.log("Starting in-memory MongoDB server...");
-      mongoServer = await MongoMemoryServer.create();
+    // In-memory Mongo Database only for local development
+    if (process.env.NODE_ENV !== "production") {
+      console.log("Starting in-memory MongoDB server for local development...");
+      const { MongoMemoryServer } = await import("mongodb-memory-server");
+      const mongoServer = await MongoMemoryServer.create();
       const uri = mongoServer.getUri();
       await mongoose.connect(uri, {
         serverSelectionTimeoutMS: 5000,
