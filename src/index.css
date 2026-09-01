@@ -1,1 +1,115 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   Custom Scrollbar System
+   Modern, sleek, rounded pill scrollbars across all browsers & containers
+   ========================================================================== */
+
+/* Universal default scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+/* WebKit (Chrome, Edge, Safari, Opera) */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 9999px;
+  margin: 2px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.15s ease-in-out;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #64748b;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dark mode and dark containers (e.g. sidebars, dark panels) */
+.dark-scrollbar,
+.bg-slate-900,
+.bg-slate-950,
+.bg-sky-950 {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb,
+.bg-slate-900::-webkit-scrollbar-thumb,
+.bg-slate-950::-webkit-scrollbar-thumb,
+.bg-sky-950::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  background-clip: padding-box;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover,
+.bg-slate-900::-webkit-scrollbar-thumb:hover,
+.bg-slate-950::-webkit-scrollbar-thumb:hover,
+.bg-sky-950::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+  background-clip: padding-box;
+}
+
+/* Dedicated Utility Classes */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+.custom-scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: #e2e8f0;
+  border-radius: 9999px;
+}
+
+.custom-scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background-color: #cbd5e1;
+}
+
+/* Hide scrollbar utility when needed (e.g. smooth swipe chips or tab bars) */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

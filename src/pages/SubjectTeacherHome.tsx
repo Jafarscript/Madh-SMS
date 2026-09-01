@@ -428,10 +428,14 @@ const SubjectTeacherHome = () => {
     const focusCell = (row: number, f: Field) => {
       const target = filteredStudents[row];
       if (!target) return;
-      const el = inputRefs.current[`${target._id}-${f}`];
-      if (el) {
-        el.focus();
-        el.select();
+      const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+      const targetEl = isMobile
+        ? (inputRefs.current[`mobile-${target._id}-${f}`] || inputRefs.current[`desktop-${target._id}-${f}`] || inputRefs.current[`${target._id}-${f}`])
+        : (inputRefs.current[`desktop-${target._id}-${f}`] || inputRefs.current[`mobile-${target._id}-${f}`] || inputRefs.current[`${target._id}-${f}`]);
+      if (targetEl) {
+        targetEl.focus();
+        targetEl.select?.();
+        targetEl.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
       }
     };
 
@@ -464,7 +468,16 @@ const SubjectTeacherHome = () => {
         break;
       case "Enter":
         e.preventDefault();
-        handleSave(studentId);
+        // If current student has complete valid scores, trigger auto-save in background
+        const currentEntry = entries[studentId];
+        if (currentEntry && currentEntry.ca !== "" && currentEntry.exam !== "") {
+          const caNum = Number(currentEntry.ca);
+          const examNum = Number(currentEntry.exam);
+          if (caNum >= 0 && caNum <= 40 && examNum >= 0 && examNum <= 60) {
+            handleSave(studentId);
+          }
+        }
+        // Move to the next student in the same column (e.g. total, ca, or exam)
         focusCell(rowIndex + 1, field);
         break;
       default:
@@ -828,7 +841,7 @@ const SubjectTeacherHome = () => {
                             <td className="p-3.5 bg-emerald-50/30">
                               <input
                                 ref={(el) => {
-                                  inputRefs.current[`${s._id}-total`] = el;
+                                  inputRefs.current[`desktop-${s._id}-total`] = el;
                                 }}
                                 type="number"
                                 min={0}
@@ -851,7 +864,7 @@ const SubjectTeacherHome = () => {
                               <div className="relative inline-block">
                                 <input
                                   ref={(el) => {
-                                    inputRefs.current[`${s._id}-ca`] = el;
+                                    inputRefs.current[`desktop-${s._id}-ca`] = el;
                                   }}
                                   type="number"
                                   min={0}
@@ -878,7 +891,7 @@ const SubjectTeacherHome = () => {
                               <div className="relative inline-block">
                                 <input
                                   ref={(el) => {
-                                    inputRefs.current[`${s._id}-exam`] = el;
+                                    inputRefs.current[`desktop-${s._id}-exam`] = el;
                                   }}
                                   type="number"
                                   min={0}
@@ -979,7 +992,7 @@ const SubjectTeacherHome = () => {
                         </label>
                         <input
                           ref={(el) => {
-                            inputRefs.current[`${s._id}-total`] = el;
+                            inputRefs.current[`mobile-${s._id}-total`] = el;
                           }}
                           type="number"
                           min={0}
@@ -999,7 +1012,7 @@ const SubjectTeacherHome = () => {
                           <label className="block text-[11px] text-gray-500 mb-1 font-semibold">CA Test (40)</label>
                           <input
                             ref={(el) => {
-                              inputRefs.current[`${s._id}-ca`] = el;
+                              inputRefs.current[`mobile-${s._id}-ca`] = el;
                             }}
                             type="number"
                             min={0}
@@ -1016,7 +1029,7 @@ const SubjectTeacherHome = () => {
                           <label className="block text-[11px] text-gray-500 mb-1 font-semibold">Exam (60)</label>
                           <input
                             ref={(el) => {
-                              inputRefs.current[`${s._id}-exam`] = el;
+                              inputRefs.current[`mobile-${s._id}-exam`] = el;
                             }}
                             type="number"
                             min={0}
