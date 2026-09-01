@@ -20,6 +20,8 @@ import {
   X,
   School,
   ChevronRight,
+  Grid,
+  History,
 } from "lucide-react";
 
 interface NavItemConfig {
@@ -60,6 +62,13 @@ const navItemsConfig: NavItemConfig[] = [
     group: "academic",
   },
   {
+    to: "/admin/teacher-matrix",
+    label: "Teacher Matrix",
+    roles: ["super_admin", "branch_admin"],
+    icon: Grid,
+    group: "academic",
+  },
+  {
     to: "/admin/grading-scales",
     label: "Grading Scales",
     roles: ["super_admin"],
@@ -68,7 +77,7 @@ const navItemsConfig: NavItemConfig[] = [
   },
   {
     to: "/admin/terms",
-    label: "Terms",
+    label: "Academic Calendar",
     roles: ["super_admin"],
     icon: Calendar,
     group: "academic",
@@ -113,6 +122,13 @@ const navItemsConfig: NavItemConfig[] = [
     label: "Result Publishing",
     roles: ["super_admin", "branch_admin"],
     icon: Send,
+    group: "performance",
+  },
+  {
+    to: "/admin/audit-logs",
+    label: "Score Audit Trail",
+    roles: ["super_admin", "branch_admin", "class_teacher"],
+    icon: History,
     group: "performance",
   },
   {

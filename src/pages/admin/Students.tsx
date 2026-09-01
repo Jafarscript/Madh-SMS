@@ -1,9 +1,10 @@
-/* eslint-disable react-hooks/set-state-in-effect */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
+import { useAuth } from "../../context/AuthContext";
 import * as XLSX from "xlsx";
+import { AlertTriangle, Trash2, CheckCircle, FileSpreadsheet, Plus } from "lucide-react";
+import { BulkStudentUploader } from "../../components/admin/BulkStudentUploader";
 
 interface ClassItem {
   _id: string;
@@ -20,6 +21,9 @@ interface Student {
 }
 
 const Students = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "super_admin" || user?.role === "branch_admin";
+
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
   const [students, setStudents] = useState<Student[]>([]);
@@ -28,6 +32,7 @@ const Students = () => {
   const [gender, setGender] = useState<"M" | "F">("M");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -42,9 +47,32 @@ const Students = () => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [cleaningOrphaned, setCleaningOrphaned] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+
   useEffect(() => {
     api.get("/classes").then((res) => setClasses(res.data));
   }, []);
+
+  const handleCleanupOrphaned = async () => {
+    setCleaningOrphaned(true);
+    setError("");
+    setSuccessMessage("");
+    try {
+      const res = await api.post("/students/cleanup-orphaned");
+      setSuccessMessage(res.data?.message || "Orphaned student records purged successfully.");
+      setTimeout(() => setSuccessMessage(""), 5000);
+      if (selectedClass) {
+        fetchStudents(selectedClass);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to cleanup orphaned students.");
+    } finally {
+      setCleaningOrphaned(false);
+    }
+  };
 
   const fetchStudents = async (classId: string) => {
     const res = await api.get(`/students?class=${classId}`);
@@ -66,6 +94,7 @@ const Students = () => {
       return;
     }
     setError("");
+    setSuccessMessage("");
     setLoading(true);
     try {
       const selectedClassObj = classes.find((c) => c._id === selectedClass);
@@ -76,6 +105,8 @@ const Students = () => {
         branch: selectedClassObj?.branch._id,
       });
       setName("");
+      setSuccessMessage("Student added successfully.");
+      setTimeout(() => setSuccessMessage(""), 4000);
       fetchStudents(selectedClass);
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to add student");
@@ -84,21 +115,29 @@ const Students = () => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (
-      !confirm(
-        "Delete this student? This also removes their score history from view.",
-      )
-    )
-      return;
-    await api.delete(`/students/${id}`);
-    fetchStudents(selectedClass);
+  const confirmDeleteStudent = async () => {
+    if (!deletingStudent) return;
+    setIsDeleting(true);
+    setError("");
+    try {
+      await api.delete(`/students/${deletingStudent._id}`);
+      setSuccessMessage("Student and all related records deleted successfully.");
+      setTimeout(() => setSuccessMessage(""), 4000);
+      setDeletingStudent(null);
+      fetchStudents(selectedClass);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to delete student");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const startEdit = (student: Student) => {
     setEditingId(student._id);
     setEditName(student.name);
     setEditGender(student.gender);
+    setError("");
+    setSuccessMessage("");
   };
 
   const cancelEdit = () => {
@@ -123,6 +162,8 @@ const Students = () => {
       // so re-fetch the whole list rather than patching one row locally
       await fetchStudents(selectedClass);
       cancelEdit();
+      setSuccessMessage("Student updated successfully.");
+      setTimeout(() => setSuccessMessage(""), 4000);
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to update student");
     } finally {
@@ -185,24 +226,76 @@ const Students = () => {
     <div className="p-8 max-w-3xl">
       <PageHeader title="Students" subtitle="Enroll students into a class" />
 
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Class
-        </label>
-        <select
-          value={selectedClass}
-          onChange={(e) => setSelectedClass(e.target.value)}
-          className="w-full max-w-xs border border-gray-300 rounded-lg px-4 py-2.5"
-        >
-          <option value="">Select a class</option>
-          {classes.map((c) => (
-            <option key={c._id} value={c._id}>
-              {c.name}
-              {c.arm ? ` — الشعبة ${c.arm}` : ""} ({c.branch?.name})
-            </option>
-          ))}
-        </select>
+      {successMessage && (
+        <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2.5 text-sm font-medium">
+          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-6 p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-2.5 text-sm font-medium">
+          <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+        <div className="flex-1 min-w-[240px]">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Class
+          </label>
+          <select
+            value={selectedClass}
+            onChange={(e) => setSelectedClass(e.target.value)}
+            className="w-full max-w-xs border border-gray-300 rounded-lg px-4 py-2.5"
+          >
+            <option value="">Select a class</option>
+            {classes.map((c) => (
+              <option key={c._id} value={c._id}>
+                {c.name}
+                {c.arm ? ` — الشعبة ${c.arm}` : ""} ({c.branch?.name})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowBulkModal(true)}
+            className="px-4 py-2 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl transition flex items-center gap-1.5 shadow-sm shadow-sky-600/20"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Bulk Excel / CSV Enrollment</span>
+          </button>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleCleanupOrphaned}
+              disabled={cleaningOrphaned}
+              className="px-3.5 py-2 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-xl transition flex items-center gap-1.5 disabled:opacity-50"
+              title="Scan database and remove students, scores, and records belonging to previously deleted classes"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-amber-600" />
+              <span>{cleaningOrphaned ? "Cleaning..." : "Clean Orphaned"}</span>
+            </button>
+          )}
+        </div>
       </div>
+
+      {showBulkModal && (
+        <BulkStudentUploader
+          classes={classes}
+          defaultClassId={selectedClass}
+          onImportComplete={(classId) => {
+            setSelectedClass(classId);
+            fetchStudents(classId);
+          }}
+          onClose={() => setShowBulkModal(false)}
+        />
+      )}
 
       {selectedClass && (
         <>
@@ -233,7 +326,6 @@ const Students = () => {
             onSubmit={handleCreate}
             className="bg-white p-6 rounded-xl shadow-sm mb-8 flex flex-col gap-4"
           >
-            {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex gap-4">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -348,12 +440,15 @@ const Students = () => {
                         >
                           Edit
                         </button>
-                        <button
-                          onClick={() => handleDelete(s._id)}
-                          className="text-sm text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => setDeletingStudent(s)}
+                            className="text-sm text-red-600 hover:text-red-800 hover:underline flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -371,6 +466,44 @@ const Students = () => {
                 </div>
               ))}
           </div>
+
+          {/* Admin Delete Confirmation Modal for Student */}
+          {deletingStudent && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100">
+                <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  Delete Student: {deletingStudent.name}?
+                </h3>
+
+                <p className="text-sm text-gray-600 mb-4">
+                  Deleting this student will permanently delete their record along with all their score records, attendance history, and report card remarks.
+                </p>
+
+                <div className="flex gap-3 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setDeletingStudent(null)}
+                    disabled={isDeleting}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmDeleteStudent}
+                    disabled={isDeleting}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition shadow-md shadow-rose-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {isDeleting ? "Deleting..." : "Yes, Delete Student"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

@@ -11,17 +11,13 @@ import ReportCardRemark from "./models/ReportCardRemark";
 
 export const seedDatabase = async () => {
   try {
-    const defaultHashedPassword = await bcrypt.hash("password123", 10);
     const userCount = await User.countDocuments();
     if (userCount > 0) {
-      console.log("Database already has data. Ensuring demo passwords are valid...");
-      await User.updateMany(
-        {},
-        { $set: { password: defaultHashedPassword, mustChangePassword: false } }
-      );
+      console.log("Database already has data. Skipping seed to preserve all user accounts, credentials, and settings.");
       return;
     }
 
+    const defaultHashedPassword = await bcrypt.hash("password123", 10);
     console.log("Seeding database with initial data...");
 
     // 1. Branches

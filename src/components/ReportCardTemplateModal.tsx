@@ -36,7 +36,7 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
     "INSTITUTE OF ARABIC AND ISLAMIC STUDIES"
   );
   const [address, setAddress] = useState(
-    "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665"
+    "18/20 ADEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665"
   );
   const [primaryColor, setPrimaryColor] = useState("#16a34a");
   const [headerColor, setHeaderColor] = useState("#1e3a8a");
@@ -63,7 +63,12 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
           setSchoolNameArabic(res.data.schoolNameArabic);
         if (res.data.schoolNameEnglish)
           setSchoolNameEnglish(res.data.schoolNameEnglish);
-        if (res.data.address) setAddress(res.data.address);
+        if (res.data.address) {
+          const addr = res.data.address.includes("ABEWALE")
+            ? res.data.address.replace(/ABEWALE/g, "ADEWALE")
+            : res.data.address;
+          setAddress(addr);
+        }
         if (res.data.primaryColor) setPrimaryColor(res.data.primaryColor);
         if (res.data.headerColor) setHeaderColor(res.data.headerColor);
         if (res.data.logoBase64) setLogoBase64(res.data.logoBase64);
@@ -89,19 +94,56 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
-      setError("Please select an image file (PNG, JPG, SVG, WebP)");
+      setError("Please select a valid image file (PNG, JPG, SVG, WebP)");
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Image size should not exceed 5MB");
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Image size should not exceed 10MB");
       return;
     }
 
     setError("");
     const reader = new FileReader();
-    reader.onload = () => {
-      setter(reader.result as string);
+    reader.onload = (loadEvt) => {
+      const resultStr = loadEvt.target?.result as string;
+      if (!resultStr) return;
+
+      // Optimize image resolution using canvas so payload transfers instantly
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 800; // ample resolution for crisp logos & signatures on A4
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const isPng = file.type === "image/png" || resultStr.startsWith("data:image/png");
+          const mime = isPng ? "image/png" : "image/jpeg";
+          const dataUrl = canvas.toDataURL(mime, isPng ? undefined : 0.9);
+          setter(dataUrl);
+        } else {
+          setter(resultStr);
+        }
+      };
+      img.onerror = () => {
+        setter(resultStr);
+      };
+      img.src = resultStr;
     };
     reader.readAsDataURL(file);
   };
@@ -110,7 +152,7 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
     setSchoolNameArabic("معهد التعليم العربي الإسلامي");
     setSchoolNameEnglish("INSTITUTE OF ARABIC AND ISLAMIC STUDIES");
     setAddress(
-      "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665"
+      "18/20 ADEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665"
     );
     setPrimaryColor("#16a34a");
     setHeaderColor("#1e3a8a");
@@ -130,7 +172,7 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
     setSuccess("");
 
     try {
-      await api.post("/report-card-settings", {
+      await api.put("/report-card-settings", {
         schoolNameArabic,
         schoolNameEnglish,
         address,
@@ -257,7 +299,7 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"
-                    placeholder="18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,&#10;49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665"
+                    placeholder="18/20 ADEWALE BELLO STREET, OFF AILEGUN ROAD,&#10;49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665"
                   />
                 </div>
               </div>

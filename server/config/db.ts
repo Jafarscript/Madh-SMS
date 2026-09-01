@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import { seedDatabase } from "../seed";
 
 let isConnected = false;
 
@@ -9,20 +8,21 @@ const connectDB = async (): Promise<void> => {
     return;
   }
 
+  const targetDbName = (process.env.MONGODB_DB_NAME || "test").trim();
+
   try {
     const mongoUri = (process.env.MONGODB_URI || process.env.MONGO_URI)?.trim();
     if (mongoUri) {
       try {
-        console.log("Connecting to MongoDB Atlas...");
+        console.log(`Connecting to MongoDB Atlas (Target Database: ${targetDbName})...`);
         const conn = await mongoose.connect(mongoUri, {
+          dbName: targetDbName,
           serverSelectionTimeoutMS: 5000,
           connectTimeoutMS: 5000,
         });
-        console.log(`MongoDB connected successfully: ${conn.connection.host}`);
-        if (!isConnected) {
-          isConnected = true;
-          await seedDatabase();
-        }
+        const activeDb = conn.connection.db?.databaseName || targetDbName;
+        console.log(`MongoDB connected successfully to host: ${conn.connection.host}, Database: ${activeDb}`);
+        isConnected = true;
         return;
       } catch (externalErr) {
         console.warn(
@@ -41,14 +41,12 @@ const connectDB = async (): Promise<void> => {
       const mongoServer = await MongoMemoryServer.create();
       const uri = mongoServer.getUri();
       await mongoose.connect(uri, {
+        dbName: targetDbName,
         serverSelectionTimeoutMS: 5000,
         connectTimeoutMS: 5000,
       });
-      console.log(`In-memory MongoDB connected: ${uri}`);
-      if (!isConnected) {
-        isConnected = true;
-        await seedDatabase();
-      }
+      console.log(`In-memory MongoDB connected: ${uri}, Database: ${targetDbName}`);
+      isConnected = true;
     }
   } catch (error) {
     console.error(`DB Connection Error: ${error}`);

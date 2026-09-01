@@ -12,6 +12,7 @@ export interface IReportCardSetting extends Document {
   showStamp: boolean;
   stampBase64?: string;
   watermarkText?: string;
+  staffRegistrationCode?: string;
   updatedBy?: Types.ObjectId;
 }
 
@@ -28,7 +29,7 @@ const ReportCardSettingSchema = new Schema<IReportCardSetting>(
     address: {
       type: String,
       default:
-        "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665",
+        "18/20 ADEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665",
     },
     logoBase64: { type: String, default: "" },
     primaryColor: { type: String, default: "#16a34a" },
@@ -38,6 +39,7 @@ const ReportCardSettingSchema = new Schema<IReportCardSetting>(
     showStamp: { type: Boolean, default: false },
     stampBase64: { type: String, default: "" },
     watermarkText: { type: String, default: "" },
+    staffRegistrationCode: { type: String, default: "STAFF-2026" },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

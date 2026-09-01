@@ -18,7 +18,17 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
+  Clock,
+  FileSpreadsheet,
+  Key,
+  Copy,
+  Check,
+  Sparkles,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import { PendingTeachersList } from "../../components/admin/PendingTeachersList";
+import { BulkStaffUploader } from "../../components/admin/BulkStaffUploader";
 
 type Role = "branch_admin" | "class_teacher" | "subject_teacher" | "parent";
 
@@ -44,6 +54,16 @@ interface Student {
 }
 
 const Users = () => {
+  const [activeTab, setActiveTab] = useState<"accounts" | "pending" | "bulk">("accounts");
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // Staff passcode state
+  const [staffCode, setStaffCode] = useState("STAFF-2026");
+  const [editingCode, setEditingCode] = useState(false);
+  const [newCodeInput, setNewCodeInput] = useState("");
+  const [savingCode, setSavingCode] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
+
   const [branches, setBranches] = useState<Branch[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -82,6 +102,8 @@ const Users = () => {
   const [editingUser, setEditingUser] = useState<any | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [showEditPassword, setShowEditPassword] = useState(false);
   const [editRole, setEditRole] = useState<Role>("class_teacher");
   const [editBranchId, setEditBranchId] = useState("");
   const [editClasses, setEditClasses] = useState<string[]>([]);
@@ -93,6 +115,12 @@ const Users = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
 
+  // Custom password reset modal state
+  const [customResetTarget, setCustomResetTarget] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [customResetPassword, setCustomResetPassword] = useState("");
+  const [showCustomResetPassword, setShowCustomResetPassword] = useState(false);
+  const [customResetLoading, setCustomResetLoading] = useState(false);
+
   const fetchUsers = async () => {
     try {
       const res = await api.get("/users");
@@ -102,11 +130,57 @@ const Users = () => {
     }
   };
 
+  const fetchPendingCount = async () => {
+    try {
+      const res = await api.get("/users/pending-teachers");
+      setPendingCount(Array.isArray(res.data) ? res.data.length : 0);
+    } catch {
+      // ignore
+    }
+  };
+
+  const fetchStaffCode = async () => {
+    try {
+      const res = await api.get("/users/staff-code");
+      if (res.data?.staffRegistrationCode) {
+        setStaffCode(res.data.staffRegistrationCode);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleUpdateStaffCode = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCodeInput.trim()) return;
+    setSavingCode(true);
+    try {
+      const res = await api.put("/users/staff-code", { code: newCodeInput.trim() });
+      if (res.data?.staffRegistrationCode) {
+        setStaffCode(res.data.staffRegistrationCode);
+      }
+      setEditingCode(false);
+      setNewCodeInput("");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update staff passcode");
+    } finally {
+      setSavingCode(false);
+    }
+  };
+
+  const copyStaffCode = () => {
+    navigator.clipboard.writeText(staffCode);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 2000);
+  };
+
   useEffect(() => {
     api.get("/branches").then((res) => setBranches(res.data));
     api.get("/classes").then((res) => setClasses(res.data));
     api.get("/students").then((res) => setStudents(res.data));
     fetchUsers();
+    fetchPendingCount();
+    fetchStaffCode();
   }, []);
 
   // Fetch subjects for create form's selected class
@@ -212,24 +286,31 @@ const Users = () => {
     );
   };
 
-  const handleResetPassword = async (userId: string, userName: string) => {
-    if (
-      !confirm(
-        `Generate a new password for ${userName}? Their old password will stop working.`
-      )
-    )
-      return;
-    setResettingId(userId);
+  const openCustomResetModal = (u: any) => {
+    setCustomResetTarget({ id: u._id, name: u.name, email: u.email });
+    setCustomResetPassword("");
+    setShowCustomResetPassword(false);
+  };
+
+  const handleCustomResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customResetTarget) return;
+
+    setCustomResetLoading(true);
     try {
-      const res = await api.put(`/users/${userId}/reset-password`);
+      const res = await api.put(`/users/${customResetTarget.id}/reset-password`, {
+        newPassword: customResetPassword.trim() || undefined,
+      });
       setResetPasswordResult({
-        name: userName,
+        name: customResetTarget.name,
         password: res.data.newPassword,
       });
+      setCustomResetTarget(null);
+      setCustomResetPassword("");
     } catch (err: any) {
       alert(err.response?.data?.message || "Failed to reset password");
     } finally {
-      setResettingId(null);
+      setCustomResetLoading(false);
     }
   };
 
@@ -250,6 +331,8 @@ const Users = () => {
     setEditingUser(u);
     setEditName(u.name);
     setEditEmail(u.email);
+    setEditPassword("");
+    setShowEditPassword(false);
     setEditRole(u.role);
     setEditBranchId(u.branch?._id || u.branch || "");
     setEditClasses((u.classes || []).map((c: any) => c._id || c));
@@ -279,6 +362,15 @@ const Users = () => {
         email: editEmail,
         role: editRole,
       };
+
+      if (editPassword.trim()) {
+        if (editPassword.trim().length < 6) {
+          setEditError("New password must be at least 6 characters");
+          setEditLoading(false);
+          return;
+        }
+        payload.password = editPassword.trim();
+      }
 
       if (editRole === "branch_admin") payload.branch = editBranchId;
       if (editRole === "class_teacher") {
@@ -320,8 +412,157 @@ const Users = () => {
         subtitle="Manage accounts for class teachers, subject teachers, branch admins, and parents"
       />
 
-      {/* Account Creation Card */}
-      <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+      {/* Staff Self-Registration Passcode Banner */}
+      <div className="bg-gradient-to-r from-sky-900 to-indigo-950 text-white rounded-2xl p-5 shadow-sm border border-sky-800/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3.5">
+          <div className="p-2.5 bg-sky-500/20 text-sky-300 rounded-xl border border-sky-400/30 shrink-0">
+            <Key className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white tracking-wide">
+                Staff Self-Registration Passcode
+              </h3>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-sky-500/30 text-sky-200">
+                School Security
+              </span>
+            </div>
+            <p className="text-xs text-sky-200/80 mt-0.5 max-w-xl leading-relaxed">
+              Share this secret code with new teachers so they can register themselves at <span className="font-mono text-sky-300">/register/teacher</span>. Submissions will appear in your Approvals Queue.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {editingCode ? (
+            <form onSubmit={handleUpdateStaffCode} className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={newCodeInput}
+                onChange={(e) => setNewCodeInput(e.target.value)}
+                placeholder="e.g. STAFF-2026"
+                className="bg-white text-slate-900 text-xs font-mono font-bold px-3 py-1.5 rounded-xl outline-none focus:ring-2 focus:ring-sky-400 uppercase tracking-wider"
+              />
+              <button
+                type="submit"
+                disabled={savingCode}
+                className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold rounded-xl transition"
+              >
+                {savingCode ? "Saving..." : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingCode(false)}
+                className="p-1.5 text-sky-300 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </form>
+          ) : (
+            <div className="flex items-center gap-2 bg-black/30 backdrop-blur-sm p-1.5 pl-3.5 rounded-xl border border-sky-400/20">
+              <span className="font-mono text-sm font-bold text-sky-300 tracking-wider">
+                {staffCode}
+              </span>
+              <button
+                type="button"
+                onClick={copyStaffCode}
+                className="p-1.5 hover:bg-white/10 rounded-lg text-sky-200 hover:text-white transition flex items-center gap-1 text-xs"
+                title="Copy Passcode"
+              >
+                {codeCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span className="text-[11px]">{codeCopied ? "Copied" : "Copy"}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNewCodeInput(staffCode);
+                  setEditingCode(true);
+                }}
+                className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-sky-200 text-xs rounded-lg transition font-medium"
+              >
+                Change
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("accounts")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            activeTab === "accounts"
+              ? "bg-sky-600 text-white shadow-sm shadow-sky-600/20"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+        >
+          <UsersIcon className="w-4 h-4" />
+          Active Staff & Accounts ({users.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("pending")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            activeTab === "pending"
+              ? "bg-amber-600 text-white shadow-sm shadow-amber-600/20"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          Pending Approvals
+          {pendingCount > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+              activeTab === "pending" ? "bg-white text-amber-800" : "bg-amber-100 text-amber-800"
+            }`}>
+              {pendingCount}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("bulk")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            activeTab === "bulk"
+              ? "bg-sky-600 text-white shadow-sm shadow-sky-600/20"
+              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          }`}
+        >
+          <FileSpreadsheet className="w-4 h-4" />
+          Bulk Staff Spreadsheet Importer
+        </button>
+      </div>
+
+      {/* TAB 1: PENDING APPROVALS */}
+      {activeTab === "pending" && (
+        <PendingTeachersList
+          classes={classes}
+          branches={branches}
+          onApprovalComplete={() => {
+            fetchUsers();
+            fetchPendingCount();
+          }}
+        />
+      )}
+
+      {/* TAB 2: BULK STAFF IMPORTER */}
+      {activeTab === "bulk" && (
+        <BulkStaffUploader
+          branches={branches}
+          onImportComplete={() => {
+            fetchUsers();
+          }}
+        />
+      )}
+
+      {/* TAB 3: ACTIVE ACCOUNTS & CREATION */}
+      {activeTab === "accounts" && (
+        <>
+          {/* Account Creation Card */}
+          <div className="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
         <div className="px-6 py-4.5 bg-slate-50/80 border-b border-slate-200 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-sky-100 text-sky-700 rounded-xl">
@@ -1042,12 +1283,11 @@ const Users = () => {
                       Edit
                     </button>
                     <button
-                      onClick={() => handleResetPassword(u._id, u.name)}
-                      disabled={resettingId === u._id}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition flex items-center gap-1 disabled:opacity-50"
+                      onClick={() => openCustomResetModal(u)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition flex items-center gap-1"
                     >
                       <KeyRound className="w-3.5 h-3.5 text-slate-500" />
-                      {resettingId === u._id ? "Resetting..." : "Reset"}
+                      Reset Password
                     </button>
                     {u.role !== "super_admin" && (
                       <button
@@ -1065,6 +1305,8 @@ const Users = () => {
           )}
         </div>
       </div>
+      </>
+      )}
 
       {/* Edit User Modal */}
       {editingUser && (
@@ -1344,6 +1586,32 @@ const Users = () => {
                 </div>
               )}
 
+              {/* Set New Password (Optional) */}
+              <div className="pt-3 border-t border-slate-100">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  Change / Set Password (Optional)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showEditPassword ? "text" : "password"}
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    placeholder="Leave blank to keep current password unchanged"
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2 pr-10 text-xs focus:ring-2 focus:ring-sky-500 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPassword(!showEditPassword)}
+                    className="absolute right-3 top-2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showEditPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  If entered, min 6 characters. The user will be able to log in immediately with this new password.
+                </p>
+              </div>
+
               <div className="pt-4 border-t border-slate-200 flex justify-end gap-2.5">
                 <button
                   type="button"
@@ -1358,6 +1626,80 @@ const Users = () => {
                   className="px-5 py-2 rounded-xl text-white text-xs font-bold bg-sky-600 hover:bg-sky-700 transition disabled:opacity-50"
                 >
                   {editLoading ? "Saving Changes..." : "Save Changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Password Reset Modal */}
+      {customResetTarget && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-amber-100 text-amber-800 rounded-lg">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Reset User Password
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    {customResetTarget.name} ({customResetTarget.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCustomResetTarget(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCustomResetSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Enter Custom Password (or leave empty to auto-generate)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCustomResetPassword ? "text" : "password"}
+                    value={customResetPassword}
+                    onChange={(e) => setCustomResetPassword(e.target.value)}
+                    placeholder="e.g. teacher2026 or leave blank..."
+                    className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 pr-10 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomResetPassword(!showCustomResetPassword)}
+                    className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    {showCustomResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                  If left empty, a secure 10-character password will be auto-generated and displayed on screen for you to copy.
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setCustomResetTarget(null)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold border border-slate-300 text-slate-700 hover:bg-slate-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={customResetLoading}
+                  className="px-5 py-2 rounded-xl text-white text-xs font-bold bg-sky-600 hover:bg-sky-700 transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  {customResetLoading ? "Updating..." : customResetPassword.trim() ? "Set Custom Password" : "Generate New Password"}
                 </button>
               </div>
             </form>

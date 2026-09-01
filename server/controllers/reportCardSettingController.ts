@@ -10,7 +10,7 @@ export const getReportCardSetting = async (_req: Request, res: Response) => {
         schoolNameArabic: "معهد التعليم العربي الإسلامي",
         schoolNameEnglish: "INSTITUTE OF ARABIC AND ISLAMIC STUDIES",
         address:
-          "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665",
+          "18/20 ADEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665",
         logoBase64: "",
         primaryColor: "#16a34a",
         headerColor: "#1e3a8a",
@@ -20,6 +20,9 @@ export const getReportCardSetting = async (_req: Request, res: Response) => {
         stampBase64: "",
         watermarkText: "",
       });
+    } else if (setting.address && setting.address.includes("ABEWALE")) {
+      setting.address = setting.address.replace(/ABEWALE/g, "ADEWALE");
+      await setting.save();
     }
     res.status(200).json(setting);
   } catch (err) {
@@ -84,7 +87,7 @@ export const resetReportCardSetting = async (req: AuthRequest, res: Response) =>
       schoolNameArabic: "معهد التعليم العربي الإسلامي",
       schoolNameEnglish: "INSTITUTE OF ARABIC AND ISLAMIC STUDIES",
       address:
-        "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665",
+        "18/20 ADEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665",
       logoBase64: "",
       primaryColor: "#16a34a",
       headerColor: "#1e3a8a",

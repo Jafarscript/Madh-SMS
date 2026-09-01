@@ -11,8 +11,15 @@ const router = Router();
 // Public / Authenticated read
 router.get("/", getReportCardSetting);
 
-// Admin-only updates
+// Admin-only updates - supports both PUT and POST
 router.put(
+  "/",
+  protect,
+  authorize("super_admin", "branch_admin"),
+  updateReportCardSetting
+);
+
+router.post(
   "/",
   protect,
   authorize("super_admin", "branch_admin"),

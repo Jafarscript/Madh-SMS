@@ -18,6 +18,11 @@ import ParentHome from "./pages/ParentHome";
 import RoleGate from "./routes/RoleGate";
 import ChangePassword from "./pages/ChangePassword";
 import Attendance from "./pages/admin/Attendance";
+import TeacherAssignmentMatrix from "./pages/admin/TeacherAssignmentMatrix";
+import AuditLogs from "./pages/admin/AuditLogs";
+import RegisterTeacher from "./pages/RegisterTeacher";
+import RegisterParent from "./pages/RegisterParent";
+import ForgotPassword from "./pages/ForgotPassword";
 import { useAuth } from "./context/AuthContext";
 
 const RootHandler = () => {
@@ -43,6 +48,9 @@ function App() {
     <Routes>
       <Route path="/" element={<RootHandler />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/register/teacher" element={<RegisterTeacher />} />
+      <Route path="/register/parent" element={<RegisterParent />} />
 
       <Route
         path="/admin"
@@ -84,6 +92,14 @@ function App() {
           element={
             <RoleGate allowedRoles={["super_admin", "branch_admin"]}>
               <Subjects />
+            </RoleGate>
+          }
+        />
+        <Route
+          path="teacher-matrix"
+          element={
+            <RoleGate allowedRoles={["super_admin", "branch_admin"]}>
+              <TeacherAssignmentMatrix />
             </RoleGate>
           }
         />
@@ -131,6 +147,7 @@ function App() {
             </RoleGate>
           }
         />
+        <Route path="audit-logs" element={<AuditLogs />} />
       </Route>
 
       <Route

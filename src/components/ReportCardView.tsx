@@ -37,7 +37,7 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
     "INSTITUTE OF ARABIC AND ISLAMIC STUDIES";
   const schoolAddress =
     templateSettings?.address ||
-    "18/20 ABEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665";
+    "18/20 ADEWALE BELLO STREET, OFF AILEGUN ROAD,\n49, LAFENWA STREET, EJIGBO, LAGOS. TEL: 08023299665";
   const primaryColor = templateSettings?.primaryColor || "#16a34a";
   const headerColor = templateSettings?.headerColor || "#1e3a8a";
 

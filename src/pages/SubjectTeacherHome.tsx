@@ -75,6 +75,7 @@ const SubjectTeacherHome = () => {
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>("all");
 
   // Result publication & security state
   const [resultStatus, setResultStatus] = useState<"draft" | "published" | "locked">("draft");
@@ -503,6 +504,37 @@ const SubjectTeacherHome = () => {
         {/* Subject & Term Selectors */}
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex flex-col sm:flex-row gap-4">
+            {(user?.role === "super_admin" || user?.role === "branch_admin") && (
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                  <span>Filter by Class</span>
+                  <span className="text-[10px] font-normal text-sky-600 bg-sky-50 px-1.5 py-0.5 rounded">Admin Only</span>
+                </label>
+                <select
+                  value={selectedClassFilter}
+                  onChange={(e) => {
+                    const newClass = e.target.value;
+                    setSelectedClassFilter(newClass);
+                    if (newClass !== "all") {
+                      const matched = subjects.filter((s) => s.class === newClass);
+                      if (matched.length > 0 && !matched.some((s) => s._id === selectedSubject)) {
+                        setSelectedSubject(matched[0]._id);
+                      } else if (matched.length === 0) {
+                        setSelectedSubject("");
+                      }
+                    }
+                  }}
+                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-sky-500 outline-none transition font-medium"
+                >
+                  <option value="all">All Classes</option>
+                  {Object.values(classesById).map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name} {c.arm ? `(${c.arm})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="flex-1">
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                 Select Subject
@@ -513,15 +545,17 @@ const SubjectTeacherHome = () => {
                 className="w-full border border-slate-300 rounded-xl px-4 py-2.5 bg-white text-slate-800 text-sm focus:ring-2 focus:ring-sky-500 outline-none transition font-medium"
               >
                 <option value="">-- Choose a subject --</option>
-                {subjects.map((s) => {
-                  const classItem = classesById[s.class];
-                  return (
-                    <option key={s._id} value={s._id}>
-                      {s.nameEnglish} {s.nameArabic ? `(${s.nameArabic})` : ""}{" "}
-                      {classItem ? `— ${classItem.name}${classItem.arm ? ` (${classItem.arm})` : ""}` : ""}
-                    </option>
-                  );
-                })}
+                {subjects
+                  .filter((s) => selectedClassFilter === "all" || s.class === selectedClassFilter)
+                  .map((s) => {
+                    const classItem = classesById[s.class];
+                    return (
+                      <option key={s._id} value={s._id}>
+                        {s.nameEnglish} {s.nameArabic ? `(${s.nameArabic})` : ""}{" "}
+                        {classItem ? `— ${classItem.name}${classItem.arm ? ` (${classItem.arm})` : ""}` : ""}
+                      </option>
+                    );
+                  })}
               </select>
             </div>
             <div className="flex-1">

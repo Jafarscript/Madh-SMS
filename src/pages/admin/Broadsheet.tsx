@@ -4,14 +4,15 @@ import { useEffect, useState, useRef } from "react";
 import {
   Printer,
   Download,
+  FileSpreadsheet,
   Search,
   BookOpen,
   Award,
   TrendingUp,
   Users,
-  Eye,
   SlidersHorizontal,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 
@@ -101,6 +102,7 @@ type SortKey =
   | "total"
   | "overallPercentage"
   | "remark"
+  | "remarkArabic"
   | "position"
   | "cumulativeAverage"
   | "cumulativePosition";
@@ -183,6 +185,7 @@ const Broadsheet = () => {
     if (sortKey === "cumulativePosition")
       cmp = (a.cumulativePosition ?? 0) - (b.cumulativePosition ?? 0);
     if (sortKey === "remark") cmp = a.remark.localeCompare(b.remark);
+    if (sortKey === "remarkArabic") cmp = a.remarkArabic.localeCompare(b.remarkArabic);
     return sortAsc ? cmp : -cmp;
   });
 
@@ -207,36 +210,38 @@ const Broadsheet = () => {
     window.print();
   };
 
-  const handleExportCSV = () => {
+  // True Excel export (.xlsx) with 100% Arabic Unicode encoding support
+  const handleExportExcel = () => {
     if (sortedRows.length === 0) return;
 
+    // Headers with Arabic subject names only, separated English & Arabic remark columns
     const headers = [
-      "No.",
-      "Student Name",
-      ...subjects.map((s) => `${s.nameEnglish} (${s.nameArabic || ""})`),
-      "Total",
-      "Overall %",
-      "Remark (التقدير)",
-      "Grade",
-      "Position",
+      "No. (الرقم)",
+      "Student Name (اسم الطالب)",
+      ...subjects.map((s) => s.nameArabic || s.nameEnglish),
+      "Total (المجموع)",
+      "Overall % (النسبة)",
+      "Remark (English)",
+      "التقدير (Arabic)",
+      "Position (الترتيب)",
     ];
 
     if (viewMode === "prior_summary") {
       sessionTerms.forEach((st) => {
         headers.push(`Term ${st.termNumber} Total`, `Term ${st.termNumber} %`, `Term ${st.termNumber} Pos`);
       });
-      headers.push("Cumulative Average %", "Cumulative Remark", "Cumulative Pos");
+      headers.push("Cumulative Average %", "Cumulative Remark (English)", "التقدير التراكمي (Arabic)", "Cumulative Position");
     }
 
-    const csvData = sortedRows.map((r) => {
-      const rowData = [
+    const excelData = sortedRows.map((r) => {
+      const rowData: (string | number)[] = [
         r.numberInClass ?? "",
-        `"${r.name.replace(/"/g, '""')}"`,
+        r.name,
         ...r.subjectScores.map((sc) => (sc.score !== null ? sc.score : "")),
         r.total,
         `${r.overallPercentage}%`,
-        `"${r.remarkArabic} (${r.remark})"`,
-        r.grade,
+        r.remark,
+        r.remarkArabic,
         r.position,
       ];
 
@@ -247,7 +252,82 @@ const Broadsheet = () => {
         });
         rowData.push(
           r.cumulativePercentage !== undefined ? `${r.cumulativePercentage}%` : "",
-          r.cumulativeRemarkArabic ? `"${r.cumulativeRemarkArabic}"` : "",
+          r.cumulativeRemark || "",
+          r.cumulativeRemarkArabic || "",
+          r.cumulativePosition ?? ""
+        );
+      }
+
+      return rowData;
+    });
+
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...excelData]);
+
+    // Auto-fit column widths for clear visibility in Excel
+    const colWidths = headers.map((h, i) => {
+      let maxLen = h.length;
+      excelData.forEach((row) => {
+        const valStr = String(row[i] ?? "");
+        if (valStr.length > maxLen) maxLen = valStr.length;
+      });
+      return { wch: Math.max(maxLen + 4, 12) };
+    });
+    worksheet["!cols"] = colWidths;
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Broadsheet");
+
+    const classNameStr = selectedClassObj?.name || "Class";
+    const sessionStr = currentTermObj?.session || "Session";
+    const termStr = currentTermObj?.termNumber ? `Term${currentTermObj.termNumber}` : "";
+    const fileName = `Broadsheet_${classNameStr}_${sessionStr}_${termStr}.xlsx`.replace(/[\s/\\?%*:|"<>]+/g, "_");
+
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  // CSV export with UTF-8 BOM (\uFEFF) for compatibility
+  const handleExportCSV = () => {
+    if (sortedRows.length === 0) return;
+
+    const headers = [
+      "No.",
+      "Student Name",
+      ...subjects.map((s) => s.nameArabic || s.nameEnglish),
+      "Total",
+      "Overall %",
+      "Remark (English)",
+      "التقدير (Arabic)",
+      "Position",
+    ];
+
+    if (viewMode === "prior_summary") {
+      sessionTerms.forEach((st) => {
+        headers.push(`Term ${st.termNumber} Total`, `Term ${st.termNumber} %`, `Term ${st.termNumber} Pos`);
+      });
+      headers.push("Cumulative Average %", "Cumulative Remark", "التقدير التراكمي", "Cumulative Pos");
+    }
+
+    const csvData = sortedRows.map((r) => {
+      const rowData = [
+        r.numberInClass ?? "",
+        `"${r.name.replace(/"/g, '""')}"`,
+        ...r.subjectScores.map((sc) => (sc.score !== null ? sc.score : "")),
+        r.total,
+        `${r.overallPercentage}%`,
+        `"${r.remark}"`,
+        `"${r.remarkArabic}"`,
+        r.position,
+      ];
+
+      if (viewMode === "prior_summary") {
+        sessionTerms.forEach((st) => {
+          const tSum = r.termSummaries?.find((ts) => ts.termNumber === st.termNumber);
+          rowData.push(tSum ? tSum.total : "", tSum ? `${tSum.overallPercentage}%` : "", tSum?.position ?? "");
+        });
+        rowData.push(
+          r.cumulativePercentage !== undefined ? `${r.cumulativePercentage}%` : "",
+          `"${r.cumulativeRemark || ""}"`,
+          `"${r.cumulativeRemarkArabic || ""}"`,
           r.cumulativePosition ?? ""
         );
       }
@@ -255,17 +335,20 @@ const Broadsheet = () => {
       return rowData.join(",");
     });
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...csvData].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    // \uFEFF ensures UTF-8 BOM so Arabic displays correctly if opened in CSV-aware tools
+    const csvContent = "\uFEFF" + [headers.join(","), ...csvData].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute(
       "download",
-      `Broadsheet_${selectedClass}_${currentTermObj?.session || "Session"}_Term${currentTermObj?.termNumber || ""}.csv`
+      `Broadsheet_${selectedClassObj?.name || "Class"}_${currentTermObj?.session || "Session"}_Term${currentTermObj?.termNumber || ""}.csv`
     );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const selectedClassObj = classes.find((c) => c._id === selectedClass);
@@ -312,7 +395,7 @@ const Broadsheet = () => {
       <div className="print:hidden">
         <PageHeader
           title="Broadsheet & Gradebook"
-          subtitle="Master academic results with overall percentage, remarks (التقدير), and multi-term performance tracking"
+          subtitle="Master academic results with Arabic curriculum subjects, distinct English & Arabic remarks, and Excel export"
         />
 
         {/* Filters and Controls */}
@@ -380,23 +463,33 @@ const Broadsheet = () => {
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex gap-2">
+            {/* Actions: Print & Native Excel Export */}
+            <div className="flex flex-wrap sm:flex-nowrap gap-2">
               <button
                 type="button"
                 onClick={handlePrint}
                 disabled={rows.length === 0}
-                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40"
+                className="flex-1 py-2.5 px-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 shadow-xs"
               >
                 <Printer className="w-4 h-4" /> Print
               </button>
               <button
                 type="button"
+                onClick={handleExportExcel}
+                disabled={rows.length === 0}
+                className="flex-1 py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40 shadow-xs shadow-emerald-700/20"
+                title="Export native Excel (.xlsx) with Arabic characters fully preserved"
+              >
+                <FileSpreadsheet className="w-4 h-4" /> Export Excel
+              </button>
+              <button
+                type="button"
                 onClick={handleExportCSV}
                 disabled={rows.length === 0}
-                className="flex-1 py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition disabled:opacity-40"
+                className="py-2.5 px-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-medium flex items-center justify-center transition disabled:opacity-40"
+                title="Export as CSV (UTF-8 BOM)"
               >
-                <Download className="w-4 h-4" /> Export CSV
+                <Download className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -537,24 +630,19 @@ const Broadsheet = () => {
                 <SortHeader label="No." labelAr="الرقم" sortk="numberInClass" align="text-center" />
                 <SortHeader label="Student Name" labelAr="اسم الطالب" sortk="name" />
 
-                {/* Subject Columns */}
-                {subjects.map((s, idx) => (
+                {/* Subject Columns: Arabic text only */}
+                {subjects.map((s) => (
                   <th
                     key={s._id}
-                    className="p-3 font-semibold text-gray-800 whitespace-nowrap text-center border-l border-stone-200/60 min-w-[90px]"
+                    className="p-3 font-semibold text-gray-800 whitespace-nowrap text-center border-l border-stone-200/60 min-w-[95px]"
                   >
-                    <div className="text-xs font-bold text-gray-700">
-                      #{idx + 1} {s.nameEnglish}
+                    <div
+                      className="text-base text-emerald-950 font-bold leading-tight"
+                      style={{ fontFamily: "Amiri, serif" }}
+                      dir="rtl"
+                    >
+                      {s.nameArabic || s.nameEnglish}
                     </div>
-                    {s.nameArabic && (
-                      <div
-                        className="text-sm text-emerald-900 font-bold"
-                        style={{ fontFamily: "Amiri, serif" }}
-                        dir="rtl"
-                      >
-                        {s.nameArabic}
-                      </div>
-                    )}
                     {viewMode === "detailed_subjects" && (
                       <div className="flex justify-center gap-1 text-[10px] text-gray-400 font-normal mt-1">
                         {sessionTerms.map((st) => (
@@ -581,11 +669,19 @@ const Broadsheet = () => {
                   align="text-center"
                 />
 
-                {/* Remarks (التقدير) */}
+                {/* Remarks: English Column */}
                 <SortHeader
-                  label="Remarks"
-                  labelAr="التقدير"
+                  label="Remark"
+                  labelAr="التقدير بالإنجليزية"
                   sortk="remark"
+                  align="text-center"
+                />
+
+                {/* Remarks: Arabic Column */}
+                <SortHeader
+                  label="التقدير"
+                  labelAr="Arabic Remark"
+                  sortk="remarkArabic"
                   align="text-center"
                 />
 
@@ -615,14 +711,19 @@ const Broadsheet = () => {
                       sortk="cumulativeAverage"
                       align="text-center"
                     />
-                    <th className="p-3 font-semibold text-emerald-900 bg-emerald-50/40 text-center whitespace-nowrap border-l border-emerald-100">
+                    <th className="p-3 font-semibold text-gray-700 text-center whitespace-nowrap border-l border-emerald-100 bg-emerald-50/40">
                       <div>Cumul. Remark</div>
+                      <div className="text-[11px] text-gray-500 font-normal">English</div>
+                    </th>
+                    <th className="p-3 font-semibold text-emerald-900 bg-emerald-50/40 text-center whitespace-nowrap border-l border-emerald-100">
                       <div
-                        className="text-[11px] text-emerald-800 font-normal"
+                        className="text-sm text-emerald-800 font-bold"
                         style={{ fontFamily: "Amiri, serif" }}
+                        dir="rtl"
                       >
                         التقدير التراكمي
                       </div>
+                      <div className="text-[11px] text-emerald-600 font-normal">Arabic</div>
                     </th>
                     <SortHeader
                       label="Cumul. Pos"
@@ -701,19 +802,21 @@ const Broadsheet = () => {
                     {row.overallPercentage}%
                   </td>
 
-                  {/* Remarks (التقدير) */}
+                  {/* Remark (English Column) */}
+                  <td className="p-3 text-center border-l border-gray-100 whitespace-nowrap text-xs font-semibold text-gray-700">
+                    {row.remark}
+                  </td>
+
+                  {/* Remarks (Arabic Column) */}
                   <td className="p-3 text-center border-l border-gray-100 whitespace-nowrap">
                     <span
-                      className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border shadow-2xs ${getRemarkBadgeColor(
+                      className={`inline-block px-3 py-1 rounded-full text-sm font-bold border shadow-2xs ${getRemarkBadgeColor(
                         row.remarkArabic
                       )}`}
+                      style={{ fontFamily: "Amiri, serif" }}
+                      dir="rtl"
                     >
-                      <span style={{ fontFamily: "Amiri, serif" }} className="text-sm">
-                        {row.remarkArabic}
-                      </span>
-                      <span className="text-[10px] opacity-75 font-normal">
-                        ({row.remark})
-                      </span>
+                      {row.remarkArabic}
                     </span>
                   </td>
 
@@ -760,17 +863,22 @@ const Broadsheet = () => {
                           : "—"}
                       </td>
 
-                      {/* Cumulative Remark (التقدير التراكمي) */}
+                      {/* Cumulative Remark (English Column) */}
+                      <td className="p-3 text-center border-l border-emerald-100 bg-emerald-50/20 text-xs font-semibold text-gray-700 whitespace-nowrap">
+                        {row.cumulativeRemark || "—"}
+                      </td>
+
+                      {/* Cumulative Remark (Arabic Column - التقدير التراكمي) */}
                       <td className="p-3 text-center border-l border-emerald-100 bg-emerald-50/20 whitespace-nowrap">
                         {row.cumulativeRemarkArabic ? (
                           <span
-                            className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold border ${getRemarkBadgeColor(
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${getRemarkBadgeColor(
                               row.cumulativeRemarkArabic
                             )}`}
+                            style={{ fontFamily: "Amiri, serif" }}
+                            dir="rtl"
                           >
-                            <span style={{ fontFamily: "Amiri, serif" }}>
-                              {row.cumulativeRemarkArabic}
-                            </span>
+                            {row.cumulativeRemarkArabic}
                           </span>
                         ) : (
                           "—"
@@ -802,3 +910,4 @@ const Broadsheet = () => {
 };
 
 export default Broadsheet;
+

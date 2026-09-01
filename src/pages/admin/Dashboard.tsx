@@ -1,8 +1,17 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../context/AuthContext";
+import {
+  Grid,
+  History,
+  Calendar,
+  ArrowRight,
+  ShieldCheck,
+  GraduationCap,
+} from "lucide-react";
 
 interface Term {
   _id: string;
@@ -240,6 +249,78 @@ const Dashboard = () => {
                   <p className="text-sm text-slate-400">No scores entered yet.</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Admin & Operational Controls Quick Launch */}
+          <div className="mt-8 max-w-6xl">
+            <h2 className="font-bold text-base text-slate-900 mb-4 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-sky-600" />
+              <span>Admin & Operational Controls</span>
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Link
+                to="/admin/teacher-matrix"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-sky-300 hover:shadow-md transition group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center mb-3 group-hover:scale-105 transition">
+                    <Grid className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-sky-700 transition">
+                    Teacher Assignment Matrix
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Visual grid showing teacher assignments per subject and class with unassigned gap alerts.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-sky-600">
+                  <span>View Matrix</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+                </div>
+              </Link>
+
+              <Link
+                to="/admin/terms"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-sky-300 hover:shadow-md transition group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-3 group-hover:scale-105 transition">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-emerald-700 transition">
+                    Academic Calendar & Promotions
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    End-of-session class transitions, batch student promotions, and academic session archives.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-emerald-600">
+                  <span>Manage Calendar</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+                </div>
+              </Link>
+
+              <Link
+                to="/admin/audit-logs"
+                className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs hover:border-sky-300 hover:shadow-md transition group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center mb-3 group-hover:scale-105 transition">
+                    <History className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-amber-700 transition">
+                    Grading Audit Trail
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Inspect who entered or modified scores, before/after differences, and export audit logs.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-amber-600">
+                  <span>View Audit Trail</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition" />
+                </div>
+              </Link>
             </div>
           </div>
         </>
