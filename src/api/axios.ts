@@ -10,16 +10,23 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// if the token is invalid/expired, the backend returns 401 — send the
-// user back to login instead of letting every page show a confusing
-// "failed to load" error with no way forward
+// if the token is invalid/expired on a protected route, send the user back to
+// login instead of letting every page show a confusing "failed to load" error.
+// We DO NOT redirect if the user is already on a public route (e.g. login, register, forgot-password).
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
+      const publicPaths = ["/login", "/register", "/forgot-password"];
+      const isPublicPath =
+        typeof window !== "undefined" &&
+        publicPaths.some((p) => window.location.pathname.startsWith(p));
+
+      if (!isPublicPath) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }
