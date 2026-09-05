@@ -246,7 +246,7 @@ const Subjects = () => {
   };
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
       <PageHeader
         title="Subjects & Curriculum Order"
         subtitle="Manage class subjects and set custom order for Report Cards & Broadsheets"

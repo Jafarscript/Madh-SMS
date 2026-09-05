@@ -239,7 +239,7 @@ const ResultPublishing: React.FC = () => {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       <PageHeader
         title="Result Publishing & Security"
         subtitle="Manage term result release states, lock grading, and audit score completeness"
@@ -452,8 +452,8 @@ const ResultPublishing: React.FC = () => {
 
       {/* Classes Table */}
       <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full min-w-[850px] text-sm">
             <thead>
               <tr className="text-left border-b border-gray-100 bg-slate-50">
                 <th className="p-3.5 w-10 text-center">

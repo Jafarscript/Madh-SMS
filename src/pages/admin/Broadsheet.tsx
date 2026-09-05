@@ -391,7 +391,7 @@ const Broadsheet = () => {
   );
 
   return (
-    <div className="p-8 max-w-[1600px] mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
       <div className="print:hidden">
         <PageHeader
           title="Broadsheet & Gradebook"
@@ -612,7 +612,7 @@ const Broadsheet = () => {
       {!loading && rows.length > 0 && (
         <div
           ref={printableRef}
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto print:shadow-none print:border-none print:p-0"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto custom-scrollbar print:shadow-none print:border-none print:p-0"
         >
           {/* Header visible when printing */}
           <div className="hidden print:block p-6 border-b text-center">
@@ -624,7 +624,7 @@ const Broadsheet = () => {
             </p>
           </div>
 
-          <table className="text-sm w-full border-collapse">
+          <table className="text-sm w-full min-w-max border-collapse">
             <thead>
               <tr className="border-b bg-stone-100/80 print:bg-stone-100">
                 <SortHeader label="No." labelAr="الرقم" sortk="numberInClass" align="text-center" />

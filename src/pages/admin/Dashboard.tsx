@@ -86,13 +86,13 @@ const Dashboard = () => {
   }, [selectedTerm, selectedBranch]);
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
       <PageHeader
         title="Dashboard"
         subtitle="Score entry progress, top students, and school performance"
       />
 
-      <div className="flex gap-4 mb-8 max-w-xl">
+      <div className="flex flex-col sm:flex-row gap-4 mb-8 max-w-xl">
         <div className="flex-1">
           <label className="block text-sm font-medium text-gray-700 mb-1">Term</label>
           <select

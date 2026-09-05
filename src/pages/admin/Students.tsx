@@ -223,7 +223,7 @@ const Students = () => {
   };
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <PageHeader title="Students" subtitle="Enroll students into a class" />
 
       {successMessage && (
@@ -387,38 +387,40 @@ const Students = () => {
                   {editingId === s._id ? (
                     // inline edit mode — replaces the row's display with
                     // editable inputs, rather than opening a separate modal
-                    <div className="flex gap-3 items-center">
-                      <span className="text-gray-400 w-8">
+                    <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 items-center">
+                      <span className="text-gray-400 w-8 shrink-0">
                         {s.numberInClass}.
                       </span>
                       <input
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                        className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
                       />
                       <select
                         value={editGender}
                         onChange={(e) =>
                           setEditGender(e.target.value as "M" | "F")
                         }
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm shrink-0"
                       >
                         <option value="M">M</option>
                         <option value="F">F</option>
                       </select>
-                      <button
-                        onClick={() => saveEdit(s._id)}
-                        disabled={savingEdit}
-                        className="text-sm px-3.5 py-1.5 rounded-lg text-white font-medium bg-sky-600 hover:bg-sky-700 disabled:opacity-50 transition"
-                      >
-                        {savingEdit ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
-                      >
-                        Cancel
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => saveEdit(s._id)}
+                          disabled={savingEdit}
+                          className="text-sm px-3.5 py-1.5 rounded-lg text-white font-medium bg-sky-600 hover:bg-sky-700 disabled:opacity-50 transition"
+                        >
+                          {savingEdit ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="flex justify-between items-center">

@@ -88,7 +88,7 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
 
   return (
     <div
-      className="border-4 rounded-sm p-4 bg-white relative"
+      className="border-4 rounded-sm p-4 bg-white relative min-w-[680px] sm:min-w-full print:min-w-0"
       style={{ borderColor: primaryColor }}
     >
       {/* header */}

@@ -113,3 +113,29 @@
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* ==========================================================================
+   Responsive Tables & Anti-Shrink Enforcement
+   Ensures table contents never get squished, wrapped awkwardly, or truncated
+   on small devices, maintaining crisp column layouts with smooth scroll.
+   ========================================================================== */
+
+/* Prevent table cells and headers from compressing or breaking into multiple tiny lines */
+table th,
+table td {
+  white-space: nowrap;
+}
+
+/* Ensure form controls and buttons inside table cells never shrink */
+table td input,
+table td select,
+table td button,
+table th button {
+  flex-shrink: 0;
+}
+
+/* Ensure smooth horizontal scroll on touch screens and trackpads */
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}

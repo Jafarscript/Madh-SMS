@@ -206,7 +206,7 @@ const Attendance = () => {
   }, [records]);
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto space-y-6">
       <PageHeader
         title="Attendance & Term Dates"
         subtitle="Manage term calendar dates and student attendance counts (Present / Absent)"
@@ -484,8 +484,8 @@ const Attendance = () => {
           )}
 
           {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full min-w-[650px] text-left text-sm">
               <thead className="bg-slate-50 text-slate-600 text-xs uppercase tracking-wider border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3 w-16 text-center">#</th>

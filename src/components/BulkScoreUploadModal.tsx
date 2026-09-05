@@ -362,8 +362,8 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
                 </div>
               </div>
 
-              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs max-h-64 overflow-y-auto">
-                <table className="w-full text-xs text-left">
+              <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs max-h-64 overflow-y-auto overflow-x-auto custom-scrollbar">
+                <table className="w-full min-w-[500px] text-xs text-left">
                   <thead className="bg-gray-100 text-gray-600 sticky top-0">
                     <tr>
                       <th className="py-2 px-3 w-12 text-center">No</th>

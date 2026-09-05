@@ -374,8 +374,8 @@ export default function TeacherAssignmentMatrix() {
             <p className="text-xs text-slate-400">Please create classes and subjects first.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full min-w-max text-left text-xs border-collapse">
               <thead>
                 {/* Class Column Headers */}
                 <tr className="bg-sky-950 text-white text-xs">

@@ -88,7 +88,7 @@ const Branches = () => {
   };
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <PageHeader title="Branches" subtitle="Manage and edit the school's branches" />
 
       <form

@@ -360,8 +360,8 @@ export const BulkStaffUploader: React.FC<Props> = ({ branches, onImportComplete 
             </div>
           </div>
 
-          <div className="max-h-80 overflow-y-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          <div className="max-h-80 overflow-y-auto overflow-x-auto custom-scrollbar">
+            <table className="w-full min-w-[600px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-100/70 text-slate-600 font-bold uppercase tracking-wider">
                   <th className="py-2.5 px-3">#</th>

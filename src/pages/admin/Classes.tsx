@@ -148,7 +148,7 @@ const Classes = () => {
   };
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
       <PageHeader
         title="Classes & Arms"
         subtitle="Manage and edit classes; add an arm only if this class is split (e.g. A / B)"
@@ -192,7 +192,7 @@ const Classes = () => {
             </select>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Class name
@@ -205,7 +205,7 @@ const Classes = () => {
                 placeholder="e.g. الثاني الاعدادي"
               />
             </div>
-            <div className="w-32">
+            <div className="w-full sm:w-32">
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 الشعبة (optional)
               </label>

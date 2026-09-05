@@ -771,8 +771,8 @@ const SubjectTeacherHome = () => {
 
             {/* Desktop / tablet: Spreadsheet table */}
             <div className="hidden sm:block bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto custom-scrollbar">
+                <table className="w-full min-w-[700px] text-sm">
                   <thead>
                     <tr className="text-left border-b border-slate-200 bg-slate-50">
                       <th className="p-3.5 font-semibold text-slate-600 w-14 text-center">No.</th>

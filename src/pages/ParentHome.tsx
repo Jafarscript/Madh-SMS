@@ -309,7 +309,7 @@ const ParentHome = () => {
         )}
 
         {reportData && (
-          <div className="max-w-4xl mx-auto shadow-sm rounded-2xl overflow-hidden">
+          <div className="max-w-4xl mx-auto shadow-sm rounded-2xl overflow-x-auto custom-scrollbar bg-white">
             <ReportCardView data={reportData} />
           </div>
         )}
