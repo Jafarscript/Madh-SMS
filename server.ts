@@ -8,7 +8,9 @@ async function startServer() {
   const PORT = 3000;
 
   // Initialize DB Connection
-  await connectDB();
+  connectDB().catch((err) => {
+    console.warn("[Database] Initial connection notice:", (err as Error).message);
+  });
 
   // Vite middleware for development or static serving for production
   if (process.env.NODE_ENV !== "production") {

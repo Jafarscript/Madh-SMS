@@ -38,7 +38,23 @@ const Login = () => {
         navigate(roleToRoute[res.data.user.role] || "/");
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || "Invalid email or password");
+      const status = err.response?.status;
+      const respData = err.response?.data;
+      if (respData?.diagnostic) {
+        setError(`${respData.message} (${respData.diagnostic})`);
+      } else if (respData?.message) {
+        setError(respData.message);
+      } else if (status === 404) {
+        setError("API route not found (404). Please verify Vercel serverless functions deployment.");
+      } else if (status === 504 || status === 502) {
+        setError("Server timeout (504/502). Could not reach MongoDB Atlas. Please ensure IP access list allows 0.0.0.0/0 in MongoDB Atlas Network Access.");
+      } else if (status === 500) {
+        setError("Server error (500). Please check Vercel function logs and environment variables (MONGODB_URI, JWT_SECRET).");
+      } else if (err.message === "Network Error" || !err.response) {
+        setError("Network error: Unable to contact backend. Please check internet connection or Vercel deployment.");
+      } else {
+        setError(typeof respData === "string" ? respData.slice(0, 120) : "Invalid email or password");
+      }
     } finally {
       setLoading(false);
     }

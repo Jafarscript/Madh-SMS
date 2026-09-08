@@ -20,8 +20,9 @@ if (!cached) {
 
 const connectDB = async (): Promise<typeof mongoose> => {
   // 1. If we already have an active, open connection (readyState 1), reuse it immediately
-  if (cached.conn && mongoose.connection.readyState === 1) {
-    return cached.conn;
+  if (mongoose.connection.readyState === 1) {
+    cached.conn = mongoose;
+    return mongoose;
   }
 
   // 2. If a connection attempt is already in progress, await the existing promise
@@ -32,34 +33,50 @@ const connectDB = async (): Promise<typeof mongoose> => {
       return cached.conn;
     } catch (err) {
       cached.promise = null;
+      cached.conn = null;
       throw err;
     }
   }
 
-  const targetDbName = (process.env.MONGODB_DB_NAME || "test").trim();
   const mongoUri = (process.env.MONGODB_URI || process.env.MONGO_URI)?.trim();
 
-  // On Vercel / Serverless with MongoDB Atlas Free Tier (M0 limit: 500 connections),
-  // restricting the connection pool size per lambda instance (default 5, min 0, maxIdleTime 10s)
-  // is critical to prevent connection exhaustion.
-  const maxPoolSize = Math.max(1, Math.min(20, Number(process.env.MONGODB_MAX_POOL_SIZE) || 5));
+  // Extract database name from connection string if present
+  let uriDbName: string | undefined;
+  if (mongoUri) {
+    try {
+      const parsedUrl = new URL(mongoUri.replace(/^mongodb(\+srv)?:\/\//, "https://"));
+      const extractedPath = parsedUrl.pathname.replace(/^\//, "").trim();
+      if (extractedPath) {
+        uriDbName = decodeURIComponent(extractedPath);
+      }
+    } catch {
+      // Ignore URL parse error and let mongoose driver handle
+    }
+  }
 
+  // Priority: 1) Explicit MONGODB_DB_NAME env var, 2) DB in MONGODB_URI string, 3) default to "test"
+  const targetDbName = process.env.MONGODB_DB_NAME?.trim() || uriDbName || "test";
+
+  // On Vercel / Serverless or Render, pool size can be configured via MONGODB_MAX_POOL_SIZE
+  const maxPoolSize = Math.max(1, Math.min(20, Number(process.env.MONGODB_MAX_POOL_SIZE) || 10));
+
+  // 8-second timeout fits safely within Vercel's 10-15s serverless function timeout window
   const connectionOptions: mongoose.ConnectOptions = {
     dbName: targetDbName,
     maxPoolSize,
     minPoolSize: 0,
-    maxIdleTimeMS: 10000,
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 5000,
+    maxIdleTimeMS: 20000,
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 8000,
     socketTimeoutMS: 30000,
   };
 
   cached.promise = (async () => {
     if (mongoUri) {
       try {
-        console.log(`[Database] Connecting to MongoDB Atlas (Pool: ${maxPoolSize}, DB: ${targetDbName})...`);
+        console.log(`[Database] Connecting to MongoDB Atlas (Pool: ${maxPoolSize}, DB: ${targetDbName || "default"})...`);
         const conn = await mongoose.connect(mongoUri, connectionOptions);
-        const activeDb = conn.connection.db?.databaseName || targetDbName;
+        const activeDb = conn.connection.db?.databaseName || conn.connection.name;
         console.log(`[Database] Connected successfully (Host: ${conn.connection.host}, DB: ${activeDb})`);
         return conn;
       } catch (externalErr) {
@@ -77,15 +94,17 @@ const connectDB = async (): Promise<typeof mongoose> => {
       const mongoServer = await MongoMemoryServer.create();
       const uri = mongoServer.getUri();
       const conn = await mongoose.connect(uri, {
-        dbName: targetDbName,
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 5000,
+        dbName: targetDbName || "test",
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
       });
-      console.log(`[Database] In-memory MongoDB connected: ${uri}, DB: ${targetDbName}`);
+      console.log(`[Database] In-memory MongoDB connected: ${uri}, DB: ${targetDbName || "test"}`);
       return conn;
     }
 
-    throw new Error("No MongoDB connection URI provided and not running in development mode.");
+    throw new Error(
+      "No MongoDB connection URI provided (missing MONGODB_URI) and not running in development mode."
+    );
   })();
 
   try {
@@ -93,7 +112,8 @@ const connectDB = async (): Promise<typeof mongoose> => {
     return cached.conn;
   } catch (err) {
     cached.promise = null;
-    console.error("[Database] DB Connection Error:", err);
+    cached.conn = null;
+    console.error("[Database] DB Connection Error:", (err as Error).message);
     throw err;
   }
 };

@@ -291,14 +291,18 @@ export const login = async (req: Request, res: Response) => {
     const normalizedEmail = (email || "").toLowerCase().trim();
     let user = await User.findOne({ email: normalizedEmail });
     if (!user) {
-      // Case-insensitive regex fallback in case of legacy casing or whitespace
+      // Case-insensitive regex fallback in case of legacy casing or surrounding whitespace
       user = await User.findOne({
-        email: { $regex: `^${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+        email: { $regex: `^\\s*${normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, $options: "i" },
       });
     }
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid email or password" });
+      console.warn(`[Auth] Login attempt failed: No user found with email "${normalizedEmail}" in DB "${mongoose.connection.name}"`);
+      return res.status(401).json({
+        message: "No account found with this email address. Please verify your email or register.",
+        code: "USER_NOT_FOUND",
+      });
     }
 
     // Check account approval status
@@ -330,7 +334,11 @@ export const login = async (req: Request, res: Response) => {
     }
 
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid email or password" });
+      console.warn(`[Auth] Login attempt failed: Incorrect password for "${normalizedEmail}"`);
+      return res.status(401).json({
+        message: "Incorrect password. Please verify your password or use 'Forgot password' to reset it.",
+        code: "INVALID_PASSWORD",
+      });
     }
 
     const token = generateToken(user._id.toString(), user.role, user.branch?.toString());
