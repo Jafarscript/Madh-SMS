@@ -4,11 +4,10 @@ import Subject from "../models/Subject";
 import Student from "../models/Student";
 import Score from "../models/Score";
 import Branch from "../models/Branch";
+import User from "../models/User";
 import { AuthRequest } from "../middleware/auth";
 
 // GET /api/dashboard?term=<termId>&branch=<branchId optional>
-// branch_admin should always pass their own branch; super_admin can omit
-// it to see everything, or pass one to drill into a specific branch.
 export const getDashboard = async (req: AuthRequest, res: Response) => {
   try {
     const { term, branch } = req.query;
@@ -17,16 +16,36 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "term is required" });
     }
 
-    const classFilter: Record<string, string> = {};
-    if (branch) classFilter.branch = branch as string;
+    const classFilter: Record<string, any> = {};
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      classFilter.branch = req.user.branch;
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      classFilter._id = { $in: (teacher?.classes || []).map((c) => c.toString()) };
+    } else if (req.user?.role === "subject_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const teacherClassIds = (teacher?.classes || []).map((c) => c.toString());
+      const teacherSubjectIds = teacher?.subjects || [];
+      let subjectClassIds: string[] = [];
+      if (teacherSubjectIds.length > 0) {
+        const subjs = await Subject.find({ _id: { $in: teacherSubjectIds } }).select("class");
+        subjectClassIds = subjs.filter((s) => s.class).map((s) => s.class.toString());
+      }
+      const allowedClassIds = Array.from(new Set([...teacherClassIds, ...subjectClassIds]));
+      classFilter._id = { $in: allowedClassIds };
+    } else if (branch) {
+      classFilter.branch = branch as string;
+    }
 
     const classes = await ClassModel.find(classFilter).populate("branch", "name");
+    const classIds = classes.map((c) => c._id);
 
     // For each class, work out: how many students, how many subjects,
     // how many (student x subject) score slots are actually filled in.
     const classSummaries = await Promise.all(
       classes.map(async (cls) => {
-        const students = await Student.find({ class: cls._id });
+        const students = await Student.find({ class: cls._id, status: "active" });
         const subjects = await Subject.find({ class: cls._id });
 
         const expectedScoreCount = students.length * subjects.length;
@@ -37,8 +56,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
           term: term as any,
         });
 
-        // which specific subjects still have missing entries — useful for
-        // "nudge this teacher" rather than just a vague percentage
+        // which specific subjects still have missing entries
         const subjectCompletion = await Promise.all(
           subjects.map(async (subject) => {
             const entered = await Score.countDocuments({
@@ -73,12 +91,17 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
       })
     );
 
-    // top students across all classes in scope, ranked by their term total.
-    // Simpler than the report card's cumulative logic — this is a quick
-    // "who's doing well this term" snapshot, not the official position.
-    const allStudents = await Student.find(
-      branch ? ({ branch: branch as string } as any) : {}
-    );
+    // Filter students scoped strictly to the accessible classes/branch
+    const studentFilter: Record<string, any> = { status: "active" };
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      studentFilter.branch = req.user.branch;
+    } else if (req.user?.role === "class_teacher" || req.user?.role === "subject_teacher") {
+      studentFilter.class = { $in: classIds };
+    } else if (branch) {
+      studentFilter.branch = branch as string;
+    }
+
+    const allStudents = await Student.find(studentFilter);
     const scoresForStudents = await Score.find({
       term: term as any,
       student: { $in: allStudents.map((s) => s._id) } as any,

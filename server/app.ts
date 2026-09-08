@@ -33,13 +33,16 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Middleware to ensure DB connection for serverless/local environments
-app.use(async (_req, _res, next) => {
+app.use(async (_req, res, next) => {
   try {
     await connectDB();
     next();
   } catch (err) {
     console.error("Database connection middleware error:", err);
-    next();
+    return res.status(503).json({
+      message: "Database connection temporarily unavailable. Please try again shortly.",
+      error: process.env.NODE_ENV !== "production" ? (err as Error).message : undefined,
+    });
   }
 });
 

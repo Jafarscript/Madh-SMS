@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: school-system-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build:backend
+    startCommand: npm run start:backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGODB_MAX_POOL_SIZE
+        value: "10"

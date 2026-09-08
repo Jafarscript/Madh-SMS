@@ -11,6 +11,7 @@ import ReportCardRemark from "../models/ReportCardRemark";
 import Attendance from "../models/Attendance";
 import AttendanceSetting from "../models/AttendanceSetting";
 import ReportCardSetting from "../models/ReportCardSetting";
+import User from "../models/User";
 
 // Returns the full report card data object, or null if the student/term
 // can't be found. No `req`/`res` here on purpose — this is a plain function
@@ -281,6 +282,26 @@ const principalComment =
 export const getReportCard = async (req: AuthRequest, res: Response) => {
   try {
     const { student, term, gradingScale } = req.query;
+
+    if (!student || !term) {
+      return res.status(400).json({ message: "student and term are required" });
+    }
+
+    const studentDoc = await Student.findById(student).select("class branch");
+    if (!studentDoc) return res.status(404).json({ message: "Student not found" });
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (studentDoc.branch && studentDoc.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: Student is not in your branch" });
+      }
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const isAssigned = (teacher?.classes || []).some((c) => c.toString() === studentDoc.class.toString());
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Forbidden: You are not assigned to this student's class" });
+      }
+    }
+
     const data = await buildReportCardData(
       student as string,
       term as string,

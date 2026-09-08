@@ -92,10 +92,20 @@ export const approveTeacher = async (req: AuthRequest, res: Response) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "Teacher applicant not found" });
 
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: Teacher does not belong to your branch" });
+      }
+    }
+
     user.status = "active";
     user.rejectionReason = undefined;
     if (role) user.role = role;
-    if (branch) user.branch = branch;
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      user.branch = req.user.branch as any;
+    } else if (branch) {
+      user.branch = branch;
+    }
     if (Array.isArray(classes)) user.classes = classes;
     if (Array.isArray(subjects)) user.subjects = subjects;
 
@@ -124,6 +134,12 @@ export const rejectTeacher = async (req: AuthRequest, res: Response) => {
 
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "Teacher applicant not found" });
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: Teacher does not belong to your branch" });
+      }
+    }
 
     if (deletePermanently) {
       await User.findByIdAndDelete(req.params.id);
@@ -304,6 +320,18 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (user.role === "super_admin") {
+        return res.status(403).json({ message: "Forbidden: Cannot modify super admin accounts" });
+      }
+      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: User does not belong to your branch" });
+      }
+      if (role === "super_admin") {
+        return res.status(403).json({ message: "Forbidden: Cannot grant super admin role" });
+      }
+    }
+
     // If changing email, check for uniqueness
     if (email && email.toLowerCase().trim() !== user.email) {
       const normalizedEmail = email.toLowerCase().trim();
@@ -318,7 +346,7 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
     if (phone !== undefined) user.phone = phone;
     if (role) user.role = role;
     if (status) user.status = status;
-    user.branch = branch || undefined;
+    user.branch = req.user?.role === "branch_admin" && req.user.branch ? req.user.branch : (branch || undefined);
     user.classes = classes || [];
     user.subjects = subjects || [];
     user.linkedStudent = linkedStudent || undefined;
@@ -355,6 +383,15 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (user.role === "super_admin") {
+        return res.status(403).json({ message: "Forbidden: Cannot reset super admin password" });
+      }
+      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: User does not belong to your branch" });
+      }
+    }
+
     const newPassword = (typeof customPassword === "string" && customPassword.trim().length >= 6)
       ? customPassword.trim()
       : generatePassword();
@@ -375,8 +412,19 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
 // DELETE /api/users/:id
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {
-    const deleted = await User.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "User not found" });
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (user.role === "super_admin") {
+        return res.status(403).json({ message: "Forbidden: Cannot delete super admin" });
+      }
+      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: User does not belong to your branch" });
+      }
+    }
+
+    await User.findByIdAndDelete(req.params.id);
     res.status(200).json({ message: "User deleted" });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });

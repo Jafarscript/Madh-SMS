@@ -3,6 +3,8 @@ import Student from "../models/Student";
 import Subject from "../models/Subject";
 import Score from "../models/Score";
 import Term from "../models/Term";
+import ClassModel from "../models/Class";
+import User from "../models/User";
 import GradingScale from "../models/GradingScale";
 import { AuthRequest } from "../middleware/auth";
 import { computePositions } from "../utils/ranking";
@@ -14,6 +16,34 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
 
     if (!classId || !termId) {
       return res.status(400).json({ message: "class and term are required" });
+    }
+
+    const cls = await ClassModel.findById(classId);
+    if (!cls) return res.status(404).json({ message: "Class not found" });
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (cls.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: Class does not belong to your branch" });
+      }
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const isAssigned = (teacher?.classes || []).some((c) => c.toString() === classId.toString());
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Forbidden: You are not assigned to this class" });
+      }
+    } else if (req.user?.role === "subject_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const teacherClassIds = (teacher?.classes || []).map((c) => c.toString());
+      const teacherSubjectIds = teacher?.subjects || [];
+      let subjectClassIds: string[] = [];
+      if (teacherSubjectIds.length > 0) {
+        const subjs = await Subject.find({ _id: { $in: teacherSubjectIds } }).select("class");
+        subjectClassIds = subjs.filter((s) => s.class).map((s) => s.class.toString());
+      }
+      const allowedClassIds = Array.from(new Set([...teacherClassIds, ...subjectClassIds]));
+      if (!allowedClassIds.includes(classId.toString())) {
+        return res.status(403).json({ message: "Forbidden: You are not assigned to this class or its subjects" });
+      }
     }
 
     const currentTerm = await Term.findById(termId);

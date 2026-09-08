@@ -4,6 +4,7 @@ import ScoreAudit from "../models/ScoreAudit";
 import { AuthRequest } from "../middleware/auth";
 import User from "../models/User";
 import Student from "../models/Student";
+import ClassModel from "../models/Class";
 import { isClassResultLocked } from "./resultPublicationController";
 
 export const submitScore = async (req: AuthRequest, res: Response) => {
@@ -14,8 +15,15 @@ export const submitScore = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "student, subject, term, and valid non-negative scores are required" });
     }
 
-    const studentDoc = await Student.findById(student).select("class");
+    const studentDoc = await Student.findById(student).select("class branch");
     if (!studentDoc) return res.status(404).json({ message: "Student not found" });
+
+    // Branch Admin Scoping
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (studentDoc.branch && studentDoc.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: Student is not in your assigned branch" });
+      }
+    }
 
     if (await isClassResultLocked(studentDoc.class.toString(), term)) {
       return res.status(423).json({ message: "This class result is locked and scores cannot be changed" });
@@ -107,16 +115,26 @@ export const submitScore = async (req: AuthRequest, res: Response) => {
 // GET /api/scores?class=<classId>&term=<termId>&subject=<subjectId>
 export const getScores = async (req: AuthRequest, res: Response) => {
   try {
-    const filter: Record<string, string> = {};
+    const filter: Record<string, any> = {};
     if (req.query.subject) filter.subject = req.query.subject as string;
     if (req.query.term) filter.term = req.query.term as string;
 
-    // If a subject_teacher is viewing, only show scores for their assigned subjects
-    if (req.user?.role === "subject_teacher") {
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      const branchStudents = await Student.find({ branch: req.user.branch }).select("_id");
+      filter.student = { $in: branchStudents.map((s) => s._id) };
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const teacherClasses = (teacher?.classes || []).map((c) => c.toString());
+      const classStudents = await Student.find({ class: { $in: teacherClasses } }).select("_id");
+      filter.student = { $in: classStudents.map((s) => s._id) };
+    } else if (req.user?.role === "subject_teacher") {
       const teacher = await User.findById(req.user.id);
       const allowedSubjects = (teacher?.subjects || []).map((s) => s.toString());
       if (allowedSubjects.length > 0 && filter.subject && !allowedSubjects.includes(filter.subject)) {
         return res.status(403).json({ message: "Not authorized for this subject" });
+      }
+      if (!filter.subject) {
+        filter.subject = { $in: allowedSubjects };
       }
     }
 
@@ -141,6 +159,17 @@ export const getScoreAuditLogs = async (req: AuthRequest, res: Response) => {
     if (termId) filter.term = termId;
     if (studentId) filter.student = studentId;
     if (changedBy) filter.changedBy = changedBy;
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      const branchClasses = await ClassModel.find({ branch: req.user.branch }).select("_id");
+      filter.class = { $in: branchClasses.map((c) => c._id) };
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      filter.class = { $in: teacher?.classes || [] };
+    } else if (req.user?.role === "subject_teacher") {
+      const teacher = await User.findById(req.user.id);
+      filter.subject = { $in: teacher?.subjects || [] };
+    }
 
     const lim = Math.min(200, Math.max(1, parseInt(limit as string, 10) || 100));
     const p = Math.max(1, parseInt(page as string, 10) || 1);

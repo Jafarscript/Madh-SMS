@@ -1,5 +1,7 @@
 import { Response } from "express";
 import Student from "../models/Student";
+import ClassModel from "../models/Class";
+import User from "../models/User";
 import { AuthRequest } from "../middleware/auth";
 import { buildReportCardData } from "./reportCardController";
 import {
@@ -25,6 +27,25 @@ const setPdfDownloadHeaders = (res: Response, rawName: string) => {
 export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
     const { student: studentId, term, gradingScale, format } = req.query;
+
+    if (!studentId || !term) {
+      return res.status(400).json({ message: "student and term are required" });
+    }
+
+    const studentDoc = await Student.findById(studentId).select("class branch");
+    if (!studentDoc) return res.status(404).json({ message: "Student not found" });
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (studentDoc.branch && studentDoc.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: Student is not in your branch" });
+      }
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const isAssigned = (teacher?.classes || []).some((c) => c.toString() === studentDoc.class.toString());
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Forbidden: You are not assigned to this student's class" });
+      }
+    }
 
     const reportData = await buildReportCardData(
       studentId as string,
@@ -65,7 +86,22 @@ export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response)
       return res.status(400).json({ message: "class and term are required" });
     }
 
-    const students = await Student.find({ class: classId as any }).sort({ numberInClass: 1 });
+    const cls = await ClassModel.findById(classId);
+    if (!cls) return res.status(404).json({ message: "Class not found" });
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (cls.branch && cls.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: Class does not belong to your branch" });
+      }
+    } else if (req.user?.role === "class_teacher") {
+      const teacher = await User.findById(req.user.id);
+      const isAssigned = (teacher?.classes || []).some((c) => c.toString() === classId.toString());
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Forbidden: You are not assigned to this class" });
+      }
+    }
+
+    const students = await Student.find({ class: classId as any, status: "active" }).sort({ numberInClass: 1 });
     if (students.length === 0) {
       return res.status(404).json({ message: "No students found in this class" });
     }

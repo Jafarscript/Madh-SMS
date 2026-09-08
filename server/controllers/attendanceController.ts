@@ -241,7 +241,11 @@ export const getAttendanceSettings = async (req: AuthRequest, res: Response) => 
     if (!termId) return res.status(400).json({ message: "term is required" });
 
     const query: any = { term: termId, class: { $exists: false } };
-    if (branchId) query.branch = branchId;
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      query.branch = req.user.branch;
+    } else if (branchId) {
+      query.branch = branchId;
+    }
 
     const setting = await AttendanceSetting.findOne(query);
     const termDoc = await Term.findById(termId);
@@ -271,7 +275,11 @@ export const saveAttendanceSettings = async (req: AuthRequest, res: Response) =>
         : null;
 
     const query: any = { term: termId, class: { $exists: false } };
-    if (branchId) query.branch = branchId;
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      query.branch = req.user.branch;
+    } else if (branchId) {
+      query.branch = branchId;
+    }
 
     const updated = await AttendanceSetting.findOneAndUpdate(
       query,

@@ -12,7 +12,13 @@ import { AuthRequest } from "../middleware/auth";
 
 export const createClass = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, arm, branch } = req.body; // arm is optional
+    let { name, arm, branch } = req.body; // arm is optional
+
+    // If branch_admin, force branch to their assigned branch
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      branch = req.user.branch;
+    }
+
     const newClass = await ClassModel.create({ name, arm, branch });
     res.status(201).json(newClass);
   } catch (err) {
@@ -27,16 +33,25 @@ export const getClasses = async (req: AuthRequest, res: Response) => {
   try {
     const filter: Record<string, any> = {};
 
-    // branch_admin is always scoped to their own branch, regardless of
-    // whatever the query string says — this is the real enforcement point,
-    // not a suggestion the frontend can just choose to respect or ignore
+    // branch_admin is always scoped to their own branch
     if (req.user?.role === "branch_admin" && req.user.branch) {
       filter.branch = req.user.branch;
     } else if (req.user?.role === "class_teacher") {
-      // class_teacher only sees classes they're actually assigned to —
-      // pulled from their own user record, never trusted from a query param
+      // class_teacher only sees classes they're actually assigned to
       const teacher = await User.findById(req.user.id);
       filter._id = { $in: (teacher?.classes || []).map((c) => c.toString()) };
+    } else if (req.user?.role === "subject_teacher") {
+      // subject_teacher only sees classes assigned to them OR classes of their assigned subjects
+      const teacher = await User.findById(req.user.id);
+      const teacherClassIds = (teacher?.classes || []).map((c) => c.toString());
+      const teacherSubjectIds = teacher?.subjects || [];
+      let subjectClassIds: string[] = [];
+      if (teacherSubjectIds.length > 0) {
+        const subjs = await Subject.find({ _id: { $in: teacherSubjectIds } }).select("class");
+        subjectClassIds = subjs.filter((s) => s.class).map((s) => s.class.toString());
+      }
+      const allowedClassIds = Array.from(new Set([...teacherClassIds, ...subjectClassIds]));
+      filter._id = { $in: allowedClassIds };
     } else if (req.query.branch) {
       filter.branch = req.query.branch as string;
     }
@@ -55,9 +70,23 @@ export const getClasses = async (req: AuthRequest, res: Response) => {
 export const updateClass = async (req: AuthRequest, res: Response) => {
   try {
     const { name, arm, branch } = req.body;
+
+    // Check existing class permissions
+    const existing = await ClassModel.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Class not found" });
+
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      if (existing.branch.toString() !== req.user.branch.toString()) {
+        return res.status(403).json({ message: "Forbidden: You can only edit classes in your assigned branch." });
+      }
+    }
+
     const updateData: Record<string, any> = {};
     if (name !== undefined) updateData.name = name;
-    if (branch !== undefined) updateData.branch = branch;
+    if (branch !== undefined) {
+      // branch_admin cannot move class to another branch
+      updateData.branch = req.user?.role === "branch_admin" && req.user.branch ? req.user.branch : branch;
+    }
 
     const updateQuery: Record<string, any> = { $set: updateData };
     if (arm !== undefined) {
@@ -73,7 +102,6 @@ export const updateClass = async (req: AuthRequest, res: Response) => {
       updateQuery,
       { new: true },
     ).populate("branch", "name");
-    if (!updated) return res.status(404).json({ message: "Class not found" });
     res.status(200).json(updated);
   } catch (err) {
     res
