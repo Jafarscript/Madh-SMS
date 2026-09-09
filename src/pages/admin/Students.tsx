@@ -18,6 +18,8 @@ interface Student {
   name: string;
   gender: "M" | "F";
   numberInClass?: number;
+  enrolledTerms?: number[];
+  joinedTerm?: 1 | 2 | 3;
 }
 
 const Students = () => {
@@ -30,6 +32,8 @@ const Students = () => {
 
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"M" | "F">("M");
+  const [joinedTerm, setJoinedTerm] = useState<1 | 2 | 3>(1);
+  const [enrolledTerms, setEnrolledTerms] = useState<number[]>([1, 2, 3]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -44,12 +48,16 @@ const Students = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editGender, setEditGender] = useState<"M" | "F">("M");
+  const [editJoinedTerm, setEditJoinedTerm] = useState<1 | 2 | 3>(1);
+  const [editEnrolledTerms, setEditEnrolledTerms] = useState<number[]>([1, 2, 3]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [deletingStudent, setDeletingStudent] = useState<Student | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [cleaningOrphaned, setCleaningOrphaned] = useState(false);
+  const [detectingTerms, setDetectingTerms] = useState(false);
+  const [togglingTermsStudentId, setTogglingTermsStudentId] = useState<string | null>(null);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
   useEffect(() => {
@@ -71,6 +79,69 @@ const Students = () => {
       setError(err.response?.data?.message || "Failed to cleanup orphaned students.");
     } finally {
       setCleaningOrphaned(false);
+    }
+  };
+
+  const handleAutoDetectTerms = async () => {
+    if (!selectedClass) {
+      setError("Please select a class first.");
+      return;
+    }
+    setDetectingTerms(true);
+    setError("");
+    setSuccessMessage("");
+    try {
+      const res = await api.post(`/students/auto-detect-enrolled-terms?classId=${selectedClass}`);
+      setSuccessMessage(res.data?.message || "Terms present auto-detected for students based on score records.");
+      setTimeout(() => setSuccessMessage(""), 5000);
+      await fetchStudents(selectedClass);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to auto-detect terms present.");
+    } finally {
+      setDetectingTerms(false);
+    }
+  };
+
+  const handleToggleTermPresence = async (student: Student, termNumber: number) => {
+    const currentTerms: number[] =
+      student.enrolledTerms && student.enrolledTerms.length > 0
+        ? [...student.enrolledTerms]
+        : student.joinedTerm
+        ? [1, 2, 3].filter((t) => t >= student.joinedTerm!)
+        : [1, 2, 3];
+
+    let updatedTerms: number[];
+    if (currentTerms.includes(termNumber)) {
+      if (currentTerms.length === 1) {
+        setError("A student must be present in at least one term.");
+        setTimeout(() => setError(""), 3000);
+        return;
+      }
+      updatedTerms = currentTerms.filter((t) => t !== termNumber);
+    } else {
+      updatedTerms = [...currentTerms, termNumber].sort((a, b) => a - b);
+    }
+
+    setTogglingTermsStudentId(student._id);
+    // Optimistic UI update
+    setStudents((prev) =>
+      prev.map((s) =>
+        s._id === student._id
+          ? { ...s, enrolledTerms: updatedTerms, joinedTerm: (Math.min(...updatedTerms) as 1 | 2 | 3) }
+          : s
+      )
+    );
+
+    try {
+      await api.put(`/students/${student._id}/enrolled-terms`, {
+        enrolledTerms: updatedTerms,
+        joinedTerm: Math.min(...updatedTerms),
+      });
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to update enrolled terms.");
+      await fetchStudents(selectedClass);
+    } finally {
+      setTogglingTermsStudentId(null);
     }
   };
 
@@ -101,10 +172,14 @@ const Students = () => {
       await api.post("/students", {
         name,
         gender,
+        joinedTerm,
+        enrolledTerms,
         class: selectedClass,
         branch: selectedClassObj?.branch._id,
       });
       setName("");
+      setJoinedTerm(1);
+      setEnrolledTerms([1, 2, 3]);
       setSuccessMessage("Student added successfully.");
       setTimeout(() => setSuccessMessage(""), 4000);
       fetchStudents(selectedClass);
@@ -136,6 +211,14 @@ const Students = () => {
     setEditingId(student._id);
     setEditName(student.name);
     setEditGender(student.gender);
+    const existingTerms =
+      student.enrolledTerms && student.enrolledTerms.length > 0
+        ? student.enrolledTerms
+        : student.joinedTerm
+        ? [1, 2, 3].filter((t) => t >= student.joinedTerm!)
+        : [1, 2, 3];
+    setEditEnrolledTerms(existingTerms);
+    setEditJoinedTerm(student.joinedTerm || (Math.min(...existingTerms) as 1 | 2 | 3) || 1);
     setError("");
     setSuccessMessage("");
   };
@@ -144,11 +227,17 @@ const Students = () => {
     setEditingId(null);
     setEditName("");
     setEditGender("M");
+    setEditJoinedTerm(1);
+    setEditEnrolledTerms([1, 2, 3]);
   };
 
   const saveEdit = async (id: string) => {
     if (!editName.trim()) {
       setError("Name cannot be empty");
+      return;
+    }
+    if (editEnrolledTerms.length === 0) {
+      setError("Student must be enrolled in at least one term.");
       return;
     }
     setSavingEdit(true);
@@ -157,6 +246,8 @@ const Students = () => {
       await api.put(`/students/${id}`, {
         name: editName.trim(),
         gender: editGender,
+        joinedTerm: editJoinedTerm,
+        enrolledTerms: editEnrolledTerms,
       });
       // renumbering may have shifted positions (name/gender changed),
       // so re-fetch the whole list rather than patching one row locally
@@ -261,6 +352,19 @@ const Students = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {selectedClass && (
+            <button
+              type="button"
+              onClick={handleAutoDetectTerms}
+              disabled={detectingTerms}
+              className="px-3.5 py-2 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl transition flex items-center gap-1.5 disabled:opacity-50"
+              title="Scan existing score records to automatically set present terms (T1, T2, T3) for students in this class"
+            >
+              <CheckCircle className="w-3.5 h-3.5 text-indigo-600" />
+              <span>{detectingTerms ? "Detecting..." : "Auto-Detect Terms"}</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setShowBulkModal(true)}
@@ -326,8 +430,8 @@ const Students = () => {
             onSubmit={handleCreate}
             className="bg-white p-6 rounded-xl shadow-sm mb-8 flex flex-col gap-4"
           >
-            <div className="flex gap-4">
-              <div className="flex-1">
+            <div className="flex flex-wrap gap-4">
+              <div className="flex-1 min-w-[200px]">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Student name
                 </label>
@@ -335,6 +439,7 @@ const Students = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   required
+                  placeholder="Full name"
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
                 />
               </div>
@@ -351,6 +456,24 @@ const Students = () => {
                   <option value="F">F</option>
                 </select>
               </div>
+              <div className="w-56">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Joined Term
+                </label>
+                <select
+                  value={joinedTerm}
+                  onChange={(e) => {
+                    const jt = Number(e.target.value) as 1 | 2 | 3;
+                    setJoinedTerm(jt);
+                    setEnrolledTerms([1, 2, 3].filter((t) => t >= jt));
+                  }}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
+                >
+                  <option value={1}>Term 1 (Full Academic Year)</option>
+                  <option value={2}>Term 2 (Joined in 2nd Term)</option>
+                  <option value={3}>Term 3 (Joined in 3rd Term)</option>
+                </select>
+              </div>
             </div>
             <button
               type="submit"
@@ -361,7 +484,7 @@ const Students = () => {
             </button>
           </form>
 
-          <div className="mb-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <input
               type="text"
               value={searchQuery}
@@ -369,6 +492,10 @@ const Students = () => {
               placeholder="Search students by name..."
               className="w-full max-w-sm border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
             />
+            <div className="text-xs text-gray-500 bg-sky-50 border border-sky-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+              <span className="font-semibold text-sky-700">Terms Present (T1, T2, T3):</span>
+              <span>Click term badges to toggle enrollment. Non-enrolled terms are excluded from cumulative scores.</span>
+            </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm divide-y">
@@ -382,12 +509,20 @@ const Students = () => {
                 s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
               )
               .sort((a, b) => (a.numberInClass ?? 0) - (b.numberInClass ?? 0))
-              .map((s) => (
+              .map((s) => {
+                const sEnrolledTerms =
+                  s.enrolledTerms && s.enrolledTerms.length > 0
+                    ? s.enrolledTerms
+                    : s.joinedTerm
+                    ? [1, 2, 3].filter((t) => t >= s.joinedTerm!)
+                    : [1, 2, 3];
+
+                return (
                 <div key={s._id} className="p-4">
                   {editingId === s._id ? (
                     // inline edit mode — replaces the row's display with
                     // editable inputs, rather than opening a separate modal
-                    <div className="flex flex-wrap sm:flex-nowrap gap-2 sm:gap-3 items-center">
+                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                       <span className="text-gray-400 w-8 shrink-0">
                         {s.numberInClass}.
                       </span>
@@ -407,6 +542,34 @@ const Students = () => {
                         <option value="F">F</option>
                       </select>
                       <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs text-gray-500 font-medium mr-1">Terms:</span>
+                        {[1, 2, 3].map((tNum) => {
+                          const isChecked = editEnrolledTerms.includes(tNum);
+                          return (
+                            <button
+                              key={tNum}
+                              type="button"
+                              onClick={() => {
+                                if (isChecked) {
+                                  if (editEnrolledTerms.length > 1) {
+                                    setEditEnrolledTerms(editEnrolledTerms.filter((t) => t !== tNum));
+                                  }
+                                } else {
+                                  setEditEnrolledTerms([...editEnrolledTerms, tNum].sort((a, b) => a - b));
+                                }
+                              }}
+                              className={`px-2 py-1 text-xs font-semibold rounded-md border transition ${
+                                isChecked
+                                  ? "bg-emerald-600 text-white border-emerald-600"
+                                  : "bg-gray-100 text-gray-400 border-gray-200 line-through"
+                              }`}
+                            >
+                              T{tNum}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => saveEdit(s._id)}
                           disabled={savingEdit}
@@ -423,19 +586,50 @@ const Students = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="flex justify-between items-center">
-                      <p className="font-medium text-gray-800">
-                        {s.numberInClass && (
-                          <span className="text-gray-400 mr-2">
-                            {s.numberInClass}.
+                    <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <p className="font-medium text-gray-800">
+                          {s.numberInClass && (
+                            <span className="text-gray-400 mr-2">
+                              {s.numberInClass}.
+                            </span>
+                          )}
+                          {s.name}{" "}
+                          <span className="text-sm text-gray-400">
+                            ({s.gender})
                           </span>
-                        )}
-                        {s.name}{" "}
-                        <span className="text-sm text-gray-400">
-                          ({s.gender})
-                        </span>
-                      </p>
-                      <div className="flex gap-3">
+                        </p>
+
+                        {/* Interactive Term Presence Badges */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                            Present:
+                          </span>
+                          {[1, 2, 3].map((tNum) => {
+                            const isPresent = sEnrolledTerms.includes(tNum);
+                            return (
+                              <button
+                                key={tNum}
+                                type="button"
+                                onClick={() => handleToggleTermPresence(s, tNum)}
+                                disabled={togglingTermsStudentId === s._id}
+                                title={`Term ${tNum}: Click to ${
+                                  isPresent ? "exclude" : "enroll"
+                                } student. When excluded, non-enrolled term scores are not counted in cumulative total.`}
+                                className={`px-2 py-0.5 text-xs font-bold rounded-md border transition cursor-pointer ${
+                                  isPresent
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                                    : "bg-gray-100 text-gray-400 border-gray-200 line-through opacity-60 hover:opacity-90"
+                                }`}
+                              >
+                                T{tNum}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 shrink-0">
                         <button
                           onClick={() => startEdit(s)}
                           className="text-sm font-medium text-sky-600 hover:text-sky-800 hover:underline"
@@ -466,7 +660,8 @@ const Students = () => {
                       </p>
                     )}
                 </div>
-              ))}
+              );
+            })}
           </div>
 
           {/* Admin Delete Confirmation Modal for Student */}

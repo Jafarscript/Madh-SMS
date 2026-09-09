@@ -67,28 +67,45 @@ export const buildReportCardData = async (
 
   const gradingScale = scaleId ? await GradingScale.findById(scaleId) : null;
 
+  const studentEnrolledTerms: number[] =
+    student.enrolledTerms && Array.isArray(student.enrolledTerms) && student.enrolledTerms.length > 0
+      ? student.enrolledTerms
+      : student.joinedTerm
+        ? [1, 2, 3].filter((t) => t >= student.joinedTerm!)
+        : [1, 2, 3];
+
+  const isEnrolledInCurrentTerm = studentEnrolledTerms.includes(currentTerm.termNumber);
+
+  // Applicable prior terms for this student (only terms where student was actually enrolled/present):
+  const applicablePriorTerms = priorTerms.filter((t) =>
+    studentEnrolledTerms.includes(t.termNumber)
+  );
+
   const subjectResults = subjects.map((subject) => {
     const subjectKey = subject._id.toString();
     const termScoreMap = scoresBySubjectMap.get(subjectKey) || new Map();
 
-    // pull this subject's raw totals in chronological order, based on
-    // priorTerms' order — this is what makes the cascade correct
-    const rawScoresAscending = priorTerms
+    // pull this subject's raw totals in chronological order, based ONLY on
+    // terms where the student was enrolled — this ensures prior terms when the
+    // student wasn't around are not aggregated or counted as 0!
+    const rawScoresAscending = applicablePriorTerms
       .map((t) => termScoreMap.get(t._id.toString()))
       .filter((v): v is number => v !== undefined);
 
     const { priorPeriodValue, finalValue: cumulativeAverage } =
       foldCascade(rawScoresAscending);
 
-    const currentTermScore = termScoreMap.get(termId) ?? null;
-    const currentTermScoreDoc = scoresBySubject.find(
-      (sc) =>
-        sc.subject.toString() === subjectKey && sc.term.toString() === termId,
-    );
+    const currentTermScore = isEnrolledInCurrentTerm ? (termScoreMap.get(termId) ?? null) : null;
+    const currentTermScoreDoc = isEnrolledInCurrentTerm
+      ? scoresBySubject.find(
+          (sc) =>
+            sc.subject.toString() === subjectKey && sc.term.toString() === termId,
+        )
+      : null;
     const combinedTotal =
-  priorPeriodValue !== null && currentTermScore !== null
-    ? priorPeriodValue + currentTermScore
-    : null;
+      priorPeriodValue !== null && currentTermScore !== null
+        ? priorPeriodValue + currentTermScore
+        : null;
 
     let grade = null;
     let remark = null;
@@ -113,8 +130,7 @@ export const buildReportCardData = async (
       ca: currentTermScoreDoc?.ca ?? null,
       exam: currentTermScoreDoc?.exam ?? null,
       currentTermScore,
-      // only present for term 2 (= term 1's raw total) and term 3
-      // (= cascade through term 1+2) — term 1 has nothing prior, so null
+      // only present when there was a valid prior enrolled term cascade
       priorPeriodValue:
         priorPeriodValue !== null
           ? Math.round(priorPeriodValue * 100) / 100
@@ -160,33 +176,43 @@ const principalComment =
     : null;
 
   const termAverages = priorTerms.map((t) => {
-  const cascadeValues: number[] = [];
-
-  subjects.forEach((subject) => {
-    const subjectKey = subject._id.toString();
-    const termScoreMap = scoresBySubjectMap.get(subjectKey) || new Map();
-
-    const scoresUpToThisTerm = priorTerms
-      .filter((pt) => pt.termNumber <= t.termNumber)
-      .map((pt) => termScoreMap.get(pt._id.toString()))
-      .filter((v): v is number => v !== undefined);
-
-    if (scoresUpToThisTerm.length > 0) {
-      const { finalValue } = foldCascade(scoresUpToThisTerm);
-      if (finalValue !== null) cascadeValues.push(finalValue);
+    const isEnrolled = studentEnrolledTerms.includes(t.termNumber);
+    if (!isEnrolled) {
+      return {
+        termNumber: t.termNumber,
+        average: null,
+        isEnrolled: false,
+      };
     }
+
+    const cascadeValues: number[] = [];
+
+    subjects.forEach((subject) => {
+      const subjectKey = subject._id.toString();
+      const termScoreMap = scoresBySubjectMap.get(subjectKey) || new Map();
+
+      const scoresUpToThisTerm = applicablePriorTerms
+        .filter((pt) => pt.termNumber <= t.termNumber)
+        .map((pt) => termScoreMap.get(pt._id.toString()))
+        .filter((v): v is number => v !== undefined);
+
+      if (scoresUpToThisTerm.length > 0) {
+        const { finalValue } = foldCascade(scoresUpToThisTerm);
+        if (finalValue !== null) cascadeValues.push(finalValue);
+      }
+    });
+
+    const average =
+      cascadeValues.length > 0
+        ? cascadeValues.reduce((a, b) => a + b, 0) / cascadeValues.length
+        : null;
+
+    return {
+      termNumber: t.termNumber,
+      average: average !== null ? Math.round(average * 100) / 100 : null,
+      isEnrolled: true,
+    };
   });
-
-  const average =
-    cascadeValues.length > 0
-      ? cascadeValues.reduce((a, b) => a + b, 0) / cascadeValues.length
-      : null;
-
-  return {
-    termNumber: t.termNumber,
-    average: average !== null ? Math.round(average * 100) / 100 : null,
-  };
-});
 
   const classBranchId = (student.class as any)?.branch;
   const [attSettingClass, attSettingBranch, attSettingGlobal, attDoc, templateSetting] =
@@ -235,16 +261,19 @@ const principalComment =
       numberInClass: student.numberInClass,
       class: (student.class as any).name,
       arm: (student.class as any).arm || null,
+      enrolledTerms: studentEnrolledTerms,
+      joinedTerm: student.joinedTerm || 1,
+      isEnrolledInCurrentTerm,
     },
     term: {
       session: currentTerm.session,
       termNumber: currentTerm.termNumber,
     },
     subjects: subjectResults,
-    overallTotal: Math.round(overallTotal * 100) / 100,
-    overallPercentage: Math.round(overallPercentage * 100) / 100,
-    position,
-    result: overallPercentage >= 50 ? "Pass" : "Fail",
+    overallTotal: isEnrolledInCurrentTerm ? Math.round(overallTotal * 100) / 100 : 0,
+    overallPercentage: isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0,
+    position: isEnrolledInCurrentTerm ? position : null,
+    result: !isEnrolledInCurrentTerm ? "Not Enrolled" : overallPercentage >= 50 ? "Pass" : "Fail",
     totalStudentsInClass,
     termAverages,
     attendance: {

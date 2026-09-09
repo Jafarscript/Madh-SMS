@@ -125,6 +125,7 @@ const Broadsheet = () => {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("current");
+  const [onlyPresentTerms, setOnlyPresentTerms] = useState(true);
 
   const printableRef = useRef<HTMLDivElement>(null);
 
@@ -147,7 +148,7 @@ const Broadsheet = () => {
     }
     setLoading(true);
     api
-      .get(`/broadsheet?class=${selectedClass}&term=${selectedTerm}`)
+      .get(`/broadsheet?class=${selectedClass}&term=${selectedTerm}&onlyPresentTerms=${onlyPresentTerms}`)
       .then((res) => {
         setSubjects(res.data.subjects || []);
         setRows(res.data.rows || []);
@@ -157,7 +158,7 @@ const Broadsheet = () => {
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [selectedClass, selectedTerm]);
+  }, [selectedClass, selectedTerm, onlyPresentTerms]);
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -497,47 +498,63 @@ const Broadsheet = () => {
           {/* View Mode Switcher */}
           {rows.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4 text-gray-500" />
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  View Mode:
-                </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    View Mode:
+                  </span>
+                </div>
+                <div className="inline-flex p-1 bg-gray-100 rounded-xl gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("current")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      viewMode === "current"
+                        ? "bg-white text-sky-700 shadow-xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Current Term Broadsheet
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("prior_summary")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      viewMode === "prior_summary"
+                        ? "bg-white text-sky-700 shadow-xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Show Previous Terms Comparison
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("detailed_subjects")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                      viewMode === "detailed_subjects"
+                        ? "bg-white text-sky-700 shadow-xs"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                  >
+                    Subject Multi-Term Breakdown
+                  </button>
+                </div>
               </div>
-              <div className="inline-flex p-1 bg-gray-100 rounded-xl gap-1">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("current")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    viewMode === "current"
-                      ? "bg-white text-sky-700 shadow-xs"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Current Term Broadsheet
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("prior_summary")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    viewMode === "prior_summary"
-                      ? "bg-white text-sky-700 shadow-xs"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Show Previous Terms Comparison
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("detailed_subjects")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                    viewMode === "detailed_subjects"
-                      ? "bg-white text-sky-700 shadow-xs"
-                      : "text-gray-600 hover:text-gray-900"
-                  }`}
-                >
-                  Subject Multi-Term Breakdown
-                </button>
-              </div>
+
+              {/* Only Present Terms Toggle */}
+              <label
+                title="When checked, students who joined mid-year (Term 2 or Term 3) will only have their attended terms averaged. Terms they were absent/not enrolled will not be counted as 0 or aggregated against them."
+                className="flex items-center gap-2 cursor-pointer select-none text-xs font-semibold text-gray-700 bg-emerald-50/70 hover:bg-emerald-50 border border-emerald-200 px-3.5 py-2 rounded-xl transition"
+              >
+                <input
+                  type="checkbox"
+                  checked={onlyPresentTerms}
+                  onChange={(e) => setOnlyPresentTerms(e.target.checked)}
+                  className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                />
+                <span className="text-emerald-900">Only aggregate terms present</span>
+              </label>
             </div>
           )}
         </div>

@@ -12,6 +12,8 @@ export interface IStudent extends Document {
   parentEmail?: string;
   status: "active" | "graduated" | "transferred" | "archived";
   graduationSession?: string;
+  enrolledTerms?: number[]; // terms attended in the session, e.g. [1, 2, 3] or [2, 3] or [3]
+  joinedTerm?: 1 | 2 | 3; // which term the student joined: 1 (start of year), 2 (2nd term), 3 (3rd term)
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -33,6 +35,15 @@ const StudentSchema = new Schema<IStudent>(
       default: "active",
     },
     graduationSession: { type: String },
+    enrolledTerms: {
+      type: [Number],
+      default: [1, 2, 3],
+    },
+    joinedTerm: {
+      type: Number,
+      enum: [1, 2, 3],
+      default: 1,
+    },
   },
   { timestamps: true }
 );

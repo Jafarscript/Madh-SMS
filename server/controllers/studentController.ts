@@ -8,6 +8,7 @@ import Score from "../models/Score";
 import Attendance from "../models/Attendance";
 import ReportCardRemark from "../models/ReportCardRemark";
 import User from "../models/User";
+import Term from "../models/Term";
 
 // Re-sorts every student in a class alphabetically (Arabic-aware collation,
 // since names are typically in Arabic script) and reassigns numberInClass
@@ -75,11 +76,18 @@ export const createStudent = async (req: AuthRequest, res: Response) => {
       parentEmail: parentEmail?.trim()?.toLowerCase(),
       numberInClass: 0,
       status: "active",
+      joinedTerm: ((Number(req.body.joinedTerm) || 1) as 1 | 2 | 3),
+      enrolledTerms:
+        req.body.enrolledTerms && Array.isArray(req.body.enrolledTerms) && req.body.enrolledTerms.length > 0
+          ? req.body.enrolledTerms
+          : req.body.joinedTerm
+            ? [1, 2, 3].filter((t) => t >= Number(req.body.joinedTerm))
+            : [1, 2, 3],
     });
 
     await renumberClass(classId);
 
-    const updated = await Student.findById(student._id).populate("class", "name arm");
+    const updated = await Student.findById(student?._id).populate("class", "name arm");
     res.status(201).json(updated);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
@@ -279,6 +287,12 @@ export const updateStudent = async (req: AuthRequest, res: Response) => {
       }
     }
 
+    if (req.body.joinedTerm && !req.body.enrolledTerms) {
+      req.body.enrolledTerms = [1, 2, 3].filter((t) => t >= Number(req.body.joinedTerm));
+    } else if (req.body.enrolledTerms && Array.isArray(req.body.enrolledTerms) && req.body.enrolledTerms.length > 0) {
+      req.body.joinedTerm = Math.min(...req.body.enrolledTerms);
+    }
+
     const updated = await Student.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!updated) return res.status(404).json({ message: "Student not found" });
 
@@ -414,5 +428,115 @@ export const promoteStudents = async (req: AuthRequest, res: Response) => {
     res.status(400).json({ message: "Invalid action" });
   } catch (err) {
     res.status(500).json({ message: "Server error during promotion", error: (err as Error).message });
+  }
+};
+
+// PUT /api/students/:id/enrolled-terms
+// Allows setting which terms a student attended (e.g. joined in Term 2 -> [2, 3])
+export const updateStudentEnrolledTerms = async (req: AuthRequest, res: Response) => {
+  try {
+    const { enrolledTerms, joinedTerm } = req.body;
+    const student = await Student.findById(req.params.id);
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
+    let finalEnrolled: number[] | undefined = enrolledTerms;
+    let finalJoined: 1 | 2 | 3 | undefined = joinedTerm ? (Number(joinedTerm) as 1 | 2 | 3) : undefined;
+
+    if (!finalEnrolled && finalJoined) {
+      finalEnrolled = [1, 2, 3].filter((t) => t >= finalJoined!);
+    } else if (finalEnrolled && finalEnrolled.length > 0) {
+      finalJoined = Math.min(...finalEnrolled) as 1 | 2 | 3;
+    } else {
+      finalEnrolled = [1, 2, 3];
+      finalJoined = 1;
+    }
+
+    student.enrolledTerms = finalEnrolled;
+    student.joinedTerm = finalJoined;
+    await student.save();
+
+    res.status(200).json({
+      message: "Enrolled terms updated successfully",
+      student: {
+        _id: student._id,
+        name: student.name,
+        enrolledTerms: student.enrolledTerms,
+        joinedTerm: student.joinedTerm,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: (err as Error).message });
+  }
+};
+
+// POST /api/students/auto-detect-enrolled-terms
+// Inspects existing score records for students across terms:
+// If a student has no scores in Term 1, but has scores in Term 2 -> joinedTerm 2, enrolledTerms [2, 3]
+// If a student has no scores in Term 1 & 2, but has scores in Term 3 -> joinedTerm 3, enrolledTerms [3]
+export const autoDetectEnrolledTerms = async (req: AuthRequest, res: Response) => {
+  try {
+    const { classId } = req.body;
+    const studentFilter: Record<string, any> = {
+      status: { $nin: ["graduated", "transferred", "archived"] },
+    };
+    if (classId) {
+      studentFilter.class = classId;
+    }
+
+    const students = await Student.find(studentFilter);
+    const terms = await Term.find().sort({ termNumber: 1 });
+    const t1 = terms.find((t) => t.termNumber === 1);
+    const t2 = terms.find((t) => t.termNumber === 2);
+    const t3 = terms.find((t) => t.termNumber === 3);
+
+    let updatedCount = 0;
+    const updates: any[] = [];
+
+    for (const student of students) {
+      const countT1 = t1 ? await Score.countDocuments({ student: student._id, term: t1._id }) : 0;
+      const countT2 = t2 ? await Score.countDocuments({ student: student._id, term: t2._id }) : 0;
+      const countT3 = t3 ? await Score.countDocuments({ student: student._id, term: t3._id }) : 0;
+
+      let detectedJoined: 1 | 2 | 3 = 1;
+      let detectedEnrolled: number[] = [1, 2, 3];
+
+      if (countT1 > 0) {
+        detectedJoined = 1;
+        detectedEnrolled = [1, 2, 3];
+      } else if (countT2 > 0) {
+        detectedJoined = 2;
+        detectedEnrolled = [2, 3];
+      } else if (countT3 > 0) {
+        detectedJoined = 3;
+        detectedEnrolled = [3];
+      } else {
+        // No scores at all yet in any term: keep current or default to joinedTerm if specified
+        continue;
+      }
+
+      if (
+        student.joinedTerm !== detectedJoined ||
+        JSON.stringify(student.enrolledTerms) !== JSON.stringify(detectedEnrolled)
+      ) {
+        student.joinedTerm = detectedJoined;
+        student.enrolledTerms = detectedEnrolled;
+        await student.save();
+        updatedCount++;
+        updates.push({
+          studentId: student._id,
+          name: student.name,
+          joinedTerm: detectedJoined,
+          enrolledTerms: detectedEnrolled,
+        });
+      }
+    }
+
+    res.status(200).json({
+      message: `Auto-detected enrolled terms for ${updatedCount} student(s).`,
+      updatedCount,
+      updates,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: (err as Error).message });
   }
 };

@@ -5,6 +5,7 @@ import Student from "../models/Student";
 import Score from "../models/Score";
 import Branch from "../models/Branch";
 import User from "../models/User";
+import Term from "../models/Term";
 import { AuthRequest } from "../middleware/auth";
 
 // GET /api/dashboard?term=<termId>&branch=<branchId optional>
@@ -15,6 +16,9 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
     if (!term) {
       return res.status(400).json({ message: "term is required" });
     }
+
+    const termDoc = await Term.findById(term);
+    const currentTermNum = termDoc?.termNumber || 1;
 
     const classFilter: Record<string, any> = {};
 
@@ -45,7 +49,19 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
     // how many (student x subject) score slots are actually filled in.
     const classSummaries = await Promise.all(
       classes.map(async (cls) => {
-        const students = await Student.find({ class: cls._id, status: "active" });
+        const rawStudents = await Student.find({
+          class: cls._id,
+          status: { $nin: ["graduated", "transferred", "archived"] },
+        });
+        const students = rawStudents.filter((s) => {
+          if (s.enrolledTerms && s.enrolledTerms.length > 0) {
+            return s.enrolledTerms.includes(currentTermNum);
+          }
+          if (s.joinedTerm) {
+            return currentTermNum >= s.joinedTerm;
+          }
+          return true;
+        });
         const subjects = await Subject.find({ class: cls._id });
 
         const expectedScoreCount = students.length * subjects.length;
@@ -92,7 +108,9 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
     );
 
     // Filter students scoped strictly to the accessible classes/branch
-    const studentFilter: Record<string, any> = { status: "active" };
+    const studentFilter: Record<string, any> = {
+      status: { $nin: ["graduated", "transferred", "archived"] },
+    };
     if (req.user?.role === "branch_admin" && req.user.branch) {
       studentFilter.branch = req.user.branch;
     } else if (req.user?.role === "class_teacher" || req.user?.role === "subject_teacher") {
@@ -101,7 +119,16 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
       studentFilter.branch = branch as string;
     }
 
-    const allStudents = await Student.find(studentFilter);
+    const fetchedStudents = await Student.find(studentFilter);
+    const allStudents = fetchedStudents.filter((s) => {
+      if (s.enrolledTerms && s.enrolledTerms.length > 0) {
+        return s.enrolledTerms.includes(currentTermNum);
+      }
+      if (s.joinedTerm) {
+        return currentTermNum >= s.joinedTerm;
+      }
+      return true;
+    });
     const scoresForStudents = await Score.find({
       term: term as any,
       student: { $in: allStudents.map((s) => s._id) } as any,

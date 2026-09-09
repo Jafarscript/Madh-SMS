@@ -51,6 +51,8 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: "Term not found" });
     }
 
+    const onlyPresentTerms = req.query.onlyPresentTerms !== "false";
+
     const students = await Student.find({ class: classId as any }).sort({ numberInClass: 1, name: 1 });
     const subjects = await Subject.find({ class: classId as any }).sort({ order: 1, nameEnglish: 1 });
 
@@ -117,16 +119,27 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
     const rows = students.map((student) => {
       const studentIdStr = student._id.toString();
 
+      // Determine enrolled terms for student
+      let studentEnrolledTerms: number[] = [1, 2, 3];
+      if (student.enrolledTerms && Array.isArray(student.enrolledTerms) && student.enrolledTerms.length > 0) {
+        studentEnrolledTerms = student.enrolledTerms;
+      } else if (student.joinedTerm) {
+        studentEnrolledTerms = [1, 2, 3].filter((t) => t >= student.joinedTerm!);
+      }
+
+      const isEnrolledInCurrentTerm = studentEnrolledTerms.includes(currentTerm.termNumber);
+
       // 1. Current term subject scores
       const subjectScores = subjects.map((subject) => {
         const key = `${currentTerm._id.toString()}_${studentIdStr}_${subject._id.toString()}`;
-        const scoreDoc = scoreMap.get(key);
+        const scoreDoc = isEnrolledInCurrentTerm ? scoreMap.get(key) : undefined;
 
         // Also gather prior term scores for this subject
         const termScoresList: { termNumber: number; termId: string; score: number | null }[] = [];
         sessionTerms.forEach((st) => {
           const stKey = `${st._id.toString()}_${studentIdStr}_${subject._id.toString()}`;
-          const stDoc = scoreMap.get(stKey);
+          const isEnrolledInSt = studentEnrolledTerms.includes(st.termNumber);
+          const stDoc = isEnrolledInSt ? scoreMap.get(stKey) : undefined;
           termScoresList.push({
             termNumber: st.termNumber,
             termId: st._id.toString(),
@@ -151,7 +164,9 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
       const average = totalSubjectsCount > 0 ? total / totalSubjectsCount : 0;
       const overallPercentage = Math.round(average * 100) / 100;
 
-      const { grade, remark, remarkArabic } = getGradeRemark(overallPercentage);
+      const { grade, remark, remarkArabic } = isEnrolledInCurrentTerm
+        ? getGradeRemark(overallPercentage)
+        : { grade: "—", remark: "Not Enrolled", remarkArabic: "لم يلتحق" };
 
       // 2. Summary for each term in the session (for prior terms comparison)
       const termSummaries = sessionTerms.map((st) => {
@@ -166,6 +181,29 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
             tEnteredCount++;
           }
         });
+
+        const isEnrolledInTerm = studentEnrolledTerms.includes(st.termNumber);
+        // If not enrolled, or if onlyPresentTerms is true and 0 scores were entered and student joined in a later term
+        const treatAsNotEnrolled =
+          !isEnrolledInTerm ||
+          (onlyPresentTerms && tEnteredCount === 0 && student.joinedTerm && student.joinedTerm > st.termNumber);
+
+        if (treatAsNotEnrolled) {
+          return {
+            termId: st._id.toString(),
+            termNumber: st.termNumber,
+            session: st.session,
+            total: null as any,
+            average: null as any,
+            overallPercentage: null as any,
+            allEntered: false,
+            enteredCount: 0,
+            grade: "—",
+            remark: "Not Enrolled",
+            remarkArabic: "لم يلتحق",
+            isEnrolled: false,
+          };
+        }
 
         const tAvg = totalSubjectsCount > 0 ? tTotal / totalSubjectsCount : 0;
         const tPercentage = Math.round(tAvg * 100) / 100;
@@ -183,14 +221,21 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
           grade: tGradeRemark.grade,
           remark: tGradeRemark.remark,
           remarkArabic: tGradeRemark.remarkArabic,
+          isEnrolled: true,
         };
       });
 
       // 3. Cumulative calculation across prior terms up to current term
+      // When onlyPresentTerms is true, filter priorTerms to only terms where student was enrolled
+      const applicablePriorTerms = priorTerms.filter((t) => {
+        if (!onlyPresentTerms) return true;
+        return studentEnrolledTerms.includes(t.termNumber);
+      });
+
       let cumulativeTotal = 0;
       subjects.forEach((subject) => {
         const subjectKey = subject._id.toString();
-        const rawScoresAscending = priorTerms
+        const rawScoresAscending = applicablePriorTerms
           .map((t) => {
             const key = `${t._id.toString()}_${studentIdStr}_${subjectKey}`;
             return scoreMap.get(key)?.total;
@@ -203,53 +248,67 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
 
       const cumulativeAverage = totalSubjectsCount > 0 ? cumulativeTotal / totalSubjectsCount : 0;
       const cumulativePercentage = Math.round(cumulativeAverage * 100) / 100;
-      const cumulativeGradeRemark = getGradeRemark(cumulativePercentage);
+      const cumulativeGradeRemark = isEnrolledInCurrentTerm
+        ? getGradeRemark(cumulativePercentage)
+        : { grade: "—", remark: "Not Enrolled", remarkArabic: "لم يلتحق" };
 
       return {
         student: student._id,
         name: student.name,
         gender: student.gender,
         numberInClass: student.numberInClass,
+        enrolledTerms: studentEnrolledTerms,
+        joinedTerm: student.joinedTerm || 1,
+        isEnrolledInCurrentTerm,
         subjectScores,
-        total,
-        average: overallPercentage,
-        overallPercentage,
+        total: isEnrolledInCurrentTerm ? total : 0,
+        average: isEnrolledInCurrentTerm ? overallPercentage : 0,
+        overallPercentage: isEnrolledInCurrentTerm ? overallPercentage : 0,
         grade,
         remark,
         remarkArabic,
-        allSubjectsEntered: enteredScores.length === totalSubjectsCount,
+        allSubjectsEntered: isEnrolledInCurrentTerm && enteredScores.length === totalSubjectsCount,
         termSummaries,
-        cumulativeTotal: Math.round(cumulativeTotal * 100) / 100,
-        cumulativeAverage: cumulativePercentage,
-        cumulativePercentage,
+        cumulativeTotal: isEnrolledInCurrentTerm ? Math.round(cumulativeTotal * 100) / 100 : null,
+        cumulativeAverage: isEnrolledInCurrentTerm ? cumulativePercentage : null,
+        cumulativePercentage: isEnrolledInCurrentTerm ? cumulativePercentage : null,
         cumulativeGrade: cumulativeGradeRemark.grade,
         cumulativeRemark: cumulativeGradeRemark.remark,
         cumulativeRemarkArabic: cumulativeGradeRemark.remarkArabic,
       };
     });
 
-    // Compute current term positions based on current term total
+    // Compute current term positions based on current term total (only for students enrolled in current term)
     const rankedCurrent = computePositions(
-      rows.map((r) => ({ studentId: r.student.toString(), score: r.total }))
+      rows
+        .filter((r) => r.isEnrolledInCurrentTerm)
+        .map((r) => ({ studentId: r.student.toString(), score: r.total }))
     );
     const currentPositionMap = new Map(rankedCurrent.map((r) => [r.studentId, r.position]));
 
-    // Compute cumulative positions based on cumulative average
+    // Compute cumulative positions based on cumulative average (only for students enrolled in current term)
     const rankedCumulative = computePositions(
-      rows.map((r) => ({ studentId: r.student.toString(), score: r.cumulativeAverage }))
+      rows
+        .filter((r) => r.isEnrolledInCurrentTerm && r.cumulativeAverage !== null)
+        .map((r) => ({ studentId: r.student.toString(), score: r.cumulativeAverage ?? 0 }))
     );
     const cumulativePositionMap = new Map(rankedCumulative.map((r) => [r.studentId, r.position]));
 
-    // Compute positions for each prior term
+    // Compute positions for each prior term (only for students enrolled in that term with scores)
     const termPositionMaps = new Map<number, Map<string, number>>();
     sessionTerms.forEach((st) => {
-      const termRankInput = rows.map((r) => {
-        const tSumm = r.termSummaries.find((ts) => ts.termNumber === st.termNumber);
-        return {
-          studentId: r.student.toString(),
-          score: tSumm ? tSumm.total : 0,
-        };
-      });
+      const termRankInput = rows
+        .filter((r) => {
+          const tSumm = r.termSummaries.find((ts) => ts.termNumber === st.termNumber);
+          return tSumm && tSumm.isEnrolled && tSumm.total !== null;
+        })
+        .map((r) => {
+          const tSumm = r.termSummaries.find((ts) => ts.termNumber === st.termNumber);
+          return {
+            studentId: r.student.toString(),
+            score: tSumm ? (tSumm.total ?? 0) : 0,
+          };
+        });
       const tRanked = computePositions(termRankInput);
       termPositionMaps.set(st.termNumber, new Map(tRanked.map((tr) => [tr.studentId, tr.position])));
     });
@@ -258,13 +317,13 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
       const sId = row.student.toString();
       const updatedTermSummaries = row.termSummaries.map((ts) => ({
         ...ts,
-        position: termPositionMaps.get(ts.termNumber)?.get(sId) ?? null,
+        position: ts.isEnrolled ? (termPositionMaps.get(ts.termNumber)?.get(sId) ?? null) : null,
       }));
 
       return {
         ...row,
-        position: currentPositionMap.get(sId)!,
-        cumulativePosition: cumulativePositionMap.get(sId)!,
+        position: row.isEnrolledInCurrentTerm ? (currentPositionMap.get(sId) ?? null) : null,
+        cumulativePosition: row.isEnrolledInCurrentTerm ? (cumulativePositionMap.get(sId) ?? null) : null,
         termSummaries: updatedTermSummaries,
       };
     });
@@ -357,28 +416,45 @@ export const getClassCumulativePositions = async (
     subjMap.get(subjectKey)!.set(sc.term.toString(), sc.total);
   });
 
-  const rankInput = students.map((s) => {
-    const studentKey = s._id.toString();
-    const subjMap = byStudentSubject.get(studentKey) || new Map();
+  const rankInput = students
+    .filter((s) => {
+      const sEnrolled =
+        s.enrolledTerms && Array.isArray(s.enrolledTerms) && s.enrolledTerms.length > 0
+          ? s.enrolledTerms
+          : s.joinedTerm
+            ? [1, 2, 3].filter((t) => t >= s.joinedTerm!)
+            : [1, 2, 3];
+      return sEnrolled.includes(currentTerm.termNumber);
+    })
+    .map((s) => {
+      const studentKey = s._id.toString();
+      const subjMap = byStudentSubject.get(studentKey) || new Map();
+      const sEnrolled =
+        s.enrolledTerms && Array.isArray(s.enrolledTerms) && s.enrolledTerms.length > 0
+          ? s.enrolledTerms
+          : s.joinedTerm
+            ? [1, 2, 3].filter((t) => t >= s.joinedTerm!)
+            : [1, 2, 3];
+      const applicablePriorTerms = priorTerms.filter((t) => sEnrolled.includes(t.termNumber));
 
-    // cascade each subject the same way the report card does, then
-    // average across the FULL subject count — a subject with no score
-    // yet contributes 0, matching buildReportCardData's overallPercentage
-    let total = 0;
-    subjects.forEach((subject) => {
-      const subjectKey = subject._id.toString();
-      const termScoreMap = subjMap.get(subjectKey) || new Map();
-      const rawScoresAscending = priorTerms
-        .map((t) => termScoreMap.get(t._id.toString()))
-        .filter((v): v is number => v !== undefined);
+      // cascade each subject the same way the report card does, then
+      // average across the FULL subject count — a subject with no score
+      // yet contributes 0, matching buildReportCardData's overallPercentage
+      let total = 0;
+      subjects.forEach((subject) => {
+        const subjectKey = subject._id.toString();
+        const termScoreMap = subjMap.get(subjectKey) || new Map();
+        const rawScoresAscending = applicablePriorTerms
+          .map((t) => termScoreMap.get(t._id.toString()))
+          .filter((v): v is number => v !== undefined);
 
-      const { finalValue } = foldCascade(rawScoresAscending);
-      total += finalValue ?? 0;
+        const { finalValue } = foldCascade(rawScoresAscending);
+        total += finalValue ?? 0;
+      });
+
+      const average = totalSubjectsCount > 0 ? total / totalSubjectsCount : 0;
+      return { studentId: studentKey, score: average };
     });
-
-    const average = totalSubjectsCount > 0 ? total / totalSubjectsCount : 0;
-    return { studentId: studentKey, score: average };
-  });
 
   const ranked = computePositions(rankInput);
   return new Map(ranked.map((r) => [r.studentId, r.position]));

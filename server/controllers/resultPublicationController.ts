@@ -6,6 +6,7 @@ import Subject from "../models/Subject";
 import Score from "../models/Score";
 import ReportCardRemark from "../models/ReportCardRemark";
 import User from "../models/User";
+import Term from "../models/Term";
 import { AuthRequest } from "../middleware/auth";
 
 const canManageClass = async (req: AuthRequest, classId: string) => {
@@ -112,13 +113,16 @@ export const getResultOverview = async (req: AuthRequest, res: Response) => {
 
     const classIds = classes.map((c) => c._id);
 
+    const currentTermDoc = await Term.findById(term);
+    const currentTermNum = currentTermDoc?.termNumber || 1;
+
     // Fetch publications, students, subjects, scores, remarks in parallel
     const [publications, allStudents, allSubjects, allScores, allRemarks] =
       await Promise.all([
         ResultPublication.find({ class: { $in: classIds }, term: term as any })
           .populate("publishedBy", "name email")
           .populate("lockedBy", "name email"),
-        Student.find({ class: { $in: classIds } }).select("_id name numberInClass class"),
+        Student.find({ class: { $in: classIds } }).select("_id name numberInClass class enrolledTerms joinedTerm status"),
         Subject.find({ class: { $in: classIds } }).select("_id nameEnglish class"),
         Score.find({ term: term as any }).select("student subject ca exam total"),
         ReportCardRemark.find({ term: term as any }).select(
@@ -141,7 +145,17 @@ export const getResultOverview = async (req: AuthRequest, res: Response) => {
 
     const classOverviews = classes.map((cls) => {
       const cid = cls._id.toString();
-      const studentsInClass = allStudents.filter((s) => s.class.toString() === cid);
+      const studentsInClass = allStudents.filter((s) => {
+        if (s.class.toString() !== cid) return false;
+        if (s.status === "graduated" || s.status === "transferred" || s.status === "archived") return false;
+        const enrolled =
+          s.enrolledTerms && Array.isArray(s.enrolledTerms) && s.enrolledTerms.length > 0
+            ? s.enrolledTerms
+            : s.joinedTerm
+              ? [1, 2, 3].filter((t: number) => t >= s.joinedTerm!)
+              : [1, 2, 3];
+        return enrolled.includes(currentTermNum);
+      });
       const subjectsInClass = allSubjects.filter((s) => s.class.toString() === cid);
       const pub = pubMap.get(cid);
 
@@ -280,6 +294,20 @@ export const getClassAuditDetails = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
+    const termDoc = await Term.findById(term);
+    const termNum = termDoc?.termNumber || 1;
+
+    const activeStudents = students.filter((s) => {
+      if (s.status === "graduated" || s.status === "transferred" || s.status === "archived") return false;
+      const enrolled =
+        s.enrolledTerms && Array.isArray(s.enrolledTerms) && s.enrolledTerms.length > 0
+          ? s.enrolledTerms
+          : s.joinedTerm
+            ? [1, 2, 3].filter((t: number) => t >= s.joinedTerm!)
+            : [1, 2, 3];
+      return enrolled.includes(termNum);
+    });
+
     const scoreMap = new Map<string, boolean>();
     scores.forEach((sc) => {
       scoreMap.set(`${sc.student.toString()}-${sc.subject.toString()}`, true);
@@ -290,7 +318,7 @@ export const getClassAuditDetails = async (req: AuthRequest, res: Response) => {
       remarkMap.set(rm.student.toString(), rm);
     });
 
-    const studentAudits = students.map((st) => {
+    const studentAudits = activeStudents.map((st) => {
       const sid = st._id.toString();
       const missingSubjects = subjects.filter(
         (sb) => !scoreMap.has(`${sid}-${sb._id.toString()}`)
@@ -326,7 +354,7 @@ export const getClassAuditDetails = async (req: AuthRequest, res: Response) => {
         branch: classDoc.branch,
       },
       publication: publication || { class: classId, term, status: "draft" },
-      totalStudents: students.length,
+      totalStudents: activeStudents.length,
       totalSubjects: subjects.length,
       students: studentAudits,
     });
