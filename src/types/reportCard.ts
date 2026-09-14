@@ -58,6 +58,8 @@ export interface ReportCardAttendance {
 }
 
 export interface ReportCardData {
+  isElementary?: boolean;
+  classCategory?: "elementary" | "secondary";
   student: {
     name: string;
     gender: string;
@@ -77,4 +79,5 @@ export interface ReportCardData {
   classTeacherComment: ReportCardComment | null;
   principalComment: ReportCardComment | null;
   templateSettings?: ReportCardTemplateSettings | null;
+  affectiveScores?: Record<string, number>;
 }

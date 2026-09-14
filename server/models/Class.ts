@@ -4,8 +4,9 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 // or no arm at all. We model each class+arm combo as its own document
 // so broadsheets/report cards can reference one specific arm directly.
 export interface IClass extends Document {
-  name: string;          // e.g. "Grade 2"
+  name: string;          // e.g. "Grade 2" or "STAGE ONE"
   arm?: string;           // e.g. "A" — omitted if class has no arms
+  category?: "secondary" | "elementary";
   branch: Types.ObjectId;
   createdAt: Date;
 }
@@ -13,6 +14,11 @@ export interface IClass extends Document {
 const ClassSchema = new Schema<IClass>({
   name: { type: String, required: true },
   arm: { type: String }, // optional on purpose
+  category: {
+    type: String,
+    enum: ["secondary", "elementary"],
+    default: "secondary",
+  },
   branch: { type: Schema.Types.ObjectId, ref: "Branch", required: true },
   createdAt: { type: Date, default: Date.now },
 });

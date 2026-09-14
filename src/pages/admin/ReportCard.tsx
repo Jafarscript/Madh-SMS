@@ -68,10 +68,13 @@ const ReportCard = () => {
   const [error, setError] = useState("");
 
   const { user } = useAuth();
+  const [commentsBank, setCommentsBank] = useState<ReportCardComment[]>(REPORT_CARD_COMMENTS);
   const studentGender = students.find((s) => s._id === selectedStudent)?.gender;
-  const filteredComments = REPORT_CARD_COMMENTS.filter(
-    (c) => c.gender === "N" || c.gender === studentGender,
-  );
+  const filteredComments = useMemo(() => {
+    return commentsBank.filter(
+      (c) => c.gender === "N" || !studentGender || c.gender === studentGender,
+    );
+  }, [commentsBank, studentGender]);
 
   const [classTeacherCommentId, setClassTeacherCommentId] = useState("");
   const [classTeacherCustom, setClassTeacherCustom] = useState({
@@ -104,6 +107,11 @@ const ReportCard = () => {
       setScales(res.data || []);
       if (res.data?.length > 0) setSelectedScale(res.data[0]._id);
     });
+    api.get("/predefined-comments").then((res) => {
+      if (Array.isArray(res.data) && res.data.length > 0) {
+        setCommentsBank(res.data);
+      }
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -874,6 +882,7 @@ const ReportCard = () => {
       <RemarksCommentBankModal
         isOpen={commentBankTarget !== null}
         onClose={() => setCommentBankTarget(null)}
+        targetRole={commentBankTarget === "principal" ? "principal" : "class_teacher"}
         studentGender={studentGender}
         studentName={students.find((s) => s._id === selectedStudent)?.name}
         currentCommentId={
@@ -882,11 +891,12 @@ const ReportCard = () => {
             : principalCommentId
         }
         onSelectComment={(comment: ReportCardComment) => {
+          const cId = comment.id || (comment as any)._id;
           if (commentBankTarget === "classTeacher") {
-            setClassTeacherCommentId(comment.id);
+            setClassTeacherCommentId(cId);
             setUseCustomClassTeacher(false);
           } else if (commentBankTarget === "principal") {
-            setPrincipalCommentId(comment.id);
+            setPrincipalCommentId(cId);
             setUseCustomPrincipal(false);
           }
         }}

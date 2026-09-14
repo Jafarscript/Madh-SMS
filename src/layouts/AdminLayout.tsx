@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Grid,
   History,
+  MessageSquareQuote,
 } from "lucide-react";
 
 interface NavItemConfig {
@@ -115,6 +116,13 @@ const navItemsConfig: NavItemConfig[] = [
     label: "Report Cards",
     roles: ["super_admin", "branch_admin", "class_teacher"],
     icon: FileText,
+    group: "performance",
+  },
+  {
+    to: "/admin/report-card-comments",
+    label: "Remarks Bank",
+    roles: ["super_admin"],
+    icon: MessageSquareQuote,
     group: "performance",
   },
   {

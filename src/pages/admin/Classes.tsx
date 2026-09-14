@@ -5,6 +5,7 @@ import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { AlertTriangle, Trash2, CheckCircle } from "lucide-react";
+import { isElementaryClass } from "../../utils/classCategoryHelper";
 
 interface Branch {
   _id: string;
@@ -15,6 +16,7 @@ interface ClassItem {
   _id: string;
   name: string;
   arm?: string;
+  category?: "secondary" | "elementary";
   branch: { _id: string; name: string };
 }
 
@@ -26,6 +28,8 @@ const Classes = () => {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [name, setName] = useState("");
   const [arm, setArm] = useState("");
+  const [category, setCategory] = useState<"secondary" | "elementary">("secondary");
+  const [categoryTouched, setCategoryTouched] = useState(false);
   const [branchId, setBranchId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,6 +38,7 @@ const Classes = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editArm, setEditArm] = useState("");
+  const [editCategory, setEditCategory] = useState<"secondary" | "elementary">("secondary");
   const [editBranchId, setEditBranchId] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
 
@@ -57,6 +62,17 @@ const Classes = () => {
     fetchData();
   }, []);
 
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (!categoryTouched) {
+      if (isElementaryClass(val)) {
+        setCategory("elementary");
+      } else {
+        setCategory("secondary");
+      }
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -68,10 +84,13 @@ const Classes = () => {
       await api.post("/classes", {
         name,
         branch: branchId,
+        category,
         ...(arm.trim() ? { arm: arm.trim() } : {}),
       });
       setName("");
       setArm("");
+      setCategory("secondary");
+      setCategoryTouched(false);
       setBranchId("");
       setSuccessMessage("Class created successfully.");
       setTimeout(() => setSuccessMessage(""), 4000);
@@ -87,7 +106,17 @@ const Classes = () => {
     setEditingId(classItem._id);
     setEditName(classItem.name);
     setEditArm(classItem.arm || "");
-    setEditBranchId(classItem.branch?._id || "");
+    // If the class is explicitly elementary OR its name indicates an elementary class, set to elementary
+    const effectiveCategory =
+      classItem.category === "elementary" || isElementaryClass(classItem.name, classItem.category)
+        ? "elementary"
+        : "secondary";
+    setEditCategory(effectiveCategory);
+    setEditBranchId(
+      typeof classItem.branch === "object" && classItem.branch
+        ? classItem.branch._id
+        : (typeof classItem.branch === "string" ? classItem.branch : "")
+    );
     setError("");
     setSuccessMessage("");
   };
@@ -96,6 +125,7 @@ const Classes = () => {
     setEditingId(null);
     setEditName("");
     setEditArm("");
+    setEditCategory("secondary");
     setEditBranchId("");
   };
 
@@ -111,11 +141,16 @@ const Classes = () => {
     setSavingEdit(true);
     setError("");
     try {
-      await api.put(`/classes/${id}`, {
+      const res = await api.put(`/classes/${id}`, {
         name: editName.trim(),
         arm: editArm.trim(),
+        category: editCategory,
         branch: editBranchId,
       });
+      // Optimistically update list so the UI reflects the category immediately
+      setClasses((prev) =>
+        prev.map((c) => (c._id === id ? { ...c, ...res.data, category: editCategory } : c))
+      );
       await fetchData();
       cancelEdit();
       setSuccessMessage("Class updated successfully.");
@@ -124,6 +159,34 @@ const Classes = () => {
       setError(err.response?.data?.message || "Failed to update class");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const handleQuickToggleCategory = async (classItem: ClassItem) => {
+    if (!isAdmin) return;
+    const newCategory: "secondary" | "elementary" =
+      classItem.category === "elementary" ? "secondary" : "elementary";
+    try {
+      setClasses((prev) =>
+        prev.map((c) => (c._id === classItem._id ? { ...c, category: newCategory } : c))
+      );
+      await api.put(`/classes/${classItem._id}`, {
+        category: newCategory,
+        name: classItem.name,
+        branch:
+          typeof classItem.branch === "object" && classItem.branch
+            ? classItem.branch._id
+            : classItem.branch,
+        arm: classItem.arm,
+      });
+      await fetchData();
+      setSuccessMessage(
+        `Switched "${classItem.name}" to ${newCategory === "elementary" ? "Elementary (Per-term)" : "Secondary (Cumulative)"}`
+      );
+      setTimeout(() => setSuccessMessage(""), 3500);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to switch class category");
+      fetchData();
     }
   };
 
@@ -199,15 +262,38 @@ const Classes = () => {
               </label>
               <input
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => handleNameChange(e.target.value)}
                 required
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5"
-                placeholder="e.g. الثاني الاعدادي"
+                placeholder="e.g. مستوى الأول or الأول الثانوي or Stage 1"
               />
             </div>
-            <div className="w-full sm:w-32">
+            <div className="w-full sm:w-56">
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">
+                  Category
+                </label>
+                {category === "elementary" && (
+                  <span className="text-[11px] text-amber-700 font-medium bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                    Per-term (Elementary)
+                  </span>
+                )}
+              </div>
+              <select
+                value={category}
+                onChange={(e) => {
+                  setCategoryTouched(true);
+                  setCategory(e.target.value as "secondary" | "elementary");
+                }}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-sm"
+              >
+                <option value="secondary">Secondary (ثانوي/إعدادي)</option>
+                <option value="elementary">Elementary (ابتدائي / Stage / مستوى)</option>
+              </select>
+            </div>
+            <div className="w-full sm:w-28">
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                الشعبة (optional)
+                الشعبة (opt.)
               </label>
               <input
                 value={arm}
@@ -236,7 +322,7 @@ const Classes = () => {
           <div key={c._id} className="p-4">
             {editingId === c._id ? (
               <div className="flex flex-col gap-3">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">
                       Branch
@@ -260,10 +346,29 @@ const Classes = () => {
                     </label>
                     <input
                       value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setEditName(val);
+                        if (isElementaryClass(val)) {
+                          setEditCategory("elementary");
+                        }
+                      }}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
                       placeholder="Class name"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">
+                      Category
+                    </label>
+                    <select
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value as "secondary" | "elementary")}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden bg-white"
+                    >
+                      <option value="secondary">Secondary (ثانوي/إعدادي)</option>
+                      <option value="elementary">Elementary (ابتدائي / Stage / مستوى)</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1">
@@ -297,10 +402,33 @@ const Classes = () => {
             ) : (
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="font-semibold text-gray-900">
-                    {c.name}
-                    {c.arm && <span className="text-gray-500 font-normal"> — الشعبة {c.arm}</span>}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-900">
+                      {c.name}
+                      {c.arm && <span className="text-gray-500 font-normal"> — الشعبة {c.arm}</span>}
+                    </p>
+                    {c.category === "elementary" ? (
+                      <button
+                        type="button"
+                        onClick={() => handleQuickToggleCategory(c)}
+                        title="Click to switch category to Secondary (Cumulative)"
+                        className="px-2.5 py-0.5 text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 rounded-full hover:bg-amber-100 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                        Elementary (Per-term)
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleQuickToggleCategory(c)}
+                        title="Click to switch category to Elementary (Per-term)"
+                        className="px-2.5 py-0.5 text-[11px] font-semibold bg-sky-50 text-sky-800 border border-sky-200 rounded-full hover:bg-sky-100 transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500 inline-block" />
+                        Secondary (Cumulative)
+                      </button>
+                    )}
+                  </div>
                   <p className="text-xs font-medium text-sky-700 mt-0.5">{c.branch?.name || "No branch"}</p>
                 </div>
                 {isAdmin && (

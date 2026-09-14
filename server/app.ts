@@ -22,6 +22,7 @@ import reportCardRemarkRoutes from "./routes/reportCardRemarkRoutes";
 import resultPublicationRoutes from "./routes/resultPublicationRoutes";
 import attendanceRoutes from "./routes/attendanceRoutes";
 import reportCardSettingRoutes from "./routes/reportCardSettingRoutes";
+import predefinedCommentRoutes from "./routes/predefinedCommentRoutes";
 import { errorHandler } from "./middleware/errorHandler";
 
 dotenv.config();
@@ -131,6 +132,7 @@ app.use(["/api/parent-portal", "/parent-portal"], parentPortalRoutes);
 app.use(["/api/terms", "/terms"], termRoutes);
 app.use(["/api/result-publications", "/result-publications"], resultPublicationRoutes);
 app.use(["/api/attendance", "/attendance"], attendanceRoutes);
+app.use(["/api/predefined-comments", "/predefined-comments"], predefinedCommentRoutes);
 
 // Error Handling
 app.use(["/api", "/"], errorHandler);

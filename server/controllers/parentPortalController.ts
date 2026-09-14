@@ -3,11 +3,13 @@ import mongoose from "mongoose";
 import User from "../models/User";
 import Student from "../models/Student";
 import Term from "../models/Term";
+import ClassModel from "../models/Class";
 import { AuthRequest } from "../middleware/auth";
 import { buildReportCardData } from "./reportCardController";
 import { generateSingleReportCardPdf } from "../utils/generateReportCardPdf";
 import { buildSingleReportCardHtml } from "../utils/reportCardTemplate";
 import { isStudentResultPublished } from "./resultPublicationController";
+import { isElementaryClass } from "./classController";
 
 // Helper to get all linked student IDs for the logged-in parent
 const getAllLinkedStudentIds = async (userId: string): Promise<string[]> => {

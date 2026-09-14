@@ -4,6 +4,7 @@ import Student from "../models/Student";
 import User from "../models/User";
 import { AuthRequest } from "../middleware/auth";
 import { getCommentById } from "../constants/reportCardComments";
+import PredefinedComment from "../models/PredefinedComment";
 import { isClassResultLocked } from "./resultPublicationController";
 
 // PUT /api/report-card-remarks
@@ -53,7 +54,22 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
     let finalId: string | undefined = undefined;
 
     if (commentId) {
-      const picked = getCommentById(commentId);
+      let picked: { en: string; ar: string } | null = null;
+      try {
+        const dbComment = await PredefinedComment.findOne({
+          $or: [{ _id: commentId.match(/^[0-9a-fA-F]{24}$/) ? commentId : null }, { code: commentId }],
+        });
+        if (dbComment) {
+          picked = { en: dbComment.en, ar: dbComment.ar };
+        }
+      } catch {
+        // ignore invalid ObjectId cast
+      }
+
+      if (!picked) {
+        picked = getCommentById(commentId) || null;
+      }
+
       if (!picked) return res.status(400).json({ message: "Unknown commentId" });
       finalEn = picked.en;
       finalAr = picked.ar;

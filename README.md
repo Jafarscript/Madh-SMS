@@ -43,11 +43,26 @@ A comprehensive, full-stack school management and academic tracking system desig
 
 ### 6. Bilingual Report Cards (English & Arabic)
 * Fully customized bilingual layout with Arabic (`RTL`) and English (`LTR`) support.
-* Cumulative averages, term positions, and breakdown per subject.
+* **Dual Report Card Engines**:
+  * **Secondary Classes (Cumulative Engine)**: Displays multi-term cumulative cascading progression, term averages, previous period comparison, and cumulative rankings.
+  * **Elementary Classes (Per-Term Engine)**: Specifically designed for lower classes (e.g. Stage 1–4 / Kindergarten / Primary) with:
+    * Clean single-term evaluation without historical cascade confusion.
+    * Standardized columns: `التقدير (GRADE)`, `المحصلة (TOTAL)`, `الامتحان (EXAM 60%)`, `المراقبة المستمرة (CA 40%)`, and `المواد (SUBJECTS)`.
+    * **Attendance Table**: Preserves the complete bilingual attendance statistics (school days opened, present, absent, resumption dates).
+    * **Psychomotor & Affective Skills Matrix**: 5-point rating grid for punctuality, neatness, attitude to school work, attentiveness, speaking habit/writing, verbal fluency, and sports.
+    * **Grading Scale Legend & Official Seal**: Dedicated scale (85-100 Excellent, 75-84 V. Good, 65-74 Good, 50-64 Fair, 1-49 Poor) and official seal/stamp.
+    * Class Teacher & Principal comment blocks with signature lines and stamps.
 * Attendance statistics (school days, present days, absent days, resumption dates).
 * Bilingual teacher and principal remarks.
 * School branding settings: custom logos, Arabic/English school names, header colors, watermarks, principal signatures, and official school stamps.
 * Single-student print and bulk class report card printing.
+
+### 7. Predefined Remarks Bank (Class Teachers & Principal)
+* Super Admins can view, edit, add, and organize standard bilingual remarks for report cards.
+* Filter and assign remarks specifically to **Class Teachers**, **Principal**, or **Both**.
+* Categorized by performance level: *Excellence*, *Commendable*, *Noticeable Progress*, *Needs More Effort*, *Conduct & Character*, and *Academic Support Required*.
+* Gender-specific Arabic conjugations (Male, Female, or Neutral).
+* One-click "Reset to Factory Defaults" to restore the 36 standard accredited remarks.
 
 ---
 

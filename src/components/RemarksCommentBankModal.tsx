@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Search, MessageSquareQuote, Check, X, Filter } from "lucide-react";
+import api from "../api/axios";
 import { REPORT_CARD_COMMENTS, COMMENT_CATEGORIES, ReportCardComment } from "../constants/reportCardComments";
 
 interface RemarksCommentBankModalProps {
@@ -8,6 +9,7 @@ interface RemarksCommentBankModalProps {
   onClose: () => void;
   studentGender?: string;
   studentName?: string;
+  targetRole?: "class_teacher" | "principal";
   currentCommentId?: string;
   onSelectComment: (comment: ReportCardComment) => void;
 }
@@ -17,14 +19,39 @@ export const RemarksCommentBankModal: React.FC<RemarksCommentBankModalProps> = (
   onClose,
   studentGender = "N",
   studentName,
+  targetRole = "class_teacher",
   currentCommentId,
   onSelectComment,
 }) => {
+  const [comments, setComments] = useState<ReportCardComment[]>(REPORT_CARD_COMMENTS);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
 
+  useEffect(() => {
+    if (isOpen) {
+      api
+        .get("/predefined-comments")
+        .then((res) => {
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            setComments(res.data);
+          }
+        })
+        .catch(() => {
+          // silently use default fallback
+        });
+    }
+  }, [isOpen]);
+
   const filteredComments = useMemo(() => {
-    return REPORT_CARD_COMMENTS.filter((c) => {
+    return comments.filter((c) => {
+      // Role filter
+      if (targetRole) {
+        const role = c.targetRole || "both";
+        if (role !== "both" && role !== targetRole) {
+          return false;
+        }
+      }
+
       // Gender filter
       const matchesGender =
         c.gender === "N" ||
@@ -49,9 +76,11 @@ export const RemarksCommentBankModal: React.FC<RemarksCommentBankModalProps> = (
 
       return true;
     });
-  }, [studentGender, selectedCategory, searchQuery]);
+  }, [comments, targetRole, studentGender, selectedCategory, searchQuery]);
 
   if (!isOpen) return null;
+
+  const isPrincipal = targetRole === "principal";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200">
@@ -61,7 +90,7 @@ export const RemarksCommentBankModal: React.FC<RemarksCommentBankModalProps> = (
           <div>
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <MessageSquareQuote className="w-5 h-5 text-emerald-800" />
-              Teacher Remarks & Comment Bank
+              {isPrincipal ? "Principal Remarks & Comment Bank" : "Class Teacher Remarks & Comment Bank"}
             </h3>
             <p className="text-xs text-gray-600 mt-0.5">
               {studentName ? `Selecting remark for ${studentName}` : "Choose standard English & Arabic remarks"}

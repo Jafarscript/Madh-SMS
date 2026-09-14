@@ -1,5 +1,6 @@
 import { Response } from "express";
 import Student from "../models/Student";
+import ClassModel from "../models/Class";
 import Subject from "../models/Subject";
 import Score from "../models/Score";
 import Term from "../models/Term";
@@ -12,6 +13,8 @@ import Attendance from "../models/Attendance";
 import AttendanceSetting from "../models/AttendanceSetting";
 import ReportCardSetting from "../models/ReportCardSetting";
 import User from "../models/User";
+import { isElementaryClass, ensureElementarySubjectsForClass } from "./classController";
+import { ELEMENTARY_FIXED_SUBJECTS } from "../constants/elementarySubjects";
 
 // Returns the full report card data object, or null if the student/term
 // can't be found. No `req`/`res` here on purpose — this is a plain function
@@ -41,8 +44,32 @@ export const buildReportCardData = async (
 
   const priorTermIds = priorTerms.map((t) => t._id);
 
+  let classDoc = student.class as any;
+  if (!classDoc || !classDoc.name) {
+    const rawClassId = classDoc?._id || classDoc || (student as any).class;
+    if (rawClassId) {
+      try {
+        classDoc = await ClassModel.findById(rawClassId);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const classId = classDoc?._id || (student as any).class;
+  const className = classDoc?.name || "";
+  const rawCategory = classDoc?.category;
+  const isElementary =
+    rawCategory === "elementary" ||
+    isElementaryClass(className, rawCategory);
+  const classCategory: "secondary" | "elementary" = isElementary ? "elementary" : "secondary";
+
+  if (isElementary && classId) {
+    await ensureElementarySubjectsForClass(classId.toString());
+  }
+
   const subjects = await Subject.find({
-    class: (student.class as any)._id,
+    class: classId,
   }).sort({
     order: 1,
     nameEnglish: 1,
@@ -154,8 +181,8 @@ const overallTotal = subjectResults.reduce(
 const overallPercentage =
   totalSubjectsCount > 0 ? overallTotal / totalSubjectsCount : 0;
 
-  const classId = (student.class as any)._id.toString();
-  const positionMap = await getClassCumulativePositions(classId, termId);
+  const classIdStr = classId ? classId.toString() : "";
+  const positionMap = await getClassCumulativePositions(classIdStr, termId);
   const position = positionMap.get(studentId) ?? null;
 
   const totalStudentsInClass = await Student.countDocuments({ class: classId });
@@ -253,14 +280,37 @@ const principalComment =
       ? attDoc.timesAbsent
       : null;
 
+  // For elementary, per-term calculations:
+  let elementaryOverallTotal = 0;
+  let elementarySubjectCount = 0;
+  if (isElementary && isEnrolledInCurrentTerm) {
+    subjectResults.forEach((s) => {
+      if (s.currentTermScore !== null && s.currentTermScore !== undefined) {
+        elementaryOverallTotal += s.currentTermScore;
+        elementarySubjectCount += 1;
+      }
+    });
+  }
+  const effectiveOverallTotal = isElementary
+    ? (isEnrolledInCurrentTerm ? elementaryOverallTotal : 0)
+    : (isEnrolledInCurrentTerm ? Math.round(overallTotal * 100) / 100 : 0);
+
+  const effectiveOverallPercentage = isElementary
+    ? (elementarySubjectCount > 0
+        ? Math.round((elementaryOverallTotal / elementarySubjectCount) * 100) / 100
+        : 0)
+    : (isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0);
+
   return {
+    isElementary,
+    classCategory,
     student: {
       id: student._id,
       name: student.name,
       gender: student.gender,
       numberInClass: student.numberInClass,
-      class: (student.class as any).name,
-      arm: (student.class as any).arm || null,
+      class: className || (student.class as any)?.name || "",
+      arm: classDoc?.arm || (student.class as any)?.arm || null,
       enrolledTerms: studentEnrolledTerms,
       joinedTerm: student.joinedTerm || 1,
       isEnrolledInCurrentTerm,
@@ -270,10 +320,14 @@ const principalComment =
       termNumber: currentTerm.termNumber,
     },
     subjects: subjectResults,
-    overallTotal: isEnrolledInCurrentTerm ? Math.round(overallTotal * 100) / 100 : 0,
-    overallPercentage: isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0,
+    overallTotal: effectiveOverallTotal,
+    overallPercentage: effectiveOverallPercentage,
     position: isEnrolledInCurrentTerm ? position : null,
-    result: !isEnrolledInCurrentTerm ? "Not Enrolled" : overallPercentage >= 50 ? "Pass" : "Fail",
+    result: !isEnrolledInCurrentTerm
+      ? "Not Enrolled"
+      : effectiveOverallPercentage >= 50
+        ? "Pass"
+        : "Fail",
     totalStudentsInClass,
     termAverages,
     attendance: {
@@ -304,6 +358,15 @@ const principalComment =
           watermarkText: templateSetting.watermarkText,
         }
       : null,
+    affectiveScores: {
+      "Punctuality": 5,
+      "Neatness": 4,
+      "Attitude to sch. Work": 5,
+      "Attentiveness": 4,
+      "Speaking Habit/Writing": 4,
+      "Verbal Fluency": 5,
+      "Games / Sports": 4,
+    },
   };
 };
 

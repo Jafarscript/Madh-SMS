@@ -1,9 +1,12 @@
 export interface ReportCardComment {
   id: string;
+  _id?: string;
   en: string;
   ar: string;
   gender: "M" | "F" | "N"; // N = neutral, shown regardless of student gender
   category: "excellence" | "commendable" | "progress" | "effort" | "behavior" | "support";
+  targetRole?: "class_teacher" | "principal" | "both";
+  isActive?: boolean;
 }
 
 export const REPORT_CARD_COMMENTS: ReportCardComment[] = [

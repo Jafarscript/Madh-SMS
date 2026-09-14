@@ -9,17 +9,119 @@ import ReportCardRemark from "../models/ReportCardRemark";
 import ResultPublication from "../models/ResultPublication";
 import User from "../models/User";
 import { AuthRequest } from "../middleware/auth";
+import { ELEMENTARY_FIXED_SUBJECTS } from "../constants/elementarySubjects";
+
+export const normalizeArabic = (text: string): string => {
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F]/g, "") // remove diacritics
+    .trim();
+};
+
+export const isElementaryClass = (name: string, category?: string): boolean => {
+  if (category === "elementary") return true;
+
+  const n = normalizeArabic(name || "");
+  const raw = (name || "").toLowerCase();
+
+  // Explicit secondary terms must stay secondary
+  const isExplicitSecondary =
+    n.includes("اعدادي") || // إعدادي / اعدادي / الاعدادية
+    n.includes("ثانوي") || // ثانوي / الثانوية
+    raw.includes("jss") ||
+    raw.includes("sss") ||
+    raw.includes("junior secondary") ||
+    raw.includes("senior secondary") ||
+    raw.includes("high school") ||
+    raw.includes("college");
+
+  if (isExplicitSecondary) return false;
+
+  const isElementaryName =
+    n.includes("مستوي") || // matches مستوى and المستوي
+    n.includes("مستوى") ||
+    n.includes("ابتدائ") || // matches ابتدائي, ابتدائيه, الابتدائي
+    n.includes("روض") || // matches روضة, رياض
+    n.includes("تمهيد") || // matches تمهيدي, التمهيدي
+    n.includes("حضانه") || // matches حضانة, حضانه
+    n.includes("طفول") || // طفولة
+    raw.includes("stage") ||
+    raw.includes("elementary") ||
+    raw.includes("primary") ||
+    raw.includes("pry") ||
+    raw.includes("basic") ||
+    raw.includes("nursery") ||
+    raw.includes("nur") ||
+    raw.includes("kg") ||
+    raw.includes("kindergarten") ||
+    raw.includes("creche") ||
+    raw.includes("reception") ||
+    raw.includes("preschool") ||
+    raw.includes("pre-school") ||
+    raw.includes("playgroup") ||
+    raw.includes("toddler") ||
+    /\bgrade\s*([1-6]|one|two|three|four|five|six)(?:[a-z]|\b)/i.test(raw) ||
+    /\byear\s*([1-6]|one|two|three|four|five|six)(?:[a-z]|\b)/i.test(raw) ||
+    /\bclass\s*([1-6]|one|two|three|four|five|six)(?:[a-z]|\b)/i.test(raw) ||
+    /\bpri(mary)?\s*([1-6]|one|two|three|four|five|six)(?:[a-z]|\b)/i.test(raw) ||
+    /\bbasic\s*([1-6]|one|two|three|four|five|six)(?:[a-z]|\b)/i.test(raw) ||
+    /(صف|الفصل|المرحله|مرحله|المستوي|مستوي)?\s*(ال)?(اول|اولي|ثاني|ثانيه|ثالث|ثالثه|رابع|رابعه|خامس|خامسه|سادس|سادسه|[1-6])/.test(n);
+
+  if (isElementaryName) return true;
+  if (category === "secondary") return false;
+  return false;
+};
+
+export const ensureElementarySubjectsForClass = async (classId: string) => {
+  try {
+    const existing = await Subject.find({ class: classId });
+    const existingNames = new Set(
+      existing.map((s) => s.nameEnglish.trim().toLowerCase())
+    );
+
+    const toInsert = [];
+    for (let i = 0; i < ELEMENTARY_FIXED_SUBJECTS.length; i++) {
+      const fixed = ELEMENTARY_FIXED_SUBJECTS[i];
+      if (!existingNames.has(fixed.nameEnglish.toLowerCase())) {
+        toInsert.push({
+          nameEnglish: fixed.nameEnglish,
+          nameArabic: fixed.nameArabic,
+          class: classId,
+          order: fixed.order,
+        });
+      }
+    }
+
+    if (toInsert.length > 0) {
+      await Subject.insertMany(toInsert);
+    }
+  } catch (err) {
+    console.error("Failed to auto-seed elementary subjects for class:", classId, err);
+  }
+};
 
 export const createClass = async (req: AuthRequest, res: Response) => {
   try {
-    let { name, arm, branch } = req.body; // arm is optional
+    let { name, arm, branch, category } = req.body; // arm is optional
 
     // If branch_admin, force branch to their assigned branch
     if (req.user?.role === "branch_admin" && req.user.branch) {
       branch = req.user.branch;
     }
 
-    const newClass = await ClassModel.create({ name, arm, branch });
+    // Auto-detect category: if not provided or if defaulted to secondary but name is elementary
+    if (!category || (category === "secondary" && isElementaryClass(name))) {
+      category = isElementaryClass(name) ? "elementary" : "secondary";
+    }
+
+    const newClass = await ClassModel.create({ name, arm, branch, category });
+    if (category === "elementary") {
+      await ensureElementarySubjectsForClass(newClass._id.toString());
+    }
     res.status(201).json(newClass);
   } catch (err) {
     res
@@ -59,7 +161,24 @@ export const getClasses = async (req: AuthRequest, res: Response) => {
     const classes = await ClassModel.find(filter)
       .populate("branch", "name")
       .sort({ name: 1 });
-    res.status(200).json(classes);
+
+    // Ensure any elementary class in the database is properly tagged as elementary & seeded with subjects
+    const sanitizedClasses = await Promise.all(
+      classes.map(async (cls) => {
+        const clsObj = cls.toObject();
+        const isElem = clsObj.category === "elementary" || isElementaryClass(clsObj.name);
+        if (clsObj.category !== "elementary" && isElem) {
+          clsObj.category = "elementary";
+          ClassModel.updateOne({ _id: cls._id }, { $set: { category: "elementary" } }).catch(() => {});
+        }
+        if (isElem) {
+          ensureElementarySubjectsForClass(cls._id.toString()).catch(() => {});
+        }
+        return clsObj;
+      })
+    );
+
+    res.status(200).json(sanitizedClasses);
   } catch (err) {
     res
       .status(500)
@@ -69,7 +188,7 @@ export const getClasses = async (req: AuthRequest, res: Response) => {
 
 export const updateClass = async (req: AuthRequest, res: Response) => {
   try {
-    const { name, arm, branch } = req.body;
+    const { name, arm, branch, category } = req.body;
 
     // Check existing class permissions
     const existing = await ClassModel.findById(req.params.id);
@@ -83,6 +202,14 @@ export const updateClass = async (req: AuthRequest, res: Response) => {
 
     const updateData: Record<string, any> = {};
     if (name !== undefined) updateData.name = name;
+
+    // Determine category: if explicitly passed, honour it; otherwise infer from name
+    if (category !== undefined) {
+      updateData.category = category;
+    } else if (name !== undefined) {
+      updateData.category = isElementaryClass(name, existing.category) ? "elementary" : "secondary";
+    }
+
     if (branch !== undefined) {
       // branch_admin cannot move class to another branch
       updateData.branch = req.user?.role === "branch_admin" && req.user.branch ? req.user.branch : branch;
@@ -100,8 +227,13 @@ export const updateClass = async (req: AuthRequest, res: Response) => {
     const updated = await ClassModel.findByIdAndUpdate(
       req.params.id,
       updateQuery,
-      { new: true },
+      { new: true, returnDocument: "after" },
     ).populate("branch", "name");
+
+    if (updated && (updated.category === "elementary" || isElementaryClass(updated.name))) {
+      await ensureElementarySubjectsForClass(updated._id.toString());
+    }
+
     res.status(200).json(updated);
   } catch (err) {
     res

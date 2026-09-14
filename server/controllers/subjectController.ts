@@ -3,6 +3,7 @@ import Subject from "../models/Subject";
 import ClassModel from "../models/Class";
 import { AuthRequest } from "../middleware/auth";
 import User from "../models/User";
+import { ensureElementarySubjectsForClass, isElementaryClass } from "./classController";
 
 export const createSubject = async (req: AuthRequest, res: Response) => {
   try {
@@ -99,6 +100,13 @@ export const getSubjects = async (req: AuthRequest, res: Response) => {
       }
     } else if (req.query.class) {
       filter.class = req.query.class as string;
+    }
+
+    if (req.query.class) {
+      const cls = await ClassModel.findById(req.query.class);
+      if (cls && (cls.category === "elementary" || isElementaryClass(cls.name))) {
+        await ensureElementarySubjectsForClass(cls._id.toString());
+      }
     }
 
     const subjects = await Subject.find(filter).sort({ order: 1, nameEnglish: 1 });

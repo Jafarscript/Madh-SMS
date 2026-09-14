@@ -20,6 +20,7 @@ import ChangePassword from "./pages/ChangePassword";
 import Attendance from "./pages/admin/Attendance";
 import TeacherAssignmentMatrix from "./pages/admin/TeacherAssignmentMatrix";
 import AuditLogs from "./pages/admin/AuditLogs";
+import PredefinedComments from "./pages/admin/PredefinedComments";
 import RegisterTeacher from "./pages/RegisterTeacher";
 import RegisterParent from "./pages/RegisterParent";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -139,6 +140,14 @@ function App() {
         <Route path="broadsheet" element={<Broadsheet />} />
         <Route path="attendance" element={<Attendance />} />
         <Route path="report-cards" element={<ReportCard />} />
+        <Route
+          path="report-card-comments"
+          element={
+            <RoleGate allowedRoles={["super_admin"]}>
+              <PredefinedComments />
+            </RoleGate>
+          }
+        />
         <Route
           path="publishing"
           element={

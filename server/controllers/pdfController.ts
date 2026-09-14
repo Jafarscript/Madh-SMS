@@ -12,6 +12,7 @@ import {
   buildSingleReportCardHtml,
   buildBulkReportCardHtml,
 } from "../utils/reportCardTemplate";
+import { isElementaryClass } from "./classController";
 
 const setPdfDownloadHeaders = (res: Response, rawName: string) => {
   const safeAsciiFallback = "report_card.pdf";
@@ -23,10 +24,10 @@ const setPdfDownloadHeaders = (res: Response, rawName: string) => {
   );
 };
 
-// GET /api/report-card/pdf/single?student=<id>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>
+// GET /api/report-card/pdf/single?student=<id>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>&classCategory=<cat>&isElementary=<bool>
 export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
-    const { student: studentId, term, gradingScale, format } = req.query;
+    const { student: studentId, term, gradingScale, format, classCategory, isElementary: qIsElem } = req.query;
 
     if (!studentId || !term) {
       return res.status(400).json({ message: "student and term are required" });
@@ -47,6 +48,18 @@ export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Respons
       }
     }
 
+    // Direct Class Model lookup to accurately verify elementary category
+    let isClassElementary = false;
+    if (studentDoc.class) {
+      const cls = await ClassModel.findById(studentDoc.class);
+      if (cls) {
+        isClassElementary =
+          cls.category === "elementary" ||
+          isElementaryClass(cls.name, cls.category) ||
+          isElementaryClass(cls.name);
+      }
+    }
+
     const reportData = await buildReportCardData(
       studentId as string,
       term as string,
@@ -54,6 +67,18 @@ export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Respons
     );
 
     if (!reportData) return res.status(404).json({ message: "Report card data not found" });
+
+    if (
+      isClassElementary ||
+      classCategory === "elementary" ||
+      qIsElem === "true" ||
+      reportData.isElementary === true ||
+      reportData.classCategory === "elementary" ||
+      isElementaryClass(reportData.student?.class)
+    ) {
+      reportData.isElementary = true;
+      reportData.classCategory = "elementary";
+    }
 
     if (format === "html") {
       const html = buildSingleReportCardHtml(reportData);
@@ -77,10 +102,10 @@ export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Respons
   }
 };
 
-// GET /api/report-card/pdf/bulk?class=<classId>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>
+// GET /api/report-card/pdf/bulk?class=<classId>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>&classCategory=<cat>&isElementary=<bool>
 export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
-    const { class: classId, term, gradingScale, format } = req.query;
+    const { class: classId, term, gradingScale, format, classCategory, isElementary: qIsElem } = req.query;
 
     if (!classId || !term) {
       return res.status(400).json({ message: "class and term are required" });
@@ -101,6 +126,13 @@ export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response)
       }
     }
 
+    const isClassElementary =
+      cls.category === "elementary" ||
+      classCategory === "elementary" ||
+      qIsElem === "true" ||
+      isElementaryClass(cls.name, cls.category) ||
+      isElementaryClass(cls.name);
+
     const students = await Student.find({ class: classId as any, status: "active" }).sort({ numberInClass: 1 });
     if (students.length === 0) {
       return res.status(404).json({ message: "No students found in this class" });
@@ -113,7 +145,13 @@ export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response)
         term as string,
         gradingScale as string
       );
-      if (data) reportDataList.push(data);
+      if (data) {
+        if (isClassElementary) {
+          data.isElementary = true;
+          data.classCategory = "elementary";
+        }
+        reportDataList.push(data);
+      }
     }
 
     if (reportDataList.length === 0) {

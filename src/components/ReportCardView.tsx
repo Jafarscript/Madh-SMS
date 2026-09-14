@@ -1,6 +1,8 @@
 // update the SubjectResult interface at the top:
 
 import type { ReportCardData } from "../types/reportCard";
+import { ElementaryReportCardView } from "./ElementaryReportCardView";
+import { isElementaryClass } from "../utils/classCategoryHelper";
 
 const termWordEn = (n: number) => (n === 1 ? "1ST" : n === 2 ? "2ND" : "3RD");
 const termWordAr = (n: number) =>
@@ -14,6 +16,15 @@ const formatVal = (val: any) => {
 };
 
 const ReportCardView = ({ data }: { data: ReportCardData }) => {
+  const isElem =
+    data.isElementary === true ||
+    data.classCategory === "elementary" ||
+    isElementaryClass(data.student?.class, data.classCategory);
+
+  if (isElem) {
+    return <ElementaryReportCardView data={data} />;
+  }
+
   const {
     student,
     term,
