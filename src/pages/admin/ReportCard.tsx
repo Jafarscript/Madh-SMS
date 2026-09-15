@@ -9,6 +9,7 @@ import ReportCardTemplateModal from "../../components/ReportCardTemplateModal";
 import { REPORT_CARD_COMMENTS, ReportCardComment } from "../../constants/reportCardComments";
 import { useAuth } from "../../context/AuthContext";
 import type { ReportCardData } from "../../types/reportCard";
+import { isElementaryClass } from "../../utils/classCategoryHelper";
 import {
   MessageSquareQuote,
   Search,
@@ -28,6 +29,7 @@ interface ClassItem {
   name: string;
   arm?: string;
   branch?: { _id: string; name: string } | string;
+  category?: "secondary" | "elementary";
 }
 interface Student {
   _id: string;
@@ -236,11 +238,23 @@ const ReportCard = () => {
     window.URL.revokeObjectURL(blobUrl);
   };
 
+  const selectedStudentObj = students.find((s) => s._id === selectedStudent);
+  const selectedClassObj = classes.find((c) => c._id === selectedClass);
+
+  const isCurrentClassElementary = Boolean(
+    reportData?.isElementary ||
+    reportData?.classCategory === "elementary" ||
+    selectedClassObj?.category === "elementary" ||
+    (selectedClassObj?.name && isElementaryClass(selectedClassObj.name, selectedClassObj.category)) ||
+    (reportData?.student?.class && isElementaryClass(reportData.student.class))
+  );
+
   const handlePrintSingle = async () => {
     if (!canView) return;
     try {
+      const elemParam = isCurrentClassElementary ? "&isElementary=true&classCategory=elementary" : "";
       const res = await api.get(
-        `/report-card/pdf/single?student=${selectedStudent}&term=${selectedTerm}&gradingScale=${selectedScale}&format=html`,
+        `/report-card/pdf/single?student=${selectedStudent}&term=${selectedTerm}&gradingScale=${selectedScale}&format=html${elemParam}`,
         { responseType: "text" }
       );
       openPrintWindow(res.data);
@@ -255,8 +269,9 @@ const ReportCard = () => {
       return;
     }
     try {
+      const elemParam = isCurrentClassElementary ? "&isElementary=true&classCategory=elementary" : "";
       const res = await api.get(
-        `/report-card/pdf/bulk?class=${selectedClass}&term=${selectedTerm}&gradingScale=${selectedScale}&format=html`,
+        `/report-card/pdf/bulk?class=${selectedClass}&term=${selectedTerm}&gradingScale=${selectedScale}&format=html${elemParam}`,
         { responseType: "text" }
       );
       openPrintWindow(res.data);
@@ -269,8 +284,9 @@ const ReportCard = () => {
     if (!canView) return;
     setDownloading(true);
     try {
+      const elemParam = isCurrentClassElementary ? "&isElementary=true&classCategory=elementary" : "";
       await downloadBlob(
-        `/report-card/pdf/single?student=${selectedStudent}&term=${selectedTerm}&gradingScale=${selectedScale}`,
+        `/report-card/pdf/single?student=${selectedStudent}&term=${selectedTerm}&gradingScale=${selectedScale}${elemParam}`,
         `${reportData?.student.name || "report-card"}.pdf`,
       );
     } catch {
@@ -289,8 +305,9 @@ const ReportCard = () => {
     setBulkDownloading(true);
     setError("");
     try {
+      const elemParam = isCurrentClassElementary ? "&isElementary=true&classCategory=elementary" : "";
       await downloadBlob(
-        `/report-card/pdf/bulk?class=${selectedClass}&term=${selectedTerm}&gradingScale=${selectedScale}`,
+        `/report-card/pdf/bulk?class=${selectedClass}&term=${selectedTerm}&gradingScale=${selectedScale}${elemParam}`,
         `class-report-cards.pdf`,
       );
     } catch {
@@ -351,9 +368,6 @@ const ReportCard = () => {
   };
 
   const isAdmin = user?.role === "super_admin" || user?.role === "branch_admin";
-
-  const selectedStudentObj = students.find((s) => s._id === selectedStudent);
-  const selectedClassObj = classes.find((c) => c._id === selectedClass);
 
   const getBranchLabel = (c?: ClassItem) => {
     if (!c || !c.branch) return "";

@@ -136,6 +136,10 @@ const ParentHome = () => {
         format: "html",
       });
       if (selectedChildId) queryParams.append("studentId", selectedChildId);
+      if (reportData?.isElementary || reportData?.classCategory === "elementary") {
+        queryParams.append("isElementary", "true");
+        queryParams.append("classCategory", "elementary");
+      }
 
       const res = await api.get(`/parent-portal/report-card/pdf?${queryParams.toString()}`, {
         responseType: "text",
@@ -152,6 +156,10 @@ const ParentHome = () => {
     try {
       const queryParams = new URLSearchParams({ term: selectedTerm });
       if (selectedChildId) queryParams.append("studentId", selectedChildId);
+      if (reportData?.isElementary || reportData?.classCategory === "elementary") {
+        queryParams.append("isElementary", "true");
+        queryParams.append("classCategory", "elementary");
+      }
 
       const res = await api.get(`/parent-portal/report-card/pdf?${queryParams.toString()}`, {
         responseType: "blob",

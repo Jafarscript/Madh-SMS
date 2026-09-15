@@ -180,10 +180,18 @@ export default function TeacherAssignmentMatrix() {
         currentClassIds.push(activeCell.classItem._id);
       }
 
+      const assignedBranch =
+        typeof teacher.branch === "object"
+          ? teacher.branch?._id
+          : teacher.branch ||
+            (typeof activeCell.classItem.branch === "object"
+              ? activeCell.classItem.branch?._id
+              : activeCell.classItem.branch);
+
       await api.put(`/users/${teacher._id}`, {
         name: teacher.name,
         role: teacher.role,
-        branch: typeof teacher.branch === "object" ? teacher.branch?._id : teacher.branch,
+        branch: assignedBranch,
         classes: currentClassIds,
         subjects: currentSubjIds,
       });

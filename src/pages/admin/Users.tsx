@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { PendingTeachersList } from "../../components/admin/PendingTeachersList";
 import { BulkStaffUploader } from "../../components/admin/BulkStaffUploader";
+import { useAuth } from "../../context/AuthContext";
 
 type Role = "branch_admin" | "class_teacher" | "subject_teacher" | "parent";
 
@@ -54,6 +55,13 @@ interface Student {
 }
 
 const Users = () => {
+  const { user: authUser } = useAuth();
+  const isBranchAdmin = authUser?.role === "branch_admin";
+  const adminBranchId =
+    typeof authUser?.branch === "object"
+      ? authUser?.branch?._id
+      : authUser?.branch || "";
+
   const [activeTab, setActiveTab] = useState<"accounts" | "pending" | "bulk">("accounts");
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -221,7 +229,7 @@ const Users = () => {
   }, [editClassForSubjects]);
 
   const resetRoleFields = () => {
-    setBranchId("");
+    setBranchId(isBranchAdmin ? adminBranchId : "");
     setSelectedClasses([]);
     setClassForSubjects("");
     setSelectedSubjects([]);
@@ -249,8 +257,12 @@ const Users = () => {
     setLoading(true);
     try {
       const password = generatePassword();
+      const effectiveBranch = isBranchAdmin ? adminBranchId : (branchId || undefined);
       const payload: Record<string, unknown> = { name, email, password, role };
 
+      if (effectiveBranch) {
+        payload.branch = effectiveBranch;
+      }
       if (role === "branch_admin") payload.branch = branchId;
       if (role === "class_teacher") {
         payload.classes = selectedClasses;
@@ -372,6 +384,10 @@ const Users = () => {
         payload.password = editPassword.trim();
       }
 
+      const effectiveEditBranch = isBranchAdmin ? adminBranchId : (editBranchId || undefined);
+      if (effectiveEditBranch) {
+        payload.branch = effectiveEditBranch;
+      }
       if (editRole === "branch_admin") payload.branch = editBranchId;
       if (editRole === "class_teacher") {
         payload.classes = editClasses;
@@ -651,31 +667,33 @@ const Users = () => {
                 </p>
               </label>
 
-              <label
-                className={`p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
-                  role === "branch_admin"
-                    ? "bg-sky-50/80 border-sky-500 ring-2 ring-sky-500/20 text-sky-950 font-semibold"
-                    : "bg-white border-slate-200 hover:border-slate-300 text-slate-700"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-bold flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4 text-sky-600" />
-                    Branch Admin
-                  </span>
-                  <input
-                    type="radio"
-                    name="role"
-                    value="branch_admin"
-                    checked={role === "branch_admin"}
-                    onChange={() => handleRoleChange("branch_admin")}
-                    className="text-sky-600"
-                  />
-                </div>
-                <p className="text-[11px] text-slate-500 font-normal leading-tight">
-                  Branch administration, publishing, and student management.
-                </p>
-              </label>
+              {!isBranchAdmin && (
+                <label
+                  className={`p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
+                    role === "branch_admin"
+                      ? "bg-sky-50/80 border-sky-500 ring-2 ring-sky-500/20 text-sky-950 font-semibold"
+                      : "bg-white border-slate-200 hover:border-slate-300 text-slate-700"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-sm font-bold flex items-center gap-1.5">
+                      <Building2 className="w-4 h-4 text-sky-600" />
+                      Branch Admin
+                    </span>
+                    <input
+                      type="radio"
+                      name="role"
+                      value="branch_admin"
+                      checked={role === "branch_admin"}
+                      onChange={() => handleRoleChange("branch_admin")}
+                      className="text-sky-600"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-normal leading-tight">
+                    Branch administration, publishing, and student management.
+                  </p>
+                </label>
+              )}
 
               <label
                 className={`p-3.5 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
@@ -755,6 +773,43 @@ const Users = () => {
               >
                 {copied ? "Copied!" : "Copy Password"}
               </button>
+            </div>
+          )}
+
+          {/* Campus / Branch Context for Branch Admin */}
+          {isBranchAdmin && (role === "class_teacher" || role === "subject_teacher" || role === "parent") && (
+            <div className="bg-sky-50 border border-sky-200 rounded-xl p-3.5 flex items-center gap-3 text-sky-900 text-xs">
+              <Building2 className="w-5 h-5 text-sky-600 shrink-0" />
+              <div>
+                <span className="font-bold">Campus Branch: </span>
+                <span className="font-semibold text-sky-950">
+                  {branches.find((b) => b._id === adminBranchId)?.name || "Your Branch"}
+                </span>
+                <span className="text-slate-500 ml-1.5">
+                  (Staff / Account will be automatically assigned to this branch)
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Branch Selector for Super Admin creating teaching staff */}
+          {!isBranchAdmin && (role === "class_teacher" || role === "subject_teacher") && (
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                Staff Campus / Branch (Recommended)
+              </label>
+              <select
+                value={branchId}
+                onChange={(e) => setBranchId(e.target.value)}
+                className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm bg-white focus:ring-2 focus:ring-sky-500 outline-none"
+              >
+                <option value="">-- Select Campus / Branch (or auto-inferred from class) --</option>
+                {branches.map((b) => (
+                  <option key={b._id} value={b._id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -1373,22 +1428,30 @@ const Users = () => {
                 >
                   <option value="class_teacher">Class Teacher</option>
                   <option value="subject_teacher">Subject Teacher</option>
-                  <option value="branch_admin">Branch Admin</option>
+                  {!isBranchAdmin && <option value="branch_admin">Branch Admin</option>}
                   <option value="parent">Parent</option>
                 </select>
               </div>
 
-              {editRole === "branch_admin" && (
+              {/* Branch configuration in Edit Modal */}
+              {isBranchAdmin ? (
+                <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 flex items-center justify-between text-xs text-sky-900">
+                  <span className="font-semibold">Campus Branch:</span>
+                  <span className="font-bold">
+                    {branches.find((b) => b._id === adminBranchId)?.name || "Your Branch"}
+                  </span>
+                </div>
+              ) : (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                    Branch
+                    Branch / Campus
                   </label>
                   <select
                     value={editBranchId}
                     onChange={(e) => setEditBranchId(e.target.value)}
                     className="w-full border border-slate-300 rounded-xl px-3.5 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
                   >
-                    <option value="">-- Select Branch --</option>
+                    <option value="">-- No explicit branch (or auto-assigned via class) --</option>
                     {branches.map((b) => (
                       <option key={b._id} value={b._id}>
                         {b.name}

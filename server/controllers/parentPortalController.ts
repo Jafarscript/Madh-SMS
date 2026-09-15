@@ -138,16 +138,37 @@ export const getMyChildReportCard = async (req: AuthRequest, res: Response) => {
     const data = await buildReportCardData(targetStudentId, term as string, gradingScale as string);
     if (!data) return res.status(404).json({ message: "Report card not found" });
 
+    const studentDoc = await Student.findById(targetStudentId).select("class");
+    let isClassElementary = false;
+    if (studentDoc?.class) {
+      const cls = await ClassModel.findById(studentDoc.class);
+      if (cls) {
+        isClassElementary =
+          cls.category === "elementary" ||
+          isElementaryClass(cls.name, cls.category) ||
+          isElementaryClass(cls.name);
+      }
+    }
+    if (
+      isClassElementary ||
+      data.isElementary === true ||
+      data.classCategory === "elementary" ||
+      isElementaryClass(data.student?.class)
+    ) {
+      data.isElementary = true;
+      data.classCategory = "elementary";
+    }
+
     res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
   }
 };
 
-// GET /api/parent-portal/report-card/pdf?studentId=<id>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>
+// GET /api/parent-portal/report-card/pdf?studentId=<id>&term=<termId>&gradingScale=<scaleId>&format=<pdf|html>&classCategory=<cat>&isElementary=<bool>
 export const downloadMyChildReportCardPdf = async (req: AuthRequest, res: Response) => {
   try {
-    const { term, gradingScale, format, studentId: requestedStudentId } = req.query;
+    const { term, gradingScale, format, studentId: requestedStudentId, classCategory, isElementary: qIsElem } = req.query;
     if (!term) return res.status(400).json({ message: "term is required" });
 
     const linkedStudentIds = await getAllLinkedStudentIds(req.user!.id);
@@ -169,6 +190,29 @@ export const downloadMyChildReportCardPdf = async (req: AuthRequest, res: Respon
 
     const data = await buildReportCardData(targetStudentId, term as string, gradingScale as string);
     if (!data) return res.status(404).json({ message: "Report card not found" });
+
+    const studentDoc = await Student.findById(targetStudentId).select("class");
+    let isClassElementary = false;
+    if (studentDoc?.class) {
+      const cls = await ClassModel.findById(studentDoc.class);
+      if (cls) {
+        isClassElementary =
+          cls.category === "elementary" ||
+          isElementaryClass(cls.name, cls.category) ||
+          isElementaryClass(cls.name);
+      }
+    }
+    if (
+      isClassElementary ||
+      classCategory === "elementary" ||
+      qIsElem === "true" ||
+      data.isElementary === true ||
+      data.classCategory === "elementary" ||
+      isElementaryClass(data.student?.class)
+    ) {
+      data.isElementary = true;
+      data.classCategory = "elementary";
+    }
 
     if (format === "html") {
       const html = buildSingleReportCardHtml(data);

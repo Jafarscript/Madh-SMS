@@ -4,6 +4,8 @@ import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import User, { UserRole } from "../models/User";
 import Student from "../models/Student";
+import Class from "../models/Class";
+import Subject from "../models/Subject";
 import ReportCardSetting from "../models/ReportCardSetting";
 import { AuthRequest } from "../middleware/auth";
 
@@ -35,12 +37,27 @@ export const register = async (req: Request, res: Response) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Resolve branch:
+    // If registered/created by a branch_admin, force branch = admin's branch
+    // If branch not explicitly provided, infer from classes or subjects
+    let finalBranch = branch;
+    const authReq = req as AuthRequest;
+    if (authReq.user?.role === "branch_admin" && authReq.user.branch) {
+      finalBranch = authReq.user.branch;
+    } else if (!finalBranch && Array.isArray(classes) && classes.length > 0) {
+      const cls = await Class.findOne({ _id: { $in: classes } }).select("branch");
+      if (cls && cls.branch) finalBranch = cls.branch;
+    } else if (!finalBranch && Array.isArray(subjects) && subjects.length > 0) {
+      const sub = await Subject.findOne({ _id: { $in: subjects } }).populate("class");
+      if (sub && (sub.class as any)?.branch) finalBranch = (sub.class as any).branch;
+    }
+
     const user = await User.create({
       name,
       email: email.toLowerCase().trim(),
       password: hashedPassword,
       role,
-      branch,
+      branch: finalBranch,
       classes,
       subjects,
       linkedStudent,
@@ -57,6 +74,7 @@ export const register = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        branch: user.branch,
         status: user.status,
         mustChangePassword: user.mustChangePassword,
       },
@@ -350,6 +368,7 @@ export const login = async (req: Request, res: Response) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        branch: user.branch,
         status: user.status,
         mustChangePassword: user.mustChangePassword,
       },

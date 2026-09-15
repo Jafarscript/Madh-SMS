@@ -3,6 +3,8 @@ import bcrypt from "bcryptjs";
 import User, { UserRole } from "../models/User";
 import Branch from "../models/Branch";
 import Class from "../models/Class";
+import Subject from "../models/Subject";
+import Student from "../models/Student";
 import ReportCardSetting from "../models/ReportCardSetting";
 import { AuthRequest } from "../middleware/auth";
 
@@ -17,9 +19,87 @@ export const generatePassword = (): string => {
   return result;
 };
 
+/**
+ * Auto-syncs teacher records whose branch field is undefined/null
+ * by inspecting their assigned classes or subjects.
+ */
+export const autoSyncTeacherBranches = async () => {
+  try {
+    const teachers = await User.find({
+      role: { $in: ["class_teacher", "subject_teacher"] },
+      $or: [{ branch: { $exists: false } }, { branch: null }],
+    });
+
+    for (const t of teachers) {
+      let targetBranch = null;
+
+      // 1. Check direct assigned classes
+      if (t.classes && t.classes.length > 0) {
+        const cls = await Class.findOne({ _id: { $in: t.classes } });
+        if (cls && cls.branch) {
+          targetBranch = cls.branch;
+        }
+      }
+
+      // 2. Check assigned subjects
+      if (!targetBranch && t.subjects && t.subjects.length > 0) {
+        const sub = await Subject.findOne({ _id: { $in: t.subjects } }).populate("class");
+        if (sub && (sub.class as any)?.branch) {
+          targetBranch = (sub.class as any).branch;
+        }
+      }
+
+      if (targetBranch) {
+        t.branch = targetBranch;
+        await t.save();
+        console.log(`[AutoSync] Associated teacher ${t.name} (${t.email}) with branch ${targetBranch}`);
+      }
+    }
+  } catch (err) {
+    console.error("[AutoSync] Error syncing teacher branches:", err);
+  }
+};
+
+/**
+ * Validates if a user belongs to a specific branch by direct branch assignment,
+ * assigned classes, assigned subjects, or unassigned status.
+ */
+export const userBelongsToBranch = async (user: any, branchId: string): Promise<boolean> => {
+  if (user.branch && user.branch.toString() === branchId.toString()) return true;
+
+  if (user.classes && user.classes.length > 0) {
+    const matchingClass = await Class.findOne({
+      _id: { $in: user.classes },
+      branch: branchId,
+    });
+    if (matchingClass) return true;
+  }
+
+  if (user.subjects && user.subjects.length > 0) {
+    const matchingSubject = await Subject.findOne({
+      _id: { $in: user.subjects },
+    }).populate("class");
+    if (matchingSubject && (matchingSubject.class as any)?.branch?.toString() === branchId.toString()) {
+      return true;
+    }
+  }
+
+  // Unassigned teaching staff who have not been restricted to another branch
+  if (!user.branch) {
+    if ((!user.classes || user.classes.length === 0) && (!user.subjects || user.subjects.length === 0)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 // GET /api/users?role=<optional>&status=<optional>
 export const getUsers = async (req: AuthRequest, res: Response) => {
   try {
+    // Run background sync so teachers are always kept updated with their branch
+    autoSyncTeacherBranches().catch(() => {});
+
     const filter: Record<string, any> = {};
     if (req.query.role) filter.role = req.query.role as string;
     if (req.query.status) {
@@ -29,10 +109,54 @@ export const getUsers = async (req: AuthRequest, res: Response) => {
       filter.status = { $ne: "pending_approval" };
     }
 
-    if (req.user?.role === "branch_admin" && req.user.branch) {
-      filter.branch = req.user.branch;
-    } else if (req.query.branch) {
-      filter.branch = req.query.branch as string;
+    let branchId =
+      req.user?.role === "branch_admin"
+        ? req.user.branch
+        : (req.query.branch as string | undefined);
+
+    if (req.user?.role === "branch_admin" && !branchId) {
+      const userDoc = await User.findById(req.user.id).select("branch");
+      if (userDoc?.branch) branchId = userDoc.branch.toString();
+    }
+
+    if (branchId) {
+      const branchClasses = await Class.find({ branch: branchId }).select("_id");
+      const branchClassIds = branchClasses.map((c) => c._id);
+
+      const branchSubjects = await Subject.find({ class: { $in: branchClassIds } }).select("_id");
+      const branchSubjectIds = branchSubjects.map((s) => s._id);
+
+      const branchStudents = await Student.find({ class: { $in: branchClassIds } }).select("_id");
+      const branchStudentIds = branchStudents.map((s) => s._id);
+
+      // Classes and subjects belonging to OTHER branches (to protect exclusivity)
+      const otherClasses = await Class.find({ branch: { $ne: branchId } }).select("_id");
+      const otherClassIds = otherClasses.map((c) => c._id);
+      const otherSubjects = await Subject.find({ class: { $in: otherClassIds } }).select("_id");
+      const otherSubjectIds = otherSubjects.map((s) => s._id);
+
+      const branchScopeCondition = {
+        $or: [
+          { branch: branchId },
+          { classes: { $in: branchClassIds } },
+          { subjects: { $in: branchSubjectIds } },
+          { linkedStudent: { $in: branchStudentIds } },
+          { linkedStudents: { $in: branchStudentIds } },
+          {
+            role: { $in: ["class_teacher", "subject_teacher"] },
+            branch: { $in: [null, undefined] },
+            classes: { $nin: otherClassIds },
+            subjects: { $nin: otherSubjectIds },
+          },
+        ],
+      };
+
+      const conditions: any[] = [branchScopeCondition];
+      if (filter.role) conditions.push({ role: filter.role });
+      if (filter.status) conditions.push({ status: filter.status });
+      filter.$and = conditions;
+      delete filter.role;
+      delete filter.status;
     }
 
     const users = await User.find(filter)
@@ -69,7 +193,10 @@ export const getPendingTeachers = async (req: AuthRequest, res: Response) => {
     const filter: Record<string, any> = { status: "pending_approval" };
 
     if (req.user?.role === "branch_admin" && req.user.branch) {
-      filter.branch = req.user.branch;
+      filter.$or = [
+        { branch: req.user.branch },
+        { branch: { $in: [null, undefined] } },
+      ];
     }
 
     const pending = await User.find(filter)
@@ -229,8 +356,10 @@ export const bulkCreateStaff = async (req: AuthRequest, res: Response) => {
       }
 
       // Determine branch
-      let branchId = defaultBranch || undefined;
-      if (branchRaw) {
+      let branchId = defaultBranch || (req.body as any).defaultBranchId || undefined;
+      if (req.user?.role === "branch_admin" && req.user.branch) {
+        branchId = req.user.branch;
+      } else if (branchRaw) {
         const matched = branchMapByName[branchRaw.toLowerCase()];
         if (matched) branchId = matched;
       }
@@ -324,11 +453,12 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
       if (user.role === "super_admin") {
         return res.status(403).json({ message: "Forbidden: Cannot modify super admin accounts" });
       }
-      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+      const belongs = await userBelongsToBranch(user, req.user.branch);
+      if (!belongs) {
         return res.status(403).json({ message: "Forbidden: User does not belong to your branch" });
       }
-      if (role === "super_admin") {
-        return res.status(403).json({ message: "Forbidden: Cannot grant super admin role" });
+      if (role === "super_admin" || role === "branch_admin") {
+        return res.status(403).json({ message: "Forbidden: Cannot grant administrator roles" });
       }
     }
 
@@ -346,7 +476,27 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
     if (phone !== undefined) user.phone = phone;
     if (role) user.role = role;
     if (status) user.status = status;
-    user.branch = req.user?.role === "branch_admin" && req.user.branch ? req.user.branch : (branch || undefined);
+
+    // Resolve branch assignment:
+    // If updated by branch_admin, always keep/assign branch_admin's branch.
+    // If updated by super_admin and branch wasn't explicitly supplied, infer from classes/subjects.
+    let finalBranch = branch;
+    if (req.user?.role === "branch_admin" && req.user.branch) {
+      finalBranch = req.user.branch;
+    } else if (!finalBranch && Array.isArray(classes) && classes.length > 0) {
+      const cls = await Class.findOne({ _id: { $in: classes } }).select("branch");
+      if (cls && cls.branch) finalBranch = cls.branch;
+    } else if (!finalBranch && Array.isArray(subjects) && subjects.length > 0) {
+      const sub = await Subject.findOne({ _id: { $in: subjects } }).populate("class");
+      if (sub && (sub.class as any)?.branch) finalBranch = (sub.class as any).branch;
+    }
+
+    if (finalBranch) {
+      user.branch = finalBranch;
+    } else if (branch !== undefined) {
+      user.branch = branch || undefined;
+    }
+
     user.classes = classes || [];
     user.subjects = subjects || [];
     user.linkedStudent = linkedStudent || undefined;
@@ -387,7 +537,8 @@ export const resetUserPassword = async (req: AuthRequest, res: Response) => {
       if (user.role === "super_admin") {
         return res.status(403).json({ message: "Forbidden: Cannot reset super admin password" });
       }
-      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+      const belongs = await userBelongsToBranch(user, req.user.branch);
+      if (!belongs) {
         return res.status(403).json({ message: "Forbidden: User does not belong to your branch" });
       }
     }
@@ -419,7 +570,8 @@ export const deleteUser = async (req: AuthRequest, res: Response) => {
       if (user.role === "super_admin") {
         return res.status(403).json({ message: "Forbidden: Cannot delete super admin" });
       }
-      if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
+      const belongs = await userBelongsToBranch(user, req.user.branch);
+      if (!belongs) {
         return res.status(403).json({ message: "Forbidden: User does not belong to your branch" });
       }
     }

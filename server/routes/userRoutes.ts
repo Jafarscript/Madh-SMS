@@ -23,6 +23,7 @@ router.put("/:id/approve", protect, authorize("super_admin", "branch_admin"), ap
 router.put("/:id/reject", protect, authorize("super_admin", "branch_admin"), rejectTeacher);
 
 router.post("/bulk", protect, authorize("super_admin", "branch_admin"), bulkCreateStaff);
+router.post("/bulk-staff", protect, authorize("super_admin", "branch_admin"), bulkCreateStaff);
 
 router.get("/", protect, authorize("super_admin", "branch_admin"), getUsers);
 router.put("/:id", protect, authorize("super_admin", "branch_admin"), updateUser);

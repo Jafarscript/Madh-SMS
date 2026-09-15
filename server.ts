@@ -3,14 +3,19 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import app from "./server/app";
 import connectDB from "./server/config/db";
+import { autoSyncTeacherBranches } from "./server/controllers/userController";
 
 async function startServer() {
   const PORT = 3000;
 
   // Initialize DB Connection
-  connectDB().catch((err) => {
-    console.warn("[Database] Initial connection notice:", (err as Error).message);
-  });
+  connectDB()
+    .then(async () => {
+      await autoSyncTeacherBranches();
+    })
+    .catch((err) => {
+      console.warn("[Database] Initial connection notice:", (err as Error).message);
+    });
 
   // Vite middleware for development or static serving for production
   if (process.env.NODE_ENV !== "production") {

@@ -12,6 +12,7 @@ interface User {
   name: string;
   email: string;
   role: UserRole;
+  branch?: string | { _id: string; name: string };
   mustChangePassword?: boolean;
 }
 
