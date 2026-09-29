@@ -25,6 +25,8 @@ export interface TermAverage {
 }
 
 export interface ReportCardComment {
+  id?: string;
+  _id?: string;
   en: string;
   ar: string;
 }
@@ -71,6 +73,9 @@ export interface ReportCardData {
   subjects: SubjectResult[];
   overallTotal: number;
   overallPercentage: number;
+  grade?: string | null;
+  remark?: string | null;
+  remarkArabic?: string | null;
   position: number | null;
   result: string;
   totalStudentsInClass: number;

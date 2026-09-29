@@ -71,6 +71,9 @@ export interface ReportCardData {
   subjects: SubjectResult[];
   overallTotal: number;
   overallPercentage: number;
+  grade?: string | null;
+  remark?: string | null;
+  remarkArabic?: string | null;
   position: number | null;
   result: string;
   totalStudentsInClass: number;
@@ -925,15 +928,6 @@ const renderComment = (
   return content;
 };
 
-const getElementaryGrade = (score: number | null | undefined): string => {
-  if (score === null || score === undefined) return "-";
-  if (score >= 85) return "Excellent";
-  if (score >= 75) return "V. Good";
-  if (score >= 65) return "Good";
-  if (score >= 50) return "Fair";
-  return "Poor";
-};
-
 const toArabicNumerals = (val: number | string | null | undefined): string => {
   if (val === null || val === undefined || val === "") return "-";
   const str = String(val);
@@ -942,11 +936,38 @@ const toArabicNumerals = (val: number | string | null | undefined): string => {
 };
 
 const getArabicGradeRemark = (grade: string | null | undefined, percentage: number): string => {
-  if (percentage < 50 || grade === "Fail" || grade === "Poor" || grade === "F") return "راسب";
+  if (percentage < 50 || grade === "Fail" || grade === "Poor" || grade === "F") return "ضعيف";
   if (percentage >= 85 || grade === "Excellent" || grade === "A") return "ممتاز";
-  if (percentage >= 75 || grade === "V. Good" || grade === "B") return "جيد جداً";
+  if (percentage >= 75 || grade === "V. Good" || grade === "V.Good" || grade === "B") return "جيد جداً";
   if (percentage >= 65 || grade === "Good" || grade === "C") return "جيد";
   return "مقبول";
+};
+
+const getElementaryGrade = (score: number | null | undefined, existingGrade?: string | null): string => {
+  if (score !== null && score !== undefined && !isNaN(score)) {
+    if (score >= 85) return "Excellent";
+    if (score >= 75) return "V.Good";
+    if (score >= 65) return "Good";
+    if (score >= 50) return "Fair";
+    return "Poor";
+  }
+  if (existingGrade) {
+    if (existingGrade === "A1" || existingGrade === "A") return "Excellent";
+    if (
+      existingGrade === "B2" ||
+      existingGrade === "B" ||
+      existingGrade.includes("Very Good") ||
+      existingGrade.includes("V. Good") ||
+      existingGrade.includes("V.Good")
+    ) {
+      return "V.Good";
+    }
+    if (existingGrade === "C4" || existingGrade === "C") return "Good";
+    if (existingGrade === "D7" || existingGrade === "D" || existingGrade === "Pass") return "Fair";
+    if (existingGrade === "F9" || existingGrade === "F" || existingGrade === "Fail") return "Poor";
+    return existingGrade;
+  }
+  return "";
 };
 
 const buildElementarySheetHtml = (data: ReportCardData): string => {
@@ -981,7 +1002,30 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
   const dateClosed = attendance?.dateClosed || "";
   const nextResumption = attendance?.nextResumption || "";
 
-  const arabicGrade = getArabicGradeRemark(result, overallPercentage);
+  const fallbackRemark =
+    overallPercentage >= 85
+      ? "Excellent"
+      : overallPercentage >= 75
+      ? "V.Good"
+      : overallPercentage >= 65
+      ? "Good"
+      : overallPercentage >= 50
+      ? "Fair"
+      : "Poor";
+  const fallbackRemarkArabic =
+    overallPercentage >= 85
+      ? "ممتاز"
+      : overallPercentage >= 75
+      ? "جيد جداً"
+      : overallPercentage >= 65
+      ? "جيد"
+      : overallPercentage >= 50
+      ? "مقبول"
+      : "ضعيف";
+
+  const isEnrolled = (data.student as any)?.isEnrolledInCurrentTerm !== false;
+  const displayRemark = data.remark || (!isEnrolled ? "Not Enrolled" : fallbackRemark);
+  const displayRemarkArabic = data.remarkArabic || (!isEnrolled ? "لم يلتحق" : fallbackRemarkArabic);
 
   // Map incoming subjects
   const subjectMap = new Map<string, any>();
@@ -1044,7 +1088,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
       ca: found?.ca ?? null,
       exam: found?.exam ?? null,
       total: totalVal,
-      grade: found?.grade ?? null,
+      grade: getElementaryGrade(totalVal, found?.grade ?? null),
     });
   });
 
@@ -1066,7 +1110,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
         ca: s.ca ?? null,
         exam: s.exam ?? null,
         total: totalVal,
-        grade: s.grade ?? null,
+        grade: getElementaryGrade(totalVal, s.grade ?? null),
       });
     }
   });
@@ -1362,7 +1406,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
         <div class="elem-seal-col">
           <div class="scale-list">
             <div>85 - 100 = Excellent</div>
-            <div>75 - 84 = V. Good</div>
+            <div>75 - 84 = V.Good</div>
             <div>65 - 74 = Good</div>
             <div>50 - 64 = Fair</div>
             <div>1 - 49 = Poor</div>
@@ -1423,7 +1467,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
             <div class="sum-grid-row border-b">
               <div class="sum-cell border-r">
                 <span>Position</span>
-                <strong class="sum-val">${position ? toArabicNumerals(position) : "-"}</strong>
+                <strong class="sum-val">${position ? position : "-"}</strong>
                 <span class="ar">:الترتيب</span>
               </div>
               <div class="sum-cell">
@@ -1441,7 +1485,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
               </div>
               <div class="sum-cell">
                 <span>Grade:</span>
-                <strong class="sum-val text-rose ar">${arabicGrade}</strong>
+                <strong class="sum-val text-rose ar">${displayRemark} ${displayRemarkArabic ? `<span class="ar" style="font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">(${displayRemarkArabic})</span>` : ""}</strong>
                 <span class="ar">:التقدير</span>
               </div>
             </div>
@@ -1519,7 +1563,35 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
     principalComment,
     attendance,
     templateSettings,
+    grade,
+    remark,
+    remarkArabic,
   } = data;
+
+  const fallbackRemark =
+    overallPercentage >= 85
+      ? "Excellent"
+      : overallPercentage >= 75
+      ? "Very Good"
+      : overallPercentage >= 60
+      ? "Good"
+      : overallPercentage >= 50
+      ? "Pass"
+      : "Fail";
+  const fallbackRemarkArabic =
+    overallPercentage >= 85
+      ? "ممتاز"
+      : overallPercentage >= 75
+      ? "جيد جدا"
+      : overallPercentage >= 60
+      ? "جيد"
+      : overallPercentage >= 50
+      ? "مقبول"
+      : "راسب";
+
+  const isEnrolled = (student as any)?.isEnrolledInCurrentTerm !== false;
+  const displayRemark = remark || data.remark || (!isEnrolled ? "Not Enrolled" : fallbackRemark);
+  const displayRemarkArabic = remarkArabic || data.remarkArabic || (!isEnrolled ? "لم يلتحق" : fallbackRemarkArabic);
 
   const schoolNameAr =
     templateSettings?.schoolNameArabic || "معهد التعليم العربي الإسلامي";
@@ -1691,9 +1763,9 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
           <tr class="total-row">
             <td class="subject-name">المجموع الكلي : TOTAL</td>
             <td></td><td></td>
-            <td>${overallTotal}</td>
-            ${showCascadeColumns ? `<td></td><td></td>` : ""}
             <td></td>
+            ${showCascadeColumns ? `<td></td><td></td>` : ""}
+            <td>${overallTotal}</td>
           </tr>
         </tbody>
       </table>
@@ -1719,8 +1791,9 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
           <div class="row">
             <div class="label">التقدير<br/>GRADE</div>
             <div class="val">
-              ${subjects[0]?.remark ?? "-"}
-              ${subjects[0]?.remarkArabic ? `<span class="arabic" style="margin-left: 4px; font-family: 'Amiri', 'Traditional Arabic', serif;">${subjects[0].remarkArabic}</span>` : ""}
+              ${grade ? `<span style="font-weight: 700; margin-right: 4px;">${grade} -</span>` : ""}
+              ${displayRemark}
+              ${displayRemarkArabic ? `<span class="arabic" style="margin-left: 6px; font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">${displayRemarkArabic}</span>` : ""}
             </div>
           </div>
         </div>

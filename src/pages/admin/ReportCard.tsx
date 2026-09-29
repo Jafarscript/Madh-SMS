@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useMemo } from "react";
+import { Link } from "react-router";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import ReportCardView from "../../components/ReportCardView";
@@ -22,6 +23,7 @@ import {
   Building2,
   Calendar,
   Palette,
+  Edit3,
 } from "lucide-react";
 
 interface ClassItem {
@@ -107,7 +109,10 @@ const ReportCard = () => {
     });
     api.get("/grading-scales").then((res) => {
       setScales(res.data || []);
-      if (res.data?.length > 0) setSelectedScale(res.data[0]._id);
+      if (res.data?.length > 0) {
+        const taqdeer = res.data.find((s: GradingScale) => s.name === "التقدير");
+        setSelectedScale(taqdeer ? taqdeer._id : res.data[0]._id);
+      }
     });
     api.get("/predefined-comments").then((res) => {
       if (Array.isArray(res.data) && res.data.length > 0) {
@@ -193,6 +198,45 @@ const ReportCard = () => {
       loadReportCard(selectedStudent, selectedTerm, selectedScale);
     }
   }, [selectedStudent, selectedTerm, selectedScale]);
+
+  // Synchronize comment form inputs whenever the report card data is loaded or switched
+  useEffect(() => {
+    if (reportData) {
+      if (reportData.classTeacherComment) {
+        const ct = reportData.classTeacherComment;
+        if (ct.id) {
+          setClassTeacherCommentId(ct.id);
+          setUseCustomClassTeacher(false);
+          setClassTeacherCustom({ en: ct.en || "", ar: ct.ar || "" });
+        } else {
+          setClassTeacherCommentId("");
+          setUseCustomClassTeacher(true);
+          setClassTeacherCustom({ en: ct.en || "", ar: ct.ar || "" });
+        }
+      } else {
+        setClassTeacherCommentId("");
+        setClassTeacherCustom({ en: "", ar: "" });
+        setUseCustomClassTeacher(false);
+      }
+
+      if (reportData.principalComment) {
+        const pc = reportData.principalComment;
+        if (pc.id) {
+          setPrincipalCommentId(pc.id);
+          setUseCustomPrincipal(false);
+          setPrincipalCustom({ en: pc.en || "", ar: pc.ar || "" });
+        } else {
+          setPrincipalCommentId("");
+          setUseCustomPrincipal(true);
+          setPrincipalCustom({ en: pc.en || "", ar: pc.ar || "" });
+        }
+      } else {
+        setPrincipalCommentId("");
+        setPrincipalCustom({ en: "", ar: "" });
+        setUseCustomPrincipal(false);
+      }
+    }
+  }, [reportData]);
 
   const canView = Boolean(selectedStudent && selectedTerm && selectedScale);
 
@@ -320,7 +364,12 @@ const ReportCard = () => {
   const handleSaveComment = async (
     field: "classTeacherComment" | "principalComment",
   ) => {
+    if (!selectedStudent || !selectedTerm) {
+      setError("Please select a student and term first");
+      return;
+    }
     setSavingComment(true);
+    setError("");
     try {
       const payload: Record<string, unknown> = {
         student: selectedStudent,
@@ -328,22 +377,48 @@ const ReportCard = () => {
         field,
       };
 
-      if (field === "classTeacherComment" && useCustomClassTeacher) {
-        payload.en = classTeacherCustom.en;
-        payload.ar = classTeacherCustom.ar;
-      } else if (field === "classTeacherComment") {
-        payload.commentId = classTeacherCommentId;
-      } else if (field === "principalComment" && useCustomPrincipal) {
-        payload.en = principalCustom.en;
-        payload.ar = principalCustom.ar;
+      if (field === "classTeacherComment") {
+        if (useCustomClassTeacher) {
+          if (!classTeacherCustom.en.trim() && !classTeacherCustom.ar.trim()) {
+            setError("Please write a comment or choose one from the bank");
+            setSavingComment(false);
+            return;
+          }
+          payload.en = classTeacherCustom.en.trim();
+          payload.ar = classTeacherCustom.ar.trim();
+        } else {
+          if (!classTeacherCommentId) {
+            setError("Please select a comment from the list or browse the Comment Bank");
+            setSavingComment(false);
+            return;
+          }
+          payload.commentId = classTeacherCommentId;
+        }
       } else {
-        payload.commentId = principalCommentId;
+        if (useCustomPrincipal) {
+          if (!principalCustom.en.trim() && !principalCustom.ar.trim()) {
+            setError("Please write a principal comment or choose one from the bank");
+            setSavingComment(false);
+            return;
+          }
+          payload.en = principalCustom.en.trim();
+          payload.ar = principalCustom.ar.trim();
+        } else {
+          if (!principalCommentId) {
+            setError("Please select a principal comment from the list or browse the Comment Bank");
+            setSavingComment(false);
+            return;
+          }
+          payload.commentId = principalCommentId;
+        }
       }
 
       await api.put("/report-card-remarks", payload);
-      handleView();
-    } catch {
-      setError("Failed to save comment");
+      if (selectedStudent && selectedTerm && selectedScale) {
+        await loadReportCard(selectedStudent, selectedTerm, selectedScale);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to save comment");
     } finally {
       setSavingComment(false);
     }
@@ -447,21 +522,40 @@ const ReportCard = () => {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <GraduationCap className="w-3.5 h-3.5 text-sky-600" /> Grading Scale
-            </label>
-            <select
-              id="report-card-scale-select"
-              value={selectedScale}
-              onChange={(e) => setSelectedScale(e.target.value)}
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
-            >
-              {scales.map((sc) => (
-                <option key={sc._id} value={sc._id}>
-                  {sc.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                <GraduationCap className="w-3.5 h-3.5 text-sky-600" /> Grading Scale
+              </label>
+              <Link
+                to="/admin/grading-scales"
+                className="text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:underline flex items-center gap-1"
+                title="Configure or Edit Grading Scales"
+              >
+                Edit Scales →
+              </Link>
+            </div>
+            <div className="flex gap-2">
+              <select
+                id="report-card-scale-select"
+                value={selectedScale}
+                onChange={(e) => setSelectedScale(e.target.value)}
+                className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none"
+              >
+                {scales.map((sc) => (
+                  <option key={sc._id} value={sc._id}>
+                    {sc.name}
+                  </option>
+                ))}
+              </select>
+              <Link
+                to="/admin/grading-scales"
+                className="px-3 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl text-xs font-semibold flex items-center gap-1 transition shrink-0"
+                title="Edit Grading Scale"
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                Edit
+              </Link>
+            </div>
           </div>
         </div>
 
@@ -763,11 +857,14 @@ const ReportCard = () => {
                 className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
               >
                 <option value="">Select a comment or use Comment Bank</option>
-                {filteredComments.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.ar} — {c.en}
-                  </option>
-                ))}
+                {filteredComments.map((c) => {
+                  const val = c.id || (c as any)._id || (c as any).code;
+                  return (
+                    <option key={val} value={val}>
+                      {c.ar} — {c.en}
+                    </option>
+                  );
+                })}
               </select>
             ) : (
               <div className="flex flex-col gap-2">
@@ -844,11 +941,14 @@ const ReportCard = () => {
                   className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
                 >
                   <option value="">Select a comment or use Comment Bank</option>
-                  {filteredComments.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.ar} — {c.en}
-                    </option>
-                  ))}
+                  {filteredComments.map((c) => {
+                    const val = c.id || (c as any)._id || (c as any).code;
+                    return (
+                      <option key={val} value={val}>
+                        {c.ar} — {c.en}
+                      </option>
+                    );
+                  })}
                 </select>
               ) : (
                 <div className="flex flex-col gap-2">
@@ -905,13 +1005,15 @@ const ReportCard = () => {
             : principalCommentId
         }
         onSelectComment={(comment: ReportCardComment) => {
-          const cId = comment.id || (comment as any)._id;
+          const cId = comment.id || (comment as any)._id || (comment as any).code;
           if (commentBankTarget === "classTeacher") {
             setClassTeacherCommentId(cId);
             setUseCustomClassTeacher(false);
+            setClassTeacherCustom({ en: comment.en || "", ar: comment.ar || "" });
           } else if (commentBankTarget === "principal") {
             setPrincipalCommentId(cId);
             setUseCustomPrincipal(false);
+            setPrincipalCustom({ en: comment.en || "", ar: comment.ar || "" });
           }
         }}
       />

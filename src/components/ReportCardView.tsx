@@ -39,7 +39,35 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
     termAverages,
     attendance,
     templateSettings,
+    grade,
+    remark,
+    remarkArabic,
   } = data;
+
+  const fallbackRemark =
+    overallPercentage >= 85
+      ? "Excellent"
+      : overallPercentage >= 75
+      ? "Very Good"
+      : overallPercentage >= 60
+      ? "Good"
+      : overallPercentage >= 50
+      ? "Pass"
+      : "Fail";
+  const fallbackRemarkArabic =
+    overallPercentage >= 85
+      ? "ممتاز"
+      : overallPercentage >= 75
+      ? "جيد جدا"
+      : overallPercentage >= 60
+      ? "جيد"
+      : overallPercentage >= 50
+      ? "مقبول"
+      : "راسب";
+
+  const isEnrolled = (student as any)?.isEnrolledInCurrentTerm !== false;
+  const displayRemark = remark || data.remark || (!isEnrolled ? "Not Enrolled" : fallbackRemark);
+  const displayRemarkArabic = remarkArabic || data.remarkArabic || (!isEnrolled ? "لم يلتحق" : fallbackRemarkArabic);
 
   const schoolNameAr =
     templateSettings?.schoolNameArabic || "معهد التعليم العربي الإسلامي";
@@ -361,7 +389,7 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
             <td className="border border-black p-1"></td>
             <td className="border border-black p-1"></td>
             <td className="border border-black p-1 text-center">
-              {overallTotal}
+              
             </td>
             {term.termNumber === 2 && (
               <td className="border border-black p-1"></td>
@@ -375,7 +403,7 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
             {term.termNumber === 3 && (
               <td className="border border-black p-1"></td>
             )}
-            <td className="border border-black p-1"></td>
+            <td className="border border-black p-1 text-center">{overallTotal}</td>
           </tr>
         </tbody>
       </table>
@@ -468,11 +496,14 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
               <br />
               GRADE
             </div>
-            <div className="flex-1 flex items-center justify-center font-bold text-center">
-              {subjects[0]?.remark ?? "-"}
-              {subjects[0]?.remarkArabic && (
-                <span className="ml-1" style={{ fontFamily: "Amiri, serif" }}>
-                  {subjects[0].remarkArabic}
+            <div className="flex-1 flex items-center justify-center font-bold text-center gap-1.5 px-1">
+              {grade && (
+                <span className="font-extrabold text-gray-900 mr-0.5">{grade} -</span>
+              )}
+              <span>{displayRemark}</span>
+              {displayRemarkArabic && (
+                <span style={{ fontFamily: "Amiri, serif" }} dir="rtl">
+                  {displayRemarkArabic}
                 </span>
               )}
             </div>

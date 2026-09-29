@@ -1,4 +1,5 @@
 import { Response } from "express";
+import mongoose from "mongoose";
 import Student from "../models/Student";
 import Subject from "../models/Subject";
 import Score from "../models/Score";
@@ -81,14 +82,42 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
       term: { $in: sessionTermIds } as any,
     });
 
-    // Fetch grading scale for remarks calculation
-    const gradingScale = await GradingScale.findOne();
+    // Fetch grading scale for remarks calculation (prefer scaleId, then "التقدير")
+    const scaleId = (req.query.scaleId || req.query.gradingScale) as string | undefined;
+    let gradingScale: any = null;
+    if (scaleId && scaleId !== "undefined" && scaleId !== "null" && mongoose.Types.ObjectId.isValid(scaleId)) {
+      try {
+        gradingScale = await GradingScale.findById(scaleId);
+      } catch {
+        gradingScale = null;
+      }
+    }
+    if (!gradingScale) {
+      gradingScale =
+        (await GradingScale.findOne({ name: "التقدير" })) ||
+        (await GradingScale.findOne());
+    }
+    if (!gradingScale) {
+      try {
+        const { ensureDefaultGradingScale } = await import("./gradingScaleController");
+        gradingScale = await ensureDefaultGradingScale();
+      } catch {
+        // Fallback
+      }
+    }
 
     const getGradeRemark = (scorePercentage: number) => {
       if (gradingScale && gradingScale.bands && gradingScale.bands.length > 0) {
-        const band = gradingScale.bands.find(
-          (b) => scorePercentage >= b.minScore && scorePercentage <= b.maxScore
+        const sortedBands = [...gradingScale.bands].sort((a, b) => b.minScore - a.minScore);
+        let band = sortedBands.find(
+          (b) => scorePercentage >= b.minScore && (b.maxScore === undefined || b.maxScore === null || scorePercentage <= b.maxScore + 0.09)
         );
+        if (!band) {
+          band = sortedBands.find((b) => scorePercentage >= b.minScore);
+        }
+        if (!band && sortedBands.length > 0) {
+          band = sortedBands[sortedBands.length - 1];
+        }
         if (band) {
           return {
             grade: band.grade,
@@ -98,12 +127,17 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
         }
       }
 
-      // Default standard scale if no band matched
-      if (scorePercentage >= 70) return { grade: "A", remark: "Excellent", remarkArabic: "ممتاز" };
-      if (scorePercentage >= 60) return { grade: "B", remark: "Very Good", remarkArabic: "جيد جداً" };
-      if (scorePercentage >= 50) return { grade: "C", remark: "Good", remarkArabic: "جيد" };
-      if (scorePercentage >= 40) return { grade: "D", remark: "Pass", remarkArabic: "مقبول" };
-      return { grade: "F", remark: "Fail", remarkArabic: "راسب" };
+      // Default standard scale (التقدير):
+      // 85 – 100%: A1 — Excellent / ممتاز
+      // 75 – 84.9%: B2 — Very Good / جيد جدا
+      // 60 – 74.9%: C4 — Good / جيد
+      // 50 – 59.9%: D7 — Pass / مقبول
+      // 0 – 49.9%: F9 — Fail / راسب
+      if (scorePercentage >= 85) return { grade: "A1", remark: "Excellent", remarkArabic: "ممتاز" };
+      if (scorePercentage >= 75) return { grade: "B2", remark: "Very Good", remarkArabic: "جيد جدا" };
+      if (scorePercentage >= 60) return { grade: "C4", remark: "Good", remarkArabic: "جيد" };
+      if (scorePercentage >= 50) return { grade: "D7", remark: "Pass", remarkArabic: "مقبول" };
+      return { grade: "F9", remark: "Fail", remarkArabic: "راسب" };
     };
 
     // Group scores: termId -> studentId -> subjectId -> score doc

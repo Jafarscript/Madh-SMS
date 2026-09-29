@@ -1,4 +1,5 @@
 import { Response } from "express";
+import mongoose from "mongoose";
 import Student from "../models/Student";
 import ClassModel from "../models/Class";
 import Subject from "../models/Subject";
@@ -92,7 +93,61 @@ export const buildReportCardData = async (
     scoresBySubjectMap.get(subjectKey)!.set(sc.term.toString(), sc.total);
   });
 
-  const gradingScale = scaleId ? await GradingScale.findById(scaleId) : null;
+  let gradingScale: any = null;
+  if (scaleId && scaleId !== "undefined" && scaleId !== "null" && mongoose.Types.ObjectId.isValid(scaleId)) {
+    try {
+      gradingScale = await GradingScale.findById(scaleId);
+    } catch {
+      gradingScale = null;
+    }
+  }
+  if (!gradingScale) {
+    gradingScale =
+      (await GradingScale.findOne({ name: "التقدير" })) ||
+      (await GradingScale.findOne());
+  }
+  if (!gradingScale) {
+    try {
+      const { ensureDefaultGradingScale } = await import("./gradingScaleController");
+      gradingScale = await ensureDefaultGradingScale();
+    } catch {
+      // Fallback
+    }
+  }
+
+  const getGradeRemark = (scorePercentage: number) => {
+    if (gradingScale && gradingScale.bands && gradingScale.bands.length > 0) {
+      const sortedBands = [...gradingScale.bands].sort((a, b) => b.minScore - a.minScore);
+      let band = sortedBands.find(
+        (b) => scorePercentage >= b.minScore && (b.maxScore === undefined || b.maxScore === null || scorePercentage <= b.maxScore + 0.09)
+      );
+      if (!band) {
+        band = sortedBands.find((b) => scorePercentage >= b.minScore);
+      }
+      if (!band && sortedBands.length > 0) {
+        band = sortedBands[sortedBands.length - 1];
+      }
+      if (band) {
+        return {
+          grade: band.grade,
+          remark: band.remark,
+          remarkArabic: band.remarkArabic,
+        };
+      }
+    }
+
+    // Default standard scale (التقدير):
+    // 85 – 100%: A1 — Excellent / ممتاز
+    // 75 – 84.9%: B2 — Very Good / جيد جدا
+    // 60 – 74.9%: C4 — Good / جيد
+    // 50 – 59.9%: D7 — Pass / مقبول
+    // 0 – 49.9%: F9 — Fail / راسب
+    if (scorePercentage >= 85) return { grade: "A1", remark: "Excellent", remarkArabic: "ممتاز" };
+    if (scorePercentage >= 75) return { grade: "B2", remark: "Very Good", remarkArabic: "جيد جدا" };
+    if (scorePercentage >= 60) return { grade: "C4", remark: "Good", remarkArabic: "جيد" };
+    if (scorePercentage >= 50) return { grade: "D7", remark: "Pass", remarkArabic: "مقبول" };
+    return { grade: "F9", remark: "Fail", remarkArabic: "راسب" };
+  };
 
   const studentEnrolledTerms: number[] =
     student.enrolledTerms && Array.isArray(student.enrolledTerms) && student.enrolledTerms.length > 0
@@ -138,12 +193,32 @@ export const buildReportCardData = async (
     let remark = null;
     let remarkArabic = null;
 
-    if (gradingScale && cumulativeAverage !== null) {
-      const band = gradingScale.bands.find(
-        (b) =>
-          cumulativeAverage >= b.minScore && cumulativeAverage <= b.maxScore,
-      );
-      if (band) {
+    const scoreForGrading = isElementary ? currentTermScore : cumulativeAverage;
+    if (scoreForGrading !== null && scoreForGrading !== undefined) {
+      if (isElementary) {
+        if (scoreForGrading >= 85) {
+          grade = "Excellent";
+          remark = "Excellent";
+          remarkArabic = "ممتاز";
+        } else if (scoreForGrading >= 75) {
+          grade = "V.Good";
+          remark = "V. Good";
+          remarkArabic = "جيد جداً";
+        } else if (scoreForGrading >= 65) {
+          grade = "Good";
+          remark = "Good";
+          remarkArabic = "جيد";
+        } else if (scoreForGrading >= 50) {
+          grade = "Fair";
+          remark = "Fair";
+          remarkArabic = "مقبول";
+        } else {
+          grade = "Poor";
+          remark = "Poor";
+          remarkArabic = "ضعيف";
+        }
+      } else {
+        const band = getGradeRemark(scoreForGrading);
         grade = band.grade;
         remark = band.remark;
         remarkArabic = band.remarkArabic;
@@ -193,13 +268,21 @@ const overallPercentage =
 });
 
 const classTeacherComment =
-  remarkDoc?.classTeacherCommentEn && remarkDoc?.classTeacherCommentAr
-    ? { en: remarkDoc.classTeacherCommentEn, ar: remarkDoc.classTeacherCommentAr }
+  remarkDoc && (remarkDoc.classTeacherCommentEn || remarkDoc.classTeacherCommentAr || remarkDoc.classTeacherCommentId)
+    ? {
+        id: remarkDoc.classTeacherCommentId || "",
+        en: remarkDoc.classTeacherCommentEn || "",
+        ar: remarkDoc.classTeacherCommentAr || "",
+      }
     : null;
 
 const principalComment =
-  remarkDoc?.principalCommentEn && remarkDoc?.principalCommentAr
-    ? { en: remarkDoc.principalCommentEn, ar: remarkDoc.principalCommentAr }
+  remarkDoc && (remarkDoc.principalCommentEn || remarkDoc.principalCommentAr || remarkDoc.principalCommentId)
+    ? {
+        id: remarkDoc.principalCommentId || "",
+        en: remarkDoc.principalCommentEn || "",
+        ar: remarkDoc.principalCommentAr || "",
+      }
     : null;
 
   const termAverages = priorTerms.map((t) => {
@@ -301,6 +384,20 @@ const principalComment =
         : 0)
     : (isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0);
 
+  const overallGradeRemark = isEnrolledInCurrentTerm
+    ? (isElementary
+        ? (effectiveOverallPercentage >= 85
+            ? { grade: "Excellent", remark: "Excellent", remarkArabic: "ممتاز" }
+            : effectiveOverallPercentage >= 75
+            ? { grade: "V.Good", remark: "V. Good", remarkArabic: "جيد جداً" }
+            : effectiveOverallPercentage >= 65
+            ? { grade: "Good", remark: "Good", remarkArabic: "جيد" }
+            : effectiveOverallPercentage >= 50
+            ? { grade: "Fair", remark: "Fair", remarkArabic: "مقبول" }
+            : { grade: "Poor", remark: "Poor", remarkArabic: "ضعيف" })
+        : getGradeRemark(effectiveOverallPercentage))
+    : { grade: "—", remark: "Not Enrolled", remarkArabic: "لم يلتحق" };
+
   return {
     isElementary,
     classCategory,
@@ -322,6 +419,9 @@ const principalComment =
     subjects: subjectResults,
     overallTotal: effectiveOverallTotal,
     overallPercentage: effectiveOverallPercentage,
+    grade: overallGradeRemark.grade,
+    remark: overallGradeRemark.remark,
+    remarkArabic: overallGradeRemark.remarkArabic,
     position: isEnrolledInCurrentTerm ? position : null,
     result: !isEnrolledInCurrentTerm
       ? "Not Enrolled"

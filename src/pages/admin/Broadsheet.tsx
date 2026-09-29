@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState, useRef } from "react";
+import { Link } from "react-router";
 import {
   Printer,
   Download,
@@ -11,6 +12,8 @@ import {
   TrendingUp,
   Users,
   SlidersHorizontal,
+  GraduationCap,
+  Edit3,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import api from "../../api/axios";
@@ -28,6 +31,11 @@ interface Term {
   session: string;
   termNumber: number;
   isActive: boolean;
+}
+
+interface GradingScale {
+  _id: string;
+  name: string;
 }
 
 interface SubjectScore {
@@ -112,8 +120,10 @@ type ViewMode = "current" | "prior_summary" | "detailed_subjects";
 const Broadsheet = () => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [terms, setTerms] = useState<Term[]>([]);
+  const [scales, setScales] = useState<GradingScale[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedTerm, setSelectedTerm] = useState("");
+  const [selectedScale, setSelectedScale] = useState("");
   const [subjects, setSubjects] = useState<SubjectMeta[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [sessionTerms, setSessionTerms] = useState<Term[]>([]);
@@ -136,6 +146,13 @@ const Broadsheet = () => {
       const active = res.data.find((t: Term) => t.isActive);
       if (active) setSelectedTerm(active._id);
     });
+    api.get("/grading-scales").then((res) => {
+      setScales(res.data || []);
+      if (res.data?.length > 0) {
+        const taqdeer = res.data.find((s: GradingScale) => s.name === "التقدير");
+        setSelectedScale(taqdeer ? taqdeer._id : res.data[0]._id);
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -147,8 +164,9 @@ const Broadsheet = () => {
       return;
     }
     setLoading(true);
+    const scaleParam = selectedScale ? `&gradingScale=${selectedScale}` : "";
     api
-      .get(`/broadsheet?class=${selectedClass}&term=${selectedTerm}&onlyPresentTerms=${onlyPresentTerms}`)
+      .get(`/broadsheet?class=${selectedClass}&term=${selectedTerm}&onlyPresentTerms=${onlyPresentTerms}${scaleParam}`)
       .then((res) => {
         setSubjects(res.data.subjects || []);
         setRows(res.data.rows || []);
@@ -158,7 +176,7 @@ const Broadsheet = () => {
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
-  }, [selectedClass, selectedTerm, onlyPresentTerms]);
+  }, [selectedClass, selectedTerm, onlyPresentTerms, selectedScale]);
 
   const handleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -394,14 +412,23 @@ const Broadsheet = () => {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
       <div className="print:hidden">
-        <PageHeader
-          title="Broadsheet & Gradebook"
-          subtitle="Master academic results with Arabic curriculum subjects, distinct English & Arabic remarks, and Excel export"
-        />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
+          <PageHeader
+            title="Broadsheet & Gradebook"
+            subtitle="Master academic results with Arabic curriculum subjects, distinct English & Arabic remarks, and Excel export"
+          />
+          <Link
+            to="/admin/grading-scales"
+            className="self-start sm:self-auto flex items-center gap-1.5 px-3.5 py-2 bg-white border border-gray-200 hover:border-sky-300 text-sky-700 hover:text-sky-800 rounded-xl text-xs font-semibold shadow-2xs transition"
+          >
+            <GraduationCap className="w-4 h-4 text-sky-600" />
+            Edit Grading Scales
+          </Link>
+        </div>
 
         {/* Filters and Controls */}
         <div className="bg-white p-5 rounded-2xl shadow-xs border border-gray-100 mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wider">
                 Class
@@ -446,6 +473,42 @@ const Broadsheet = () => {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <GraduationCap className="w-3.5 h-3.5 text-sky-600" /> Grading Scale
+                </label>
+                <Link
+                  to="/admin/grading-scales"
+                  className="text-[11px] font-semibold text-sky-600 hover:text-sky-800 hover:underline flex items-center gap-1"
+                  title="Configure or Edit Grading Scales"
+                >
+                  Edit Scales →
+                </Link>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={selectedScale}
+                  onChange={(e) => setSelectedScale(e.target.value)}
+                  className="flex-1 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                >
+                  {scales.map((sc) => (
+                    <option key={sc._id} value={sc._id}>
+                      {sc.name}
+                    </option>
+                  ))}
+                </select>
+                <Link
+                  to="/admin/grading-scales"
+                  className="px-3 py-2.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl text-xs font-semibold flex items-center gap-1 transition shrink-0"
+                  title="Edit Grading Scale"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Edit
+                </Link>
+              </div>
             </div>
 
             <div>

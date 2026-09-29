@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import app from "./server/app";
 import connectDB from "./server/config/db";
 import { autoSyncTeacherBranches } from "./server/controllers/userController";
+import { ensureDefaultGradingScale } from "./server/controllers/gradingScaleController";
 
 async function startServer() {
   const PORT = 3000;
@@ -12,6 +13,7 @@ async function startServer() {
   connectDB()
     .then(async () => {
       await autoSyncTeacherBranches();
+      await ensureDefaultGradingScale();
     })
     .catch((err) => {
       console.warn("[Database] Initial connection notice:", (err as Error).message);

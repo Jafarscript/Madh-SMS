@@ -118,13 +118,13 @@ export const seedDatabase = async () => {
 
     // 4. Grading Scales
     const gradingScale = await GradingScale.create({
-      name: "Standard Islamic Academy Scale",
+      name: "التقدير",
       bands: [
-        { minScore: 70, maxScore: 100, grade: "A1", remark: "Excellent Distinction", remarkArabic: "ممتاز مع مرتبة الشرف" },
-        { minScore: 60, maxScore: 69, grade: "B2", remark: "Very Good", remarkArabic: "جيد جداً" },
-        { minScore: 50, maxScore: 59, grade: "C3", remark: "Good / Credit", remarkArabic: "جيد" },
-        { minScore: 40, maxScore: 49, grade: "D4", remark: "Pass", remarkArabic: "مقبول" },
-        { minScore: 0, maxScore: 39, grade: "F9", remark: "Fail", remarkArabic: "راسب" },
+        { minScore: 85, maxScore: 100, grade: "A1", remark: "Excellent", remarkArabic: "ممتاز" },
+        { minScore: 75, maxScore: 84.9, grade: "B2", remark: "Very Good", remarkArabic: "جيد جدا" },
+        { minScore: 60, maxScore: 74.9, grade: "C4", remark: "Good", remarkArabic: "جيد" },
+        { minScore: 50, maxScore: 59.9, grade: "D7", remark: "Pass", remarkArabic: "مقبول" },
+        { minScore: 0, maxScore: 49.9, grade: "F9", remark: "Fail", remarkArabic: "راسب" },
       ],
     });
 

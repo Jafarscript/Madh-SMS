@@ -20,8 +20,8 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
     if (!["classTeacherComment", "principalComment"].includes(field)) {
       return res.status(400).json({ message: "Invalid field" });
     }
-    if (!commentId && !(en && ar)) {
-      return res.status(400).json({ message: "Provide either a commentId, or both en and ar text" });
+    if (!commentId && !(en?.trim() || ar?.trim())) {
+      return res.status(400).json({ message: "Provide either a commentId, or comment text" });
     }
 
     const studentDoc = await Student.findById(student).select("class");
@@ -49,15 +49,19 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
 
     // resolve to final en/ar text — either from the picked predefined
     // comment, or straight from what was typed
-    let finalEn = en;
-    let finalAr = ar;
+    let finalEn = en ? en.trim() : "";
+    let finalAr = ar ? ar.trim() : "";
     let finalId: string | undefined = undefined;
 
     if (commentId) {
       let picked: { en: string; ar: string } | null = null;
       try {
+        const isObjId = /^[0-9a-fA-F]{24}$/.test(commentId);
         const dbComment = await PredefinedComment.findOne({
-          $or: [{ _id: commentId.match(/^[0-9a-fA-F]{24}$/) ? commentId : null }, { code: commentId }],
+          $or: [
+            ...(isObjId ? [{ _id: commentId }] : []),
+            { code: commentId },
+          ],
         });
         if (dbComment) {
           picked = { en: dbComment.en, ar: dbComment.ar };
@@ -70,10 +74,17 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
         picked = getCommentById(commentId) || null;
       }
 
-      if (!picked) return res.status(400).json({ message: "Unknown commentId" });
-      finalEn = picked.en;
-      finalAr = picked.ar;
-      finalId = commentId;
+      if (!picked && (en?.trim() || ar?.trim())) {
+        finalEn = en ? en.trim() : "";
+        finalAr = ar ? ar.trim() : "";
+        finalId = undefined;
+      } else if (!picked) {
+        return res.status(400).json({ message: "Unknown commentId" });
+      } else {
+        finalEn = picked.en;
+        finalAr = picked.ar;
+        finalId = commentId;
+      }
     }
 
     const prefix = field === "classTeacherComment" ? "classTeacherComment" : "principalComment";

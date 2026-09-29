@@ -18,11 +18,38 @@ const toArabicNumerals = (val: number | string | null | undefined): string => {
 };
 
 const getArabicGradeRemark = (grade: string | null | undefined, percentage: number): string => {
-  if (percentage < 50 || grade === "Fail" || grade === "Poor" || grade === "F") return "راسب";
+  if (percentage < 50 || grade === "Fail" || grade === "Poor" || grade === "F") return "ضعيف";
   if (percentage >= 85 || grade === "Excellent" || grade === "A") return "ممتاز";
-  if (percentage >= 75 || grade === "V. Good" || grade === "B") return "جيد جداً";
+  if (percentage >= 75 || grade === "V. Good" || grade === "V.Good" || grade === "B") return "جيد جداً";
   if (percentage >= 65 || grade === "Good" || grade === "C") return "جيد";
   return "مقبول";
+};
+
+const getElementaryGrade = (score: number | null | undefined, existingGrade?: string | null): string => {
+  if (score !== null && score !== undefined && !isNaN(score)) {
+    if (score >= 85) return "Excellent";
+    if (score >= 75) return "V.Good";
+    if (score >= 65) return "Good";
+    if (score >= 50) return "Fair";
+    return "Poor";
+  }
+  if (existingGrade) {
+    if (existingGrade === "A1" || existingGrade === "A") return "Excellent";
+    if (
+      existingGrade === "B2" ||
+      existingGrade === "B" ||
+      existingGrade.includes("Very Good") ||
+      existingGrade.includes("V. Good") ||
+      existingGrade.includes("V.Good")
+    ) {
+      return "V.Good";
+    }
+    if (existingGrade === "C4" || existingGrade === "C") return "Good";
+    if (existingGrade === "D7" || existingGrade === "D" || existingGrade === "Pass") return "Fair";
+    if (existingGrade === "F9" || existingGrade === "F" || existingGrade === "Fail") return "Poor";
+    return existingGrade;
+  }
+  return "";
 };
 
 export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
@@ -116,7 +143,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
       ca: found?.ca ?? null,
       exam: found?.exam ?? null,
       total: totalVal,
-      grade: found?.grade ?? null,
+      grade: getElementaryGrade(totalVal, found?.grade ?? null),
     });
   });
 
@@ -138,12 +165,35 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
         ca: s.ca ?? null,
         exam: s.exam ?? null,
         total: totalVal,
-        grade: s.grade ?? null,
+        grade: getElementaryGrade(totalVal, s.grade ?? null),
       });
     }
   });
 
-  const arabicGrade = getArabicGradeRemark(result, overallPercentage);
+  const fallbackRemark =
+    overallPercentage >= 85
+      ? "Excellent"
+      : overallPercentage >= 75
+      ? "V.Good"
+      : overallPercentage >= 65
+      ? "Good"
+      : overallPercentage >= 50
+      ? "Fair"
+      : "Poor";
+  const fallbackRemarkArabic =
+    overallPercentage >= 85
+      ? "ممتاز"
+      : overallPercentage >= 75
+      ? "جيد جداً"
+      : overallPercentage >= 65
+      ? "جيد"
+      : overallPercentage >= 50
+      ? "مقبول"
+      : "ضعيف";
+
+  const isEnrolled = (student as any)?.isEnrolledInCurrentTerm !== false;
+  const displayRemark = data.remark || (!isEnrolled ? "Not Enrolled" : fallbackRemark);
+  const displayRemarkArabic = data.remarkArabic || (!isEnrolled ? "لم يلتحق" : fallbackRemarkArabic);
 
   return (
     <div className="max-w-[794px] mx-auto p-4 bg-white text-gray-950 border border-black shadow-sm font-sans text-xs select-none">
@@ -526,7 +576,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
         <div className="md:col-span-2 border border-black p-1 flex flex-col items-center justify-between text-center bg-white">
           <div className="text-[9px] font-bold leading-relaxed border-b border-gray-300 pb-1 w-full text-left pl-1">
             <div>85 - 100 = Excellent</div>
-            <div>75 - 84 = V. Good</div>
+            <div>75 - 84 = V.Good</div>
             <div>65 - 74 = Good</div>
             <div>50 - 64 = Fair</div>
             <div>1 - 49 = Poor</div>
@@ -590,7 +640,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
               <div className="border-r border-black p-1 flex justify-between items-center">
                 <span>Position</span>
                 <strong className="text-[11px]">
-                  {position ? toArabicNumerals(position) : "-"}
+                  {position ? position : "-"}
                 </strong>
                 <span style={{ fontFamily: "'Amiri', serif" }}>:الترتيب</span>
               </div>
@@ -610,10 +660,14 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
               <div className="p-1 flex justify-between items-center">
                 <span>Grade:</span>
                 <strong
-                  className="text-[11px] text-rose-700"
-                  style={{ fontFamily: "'Amiri', serif" }}
+                  className="text-[11px] text-rose-700 flex items-center gap-1"
                 >
-                  {arabicGrade}
+                  <span>{displayRemark}</span>
+                  {displayRemarkArabic && (
+                    <span style={{ fontFamily: "'Amiri', serif" }} dir="rtl">
+                      ({displayRemarkArabic})
+                    </span>
+                  )}
                 </strong>
                 <span style={{ fontFamily: "'Amiri', serif" }}>:التقدير</span>
               </div>
