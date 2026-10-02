@@ -24,6 +24,10 @@ import {
   Calendar,
   Palette,
   Edit3,
+  Sparkles,
+  Activity,
+  Check,
+  CheckCircle2,
 } from "lucide-react";
 
 interface ClassItem {
@@ -92,6 +96,10 @@ const ReportCard = () => {
   const [useCustomPrincipal, setUseCustomPrincipal] = useState(false);
 
   const [savingComment, setSavingComment] = useState(false);
+  const [savingPrincipalComment, setSavingPrincipalComment] = useState(false);
+  const [affectiveScores, setAffectiveScores] = useState<Record<string, number>>({});
+  const [savingSkills, setSavingSkills] = useState(false);
+  const [skillsSavedSuccess, setSkillsSavedSuccess] = useState(false);
   const [resultStatus, setResultStatus] = useState<ResultStatus>("draft");
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -235,8 +243,72 @@ const ReportCard = () => {
         setPrincipalCustom({ en: "", ar: "" });
         setUseCustomPrincipal(false);
       }
+
+      if (reportData.affectiveScores && typeof reportData.affectiveScores === "object") {
+        setAffectiveScores(reportData.affectiveScores);
+      } else {
+        setAffectiveScores({
+          "Punctuality": 5,
+          "Neatness": 4,
+          "Attitude to sch. Work": 5,
+          "Attentiveness": 4,
+          "Speaking Habit/Writing": 4,
+          "Verbal Fluency": 5,
+          "Games / Sports": 4,
+        });
+      }
     }
   }, [reportData]);
+
+  const handleUpdateSkill = async (skillName: string, rating: number) => {
+    if (resultStatus === "locked" || !selectedStudent || !selectedTerm) return;
+    const newScores = { ...affectiveScores, [skillName]: rating };
+    setAffectiveScores(newScores);
+
+    // Optimistically update displayed report card
+    if (reportData) {
+      setReportData({
+        ...reportData,
+        affectiveScores: newScores,
+      });
+    }
+
+    try {
+      await api.put("/report-card-remarks", {
+        student: selectedStudent,
+        term: selectedTerm,
+        field: "affectiveScores",
+        affectiveScores: newScores,
+      });
+      setSkillsSavedSuccess(true);
+      setTimeout(() => setSkillsSavedSuccess(false), 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to update skill rating");
+    }
+  };
+
+  const handleSaveAllSkills = async () => {
+    if (!selectedStudent || !selectedTerm || resultStatus === "locked") return;
+    setSavingSkills(true);
+    setError("");
+    try {
+      await api.put("/report-card-remarks", {
+        student: selectedStudent,
+        term: selectedTerm,
+        field: "affectiveScores",
+        affectiveScores,
+      });
+      setSkillsSavedSuccess(true);
+      setTimeout(() => setSkillsSavedSuccess(false), 2500);
+      if (selectedStudent && selectedTerm && selectedScale) {
+        await loadReportCard(selectedStudent, selectedTerm, selectedScale);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to save skills");
+    } finally {
+      setSavingSkills(false);
+    }
+  };
 
   const canView = Boolean(selectedStudent && selectedTerm && selectedScale);
 
@@ -368,7 +440,11 @@ const ReportCard = () => {
       setError("Please select a student and term first");
       return;
     }
-    setSavingComment(true);
+    if (field === "classTeacherComment") {
+      setSavingComment(true);
+    } else {
+      setSavingPrincipalComment(true);
+    }
     setError("");
     try {
       const payload: Record<string, unknown> = {
@@ -393,12 +469,16 @@ const ReportCard = () => {
             return;
           }
           payload.commentId = classTeacherCommentId;
+          if (classTeacherCustom.en || classTeacherCustom.ar) {
+            payload.en = classTeacherCustom.en.trim();
+            payload.ar = classTeacherCustom.ar.trim();
+          }
         }
       } else {
         if (useCustomPrincipal) {
           if (!principalCustom.en.trim() && !principalCustom.ar.trim()) {
             setError("Please write a principal comment or choose one from the bank");
-            setSavingComment(false);
+            setSavingPrincipalComment(false);
             return;
           }
           payload.en = principalCustom.en.trim();
@@ -406,10 +486,14 @@ const ReportCard = () => {
         } else {
           if (!principalCommentId) {
             setError("Please select a principal comment from the list or browse the Comment Bank");
-            setSavingComment(false);
+            setSavingPrincipalComment(false);
             return;
           }
           payload.commentId = principalCommentId;
+          if (principalCustom.en || principalCustom.ar) {
+            payload.en = principalCustom.en.trim();
+            payload.ar = principalCustom.ar.trim();
+          }
         }
       }
 
@@ -420,7 +504,11 @@ const ReportCard = () => {
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to save comment");
     } finally {
-      setSavingComment(false);
+      if (field === "classTeacherComment") {
+        setSavingComment(false);
+      } else {
+        setSavingPrincipalComment(false);
+      }
     }
   };
 
@@ -801,11 +889,11 @@ const ReportCard = () => {
       {/* Report Card Sheet View */}
       {reportData && (
         <div className="max-w-4xl mx-auto shadow-md rounded-lg overflow-x-auto custom-scrollbar bg-white">
-          <ReportCardView data={reportData} />
+          <ReportCardView data={reportData} onUpdateSkill={handleUpdateSkill} />
         </div>
       )}
 
-      {/* Remarks Section */}
+      {/* Remarks & Skills Management Section */}
       {reportData && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col gap-6">
           {resultStatus === "locked" && (
@@ -813,7 +901,7 @@ const ReportCard = () => {
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-amber-700 shrink-0" />
                 <span>
-                  Results for this class are <strong>LOCKED</strong>. Remarks are frozen in read-only mode.
+                  Results for this class are <strong>LOCKED</strong>. Remarks and skills are frozen in read-only mode.
                 </span>
               </div>
               <span className="px-2 py-0.5 bg-amber-200 text-amber-900 font-bold rounded">
@@ -822,27 +910,183 @@ const ReportCard = () => {
             </div>
           )}
 
+          {/* Psychomotor & Affective Skills Section for Elementary */}
+          {isCurrentClassElementary && (
+            <div className="bg-slate-50/70 border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
+                    <Activity className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                      <span>Psychomotor / Affective Skills</span>
+                      <span className="text-gray-400 font-normal">|</span>
+                      <span style={{ fontFamily: "Amiri, serif" }} className="text-indigo-900 text-sm">
+                        السلوك والنشاط
+                      </span>
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Rate student conduct on a 1–5 scale (5 = Excellent, 1 = Poor). Click a score below or directly on the report card sheet.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                  <button
+                    type="button"
+                    disabled={resultStatus === "locked"}
+                    onClick={() => {
+                      const allFive = {
+                        "Punctuality": 5,
+                        "Neatness": 5,
+                        "Attitude to sch. Work": 5,
+                        "Attentiveness": 5,
+                        "Speaking Habit/Writing": 5,
+                        "Verbal Fluency": 5,
+                        "Games / Sports": 5,
+                      };
+                      setAffectiveScores(allFive);
+                      if (reportData) setReportData({ ...reportData, affectiveScores: allFive });
+                    }}
+                    className="text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition disabled:opacity-50"
+                  >
+                    Set all to 5
+                  </button>
+                  <button
+                    type="button"
+                    disabled={resultStatus === "locked"}
+                    onClick={() => {
+                      const allFour = {
+                        "Punctuality": 4,
+                        "Neatness": 4,
+                        "Attitude to sch. Work": 4,
+                        "Attentiveness": 4,
+                        "Speaking Habit/Writing": 4,
+                        "Verbal Fluency": 4,
+                        "Games / Sports": 4,
+                      };
+                      setAffectiveScores(allFour);
+                      if (reportData) setReportData({ ...reportData, affectiveScores: allFour });
+                    }}
+                    className="text-xs font-semibold text-gray-600 bg-white hover:bg-gray-100 border border-gray-200 px-2.5 py-1 rounded-lg transition disabled:opacity-50"
+                  >
+                    Set all to 4
+                  </button>
+                </div>
+              </div>
+
+              {/* Skills grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {[
+                  { en: "Punctuality", ar: "المواظبة" },
+                  { en: "Neatness", ar: "النظافة" },
+                  { en: "Attitude to sch. Work", ar: "التجاوب الدراسي" },
+                  { en: "Attentiveness", ar: "الانتباه" },
+                  { en: "Speaking Habit/Writing", ar: "التحدث / الخط" },
+                  { en: "Verbal Fluency", ar: "الفصاحة" },
+                  { en: "Games / Sports", ar: "الألعاب والرياضة" },
+                ].map((skill) => {
+                  const currentScore = affectiveScores[skill.en] ?? 5;
+                  return (
+                    <div
+                      key={skill.en}
+                      className="bg-white border border-gray-200 rounded-lg p-2.5 flex items-center justify-between gap-3 shadow-2xs"
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold text-gray-800 truncate">
+                          {skill.en}
+                        </span>
+                        <span
+                          className="text-[11px] text-gray-500 font-medium"
+                          style={{ fontFamily: "Amiri, serif" }}
+                        >
+                          {skill.ar}
+                        </span>
+                      </div>
+
+                      {/* 1 - 5 Rating Buttons */}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {[1, 2, 3, 4, 5].map((num) => {
+                          const isSelected = currentScore === num;
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              disabled={resultStatus === "locked"}
+                              onClick={() => handleUpdateSkill(skill.en, num)}
+                              className={`w-7 h-7 rounded-md text-xs font-bold transition flex items-center justify-center ${
+                                isSelected
+                                  ? "bg-indigo-600 text-white shadow-xs scale-105"
+                                  : "bg-gray-100 text-gray-600 hover:bg-indigo-50 hover:text-indigo-700"
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              title={`Rate ${num}`}
+                            >
+                              {num}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-[11px] text-gray-500">
+                  {skillsSavedSuccess && (
+                    <span className="text-emerald-600 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Skills saved successfully!
+                    </span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  disabled={savingSkills || resultStatus === "locked"}
+                  onClick={handleSaveAllSkills}
+                  className={`px-4 py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-50 shadow-xs transition disabled:cursor-not-allowed ${
+                    resultStatus === "locked"
+                      ? "bg-gray-400"
+                      : "bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-600/20 active:scale-[0.99]"
+                  }`}
+                >
+                  {resultStatus === "locked"
+                    ? "Locked (Read-Only)"
+                    : savingSkills
+                    ? "Saving Skills..."
+                    : "Save Psychomotor Skills"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Class Teacher's Comment */}
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-semibold text-gray-800">
-                Class Teacher's Comment
-              </label>
-              <div className="flex items-center gap-3">
+          <div className="bg-slate-50/60 border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-sky-100 text-sky-800 flex items-center justify-center font-bold text-xs">
+                  CT
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Class Teacher's Comment</h3>
+                  <p className="text-xs text-gray-500">Teacher's observation and term assessment</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   disabled={resultStatus === "locked"}
                   onClick={() => setCommentBankTarget("classTeacher")}
-                  className="text-xs font-semibold text-sky-800 hover:text-sky-950 flex items-center gap-1 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-xs font-semibold text-sky-800 hover:text-sky-950 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-sky-200 shadow-xs hover:bg-sky-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <MessageSquareQuote className="w-3.5 h-3.5" />
+                  <MessageSquareQuote className="w-3.5 h-3.5 text-sky-600" />
                   Browse Comment Bank
                 </button>
                 <button
                   type="button"
                   disabled={resultStatus === "locked"}
                   onClick={() => setUseCustomClassTeacher((v) => !v)}
-                  className="text-xs underline text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-xs font-medium text-gray-600 hover:text-gray-900 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-xs hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {useCustomClassTeacher ? "Choose from list" : "Write custom"}
                 </button>
@@ -854,9 +1098,9 @@ const ReportCard = () => {
                 value={classTeacherCommentId}
                 disabled={resultStatus === "locked"}
                 onChange={(e) => setClassTeacherCommentId(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
+                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none shadow-xs"
               >
-                <option value="">Select a comment or use Comment Bank</option>
+                <option value="">Select a comment or browse Comment Bank</option>
                 {filteredComments.map((c) => {
                   const val = c.id || (c as any)._id || (c as any).code;
                   return (
@@ -867,7 +1111,7 @@ const ReportCard = () => {
                 })}
               </select>
             ) : (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2.5">
                 <input
                   dir="rtl"
                   style={{ fontFamily: "Amiri, serif" }}
@@ -877,7 +1121,7 @@ const ReportCard = () => {
                   onChange={(e) =>
                     setClassTeacherCustom((p) => ({ ...p, ar: e.target.value }))
                   }
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none shadow-xs"
                 />
                 <input
                   placeholder="Comment in English"
@@ -886,109 +1130,131 @@ const ReportCard = () => {
                   onChange={(e) =>
                     setClassTeacherCustom((p) => ({ ...p, en: e.target.value }))
                   }
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none shadow-xs"
                 />
               </div>
             )}
 
-            <button
-              type="button"
-              disabled={savingComment || resultStatus === "locked"}
-              onClick={() => handleSaveComment("classTeacherComment")}
-              className={`mt-3 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-50 shadow-xs transition disabled:cursor-not-allowed ${
-                resultStatus === "locked"
-                  ? "bg-gray-400"
-                  : "bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99]"
-              }`}
-            >
-              {resultStatus === "locked" ? "Locked (Read-Only)" : savingComment ? "Saving..." : "Save Class Teacher Remark"}
-            </button>
-          </div>
-
-          {/* Principal's Comment — admins only */}
-          {(user?.role === "super_admin" || user?.role === "branch_admin") && (
-            <div className="pt-4 border-t border-gray-100">
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-semibold text-gray-800">
-                  Principal's Comment
-                </label>
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    disabled={resultStatus === "locked"}
-                    onClick={() => setCommentBankTarget("principal")}
-                    className="text-xs font-semibold text-sky-800 hover:text-sky-950 flex items-center gap-1 bg-sky-50 px-2.5 py-1 rounded-lg border border-sky-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <MessageSquareQuote className="w-3.5 h-3.5" />
-                    Browse Comment Bank
-                  </button>
-                  <button
-                    type="button"
-                    disabled={resultStatus === "locked"}
-                    onClick={() => setUseCustomPrincipal((v) => !v)}
-                    className="text-xs underline text-gray-500 hover:text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {useCustomPrincipal ? "Choose from list" : "Write custom"}
-                  </button>
-                </div>
-              </div>
-
-              {!useCustomPrincipal ? (
-                <select
-                  value={principalCommentId}
-                  disabled={resultStatus === "locked"}
-                  onChange={(e) => setPrincipalCommentId(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
-                >
-                  <option value="">Select a comment or use Comment Bank</option>
-                  {filteredComments.map((c) => {
-                    const val = c.id || (c as any)._id || (c as any).code;
-                    return (
-                      <option key={val} value={val}>
-                        {c.ar} — {c.en}
-                      </option>
-                    );
-                  })}
-                </select>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <input
-                    dir="rtl"
-                    style={{ fontFamily: "Amiri, serif" }}
-                    placeholder="تعليق المدير بالعربية"
-                    disabled={resultStatus === "locked"}
-                    value={principalCustom.ar}
-                    onChange={(e) =>
-                      setPrincipalCustom((p) => ({ ...p, ar: e.target.value }))
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
-                  />
-                  <input
-                    placeholder="Principal's comment in English"
-                    disabled={resultStatus === "locked"}
-                    value={principalCustom.en}
-                    onChange={(e) =>
-                      setPrincipalCustom((p) => ({ ...p, en: e.target.value }))
-                    }
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-sky-500 outline-none"
-                  />
-                </div>
-              )}
-
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-gray-500">
+                {classTeacherCommentId ? "Comment selected from bank" : useCustomClassTeacher ? "Custom text entered" : "No comment assigned"}
+              </span>
               <button
                 type="button"
                 disabled={savingComment || resultStatus === "locked"}
-                onClick={() => handleSaveComment("principalComment")}
-                className={`mt-3 px-4 py-2 rounded-xl text-white text-sm font-semibold disabled:opacity-50 shadow-xs transition disabled:cursor-not-allowed ${
+                onClick={() => handleSaveComment("classTeacherComment")}
+                className={`px-4 py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-50 shadow-xs transition disabled:cursor-not-allowed ${
                   resultStatus === "locked"
                     ? "bg-gray-400"
                     : "bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99]"
                 }`}
               >
-                {resultStatus === "locked" ? "Locked (Read-Only)" : savingComment ? "Saving..." : "Save Principal Remark"}
+                {resultStatus === "locked"
+                  ? "Locked (Read-Only)"
+                  : savingComment
+                  ? "Saving..."
+                  : "Save Class Teacher Remark"}
               </button>
             </div>
-          )}
+          </div>
+
+          {/* Principal's Comment */}
+          <div className="bg-slate-50/60 border border-slate-200 rounded-xl p-4 sm:p-5 flex flex-col gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+                  PR
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Principal's Comment</h3>
+                  <p className="text-xs text-gray-500">Principal / Head of school overall endorsement</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={resultStatus === "locked"}
+                  onClick={() => setCommentBankTarget("principal")}
+                  className="text-xs font-semibold text-emerald-900 hover:text-emerald-950 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-lg border border-emerald-300 shadow-xs hover:bg-emerald-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <MessageSquareQuote className="w-3.5 h-3.5 text-emerald-700" />
+                  Browse Comment Bank
+                </button>
+                <button
+                  type="button"
+                  disabled={resultStatus === "locked"}
+                  onClick={() => setUseCustomPrincipal((v) => !v)}
+                  className="text-xs font-medium text-gray-600 hover:text-gray-900 bg-white px-2.5 py-1.5 rounded-lg border border-gray-200 shadow-xs hover:bg-gray-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {useCustomPrincipal ? "Choose from list" : "Write custom"}
+                </button>
+              </div>
+            </div>
+
+            {!useCustomPrincipal ? (
+              <select
+                value={principalCommentId}
+                disabled={resultStatus === "locked"}
+                onChange={(e) => setPrincipalCommentId(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-emerald-500 outline-none shadow-xs"
+              >
+                <option value="">Select a comment or browse Comment Bank</option>
+                {filteredComments.map((c) => {
+                  const val = c.id || (c as any)._id || (c as any).code;
+                  return (
+                    <option key={val} value={val}>
+                      {c.ar} — {c.en}
+                    </option>
+                  );
+                })}
+              </select>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                <input
+                  dir="rtl"
+                  style={{ fontFamily: "Amiri, serif" }}
+                  placeholder="تعليق المدير بالعربية (Arabic principal comment)"
+                  disabled={resultStatus === "locked"}
+                  value={principalCustom.ar}
+                  onChange={(e) =>
+                    setPrincipalCustom((p) => ({ ...p, ar: e.target.value }))
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-emerald-500 outline-none shadow-xs"
+                />
+                <input
+                  placeholder="Principal's comment in English"
+                  disabled={resultStatus === "locked"}
+                  value={principalCustom.en}
+                  onChange={(e) =>
+                    setPrincipalCustom((p) => ({ ...p, en: e.target.value }))
+                  }
+                  className="w-full border border-gray-300 rounded-lg px-3.5 py-2.5 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-emerald-500 outline-none shadow-xs"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-gray-500">
+                {principalCommentId ? "Comment selected from bank" : useCustomPrincipal ? "Custom text entered" : "No comment assigned"}
+              </span>
+              <button
+                type="button"
+                disabled={savingPrincipalComment || resultStatus === "locked"}
+                onClick={() => handleSaveComment("principalComment")}
+                className={`px-4 py-2 rounded-xl text-white text-xs font-semibold disabled:opacity-50 shadow-xs transition disabled:cursor-not-allowed ${
+                  resultStatus === "locked"
+                    ? "bg-gray-400"
+                    : "bg-emerald-700 hover:bg-emerald-800 shadow-md shadow-emerald-700/20 active:scale-[0.99]"
+                }`}
+              >
+                {resultStatus === "locked"
+                  ? "Locked (Read-Only)"
+                  : savingPrincipalComment
+                  ? "Saving..."
+                  : "Save Principal Remark"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

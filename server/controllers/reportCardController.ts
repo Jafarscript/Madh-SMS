@@ -143,7 +143,7 @@ export const buildReportCardData = async (
     // 50 – 59.9%: D7 — Pass / مقبول
     // 0 – 49.9%: F9 — Fail / راسب
     if (scorePercentage >= 85) return { grade: "A1", remark: "Excellent", remarkArabic: "ممتاز" };
-    if (scorePercentage >= 75) return { grade: "B2", remark: "Very Good", remarkArabic: "جيد جدا" };
+    if (scorePercentage >= 75) return { grade: "B2", remark: "V.Good", remarkArabic: "جيد جدا" };
     if (scorePercentage >= 60) return { grade: "C4", remark: "Good", remarkArabic: "جيد" };
     if (scorePercentage >= 50) return { grade: "D7", remark: "Pass", remarkArabic: "مقبول" };
     return { grade: "F9", remark: "Fail", remarkArabic: "راسب" };
@@ -213,9 +213,9 @@ export const buildReportCardData = async (
           remark = "Fair";
           remarkArabic = "مقبول";
         } else {
-          grade = "Poor";
-          remark = "Poor";
-          remarkArabic = "ضعيف";
+          grade = "Fail";
+          remark = "Fail";
+          remarkArabic = "راسب";
         }
       } else {
         const band = getGradeRemark(scoreForGrading);
@@ -285,44 +285,53 @@ const principalComment =
       }
     : null;
 
-  const termAverages = priorTerms.map((t) => {
-    const isEnrolled = studentEnrolledTerms.includes(t.termNumber);
-    if (!isEnrolled) {
+  const allTermsInSession = await Term.find({
+    session: currentTerm.session,
+  }).sort({ termNumber: 1 });
+
+  const termAverages = [1, 2, 3].map((termNum) => {
+    const isEnrolled = studentEnrolledTerms.includes(termNum);
+    const termDoc = allTermsInSession.find((t) => t.termNumber === termNum);
+
+    if (!isEnrolled || termNum > currentTerm.termNumber || !termDoc) {
       return {
-        termNumber: t.termNumber,
+        termNumber: termNum,
         average: null,
-        isEnrolled: false,
+        isEnrolled: isEnrolled && termNum <= currentTerm.termNumber,
       };
     }
 
-    const cascadeValues: number[] = [];
+    const termScoresThisTerm: number[] = [];
 
     subjects.forEach((subject) => {
       const subjectKey = subject._id.toString();
       const termScoreMap = scoresBySubjectMap.get(subjectKey) || new Map();
-
-      const scoresUpToThisTerm = applicablePriorTerms
-        .filter((pt) => pt.termNumber <= t.termNumber)
-        .map((pt) => termScoreMap.get(pt._id.toString()))
-        .filter((v): v is number => v !== undefined);
-
-      if (scoresUpToThisTerm.length > 0) {
-        const { finalValue } = foldCascade(scoresUpToThisTerm);
-        if (finalValue !== null) cascadeValues.push(finalValue);
+      const rawScoreInTerm = termScoreMap.get(termDoc._id.toString());
+      if (rawScoreInTerm !== undefined && rawScoreInTerm !== null) {
+        termScoresThisTerm.push(rawScoreInTerm);
       }
     });
 
     const average =
-      cascadeValues.length > 0
-        ? cascadeValues.reduce((a, b) => a + b, 0) / cascadeValues.length
+      termScoresThisTerm.length > 0
+        ? Math.round((termScoresThisTerm.reduce((a, b) => a + b, 0) / termScoresThisTerm.length) * 100) / 100
         : null;
 
     return {
-      termNumber: t.termNumber,
-      average: average !== null ? Math.round(average * 100) / 100 : null,
+      termNumber: termNum,
+      average,
       isEnrolled: true,
     };
   });
+
+  const validTermAverages = termAverages
+    .filter((t) => t.average !== null && t.average !== undefined)
+    .map((t) => t.average as number);
+
+  const overallTermAverage =
+    validTermAverages.length > 0
+      ? Math.round((validTermAverages.reduce((sum, v) => sum + v, 0) / validTermAverages.length) * 100) / 100
+      : (isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0);
 
   const classBranchId = (student.class as any)?.branch;
   const [attSettingClass, attSettingBranch, attSettingGlobal, attDoc, templateSetting] =
@@ -419,6 +428,8 @@ const principalComment =
     subjects: subjectResults,
     overallTotal: effectiveOverallTotal,
     overallPercentage: effectiveOverallPercentage,
+    cumulativeAverage: isElementary ? effectiveOverallPercentage : overallTermAverage,
+    overallAverage: isElementary ? effectiveOverallPercentage : overallTermAverage,
     grade: overallGradeRemark.grade,
     remark: overallGradeRemark.remark,
     remarkArabic: overallGradeRemark.remarkArabic,
@@ -458,15 +469,22 @@ const principalComment =
           watermarkText: templateSetting.watermarkText,
         }
       : null,
-    affectiveScores: {
-      "Punctuality": 5,
-      "Neatness": 4,
-      "Attitude to sch. Work": 5,
-      "Attentiveness": 4,
-      "Speaking Habit/Writing": 4,
-      "Verbal Fluency": 5,
-      "Games / Sports": 4,
-    },
+    affectiveScores: (() => {
+      const defaultAffective: Record<string, number> = {
+        "Punctuality": 5,
+        "Neatness": 4,
+        "Attitude to sch. Work": 5,
+        "Attentiveness": 4,
+        "Speaking Habit/Writing": 4,
+        "Verbal Fluency": 5,
+        "Games / Sports": 4,
+      };
+      const saved = remarkDoc?.affectiveScores;
+      if (saved && typeof saved === "object") {
+        return { ...defaultAffective, ...saved };
+      }
+      return defaultAffective;
+    })(),
   };
 };
 

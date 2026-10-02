@@ -73,6 +73,8 @@ export interface ReportCardData {
   subjects: SubjectResult[];
   overallTotal: number;
   overallPercentage: number;
+  cumulativeAverage?: number;
+  overallAverage?: number;
   grade?: string | null;
   remark?: string | null;
   remarkArabic?: string | null;

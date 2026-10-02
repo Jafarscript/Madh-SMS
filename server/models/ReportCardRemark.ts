@@ -9,6 +9,7 @@ export interface IReportCardRemark extends Document {
   principalCommentId?: string;
   principalCommentEn?: string;
   principalCommentAr?: string;
+  affectiveScores?: Record<string, number>;
   enteredBy: Types.ObjectId;
 }
 
@@ -21,6 +22,7 @@ const ReportCardRemarkSchema = new Schema<IReportCardRemark>({
   principalCommentId: { type: String },
   principalCommentEn: { type: String },
   principalCommentAr: { type: String },
+  affectiveScores: { type: Schema.Types.Mixed, default: {} },
   enteredBy: { type: Schema.Types.ObjectId, ref: "User" },
 });
 

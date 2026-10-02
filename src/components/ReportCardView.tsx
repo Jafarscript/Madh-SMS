@@ -15,14 +15,19 @@ const formatVal = (val: any) => {
   return String(val);
 };
 
-const ReportCardView = ({ data }: { data: ReportCardData }) => {
+interface ReportCardViewProps {
+  data: ReportCardData;
+  onUpdateSkill?: (skill: string, rating: number) => void;
+}
+
+const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
   const isElem =
     data.isElementary === true ||
     data.classCategory === "elementary" ||
     isElementaryClass(data.student?.class, data.classCategory);
 
   if (isElem) {
-    return <ElementaryReportCardView data={data} />;
+    return <ElementaryReportCardView data={data} onUpdateSkill={onUpdateSkill} />;
   }
 
   const {
@@ -467,7 +472,7 @@ const ReportCardView = ({ data }: { data: ReportCardData }) => {
                   CUMULATIVE AVERAGE
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-gray-900 text-[11px] whitespace-nowrap">
-                  {overallTotal}
+                  {data.cumulativeAverage ?? overallPercentage}
                 </td>
               </tr>
             </tbody>

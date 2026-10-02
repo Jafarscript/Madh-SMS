@@ -5,6 +5,7 @@ import { ELEMENTARY_FIXED_SUBJECTS } from "../data/elementarySubjects";
 
 interface Props {
   data: ReportCardData;
+  onUpdateSkill?: (skill: string, rating: number) => void;
 }
 
 const ordinalEn = ["1st", "2nd", "3rd"];
@@ -52,7 +53,7 @@ const getElementaryGrade = (score: number | null | undefined, existingGrade?: st
   return "";
 };
 
-export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
+export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill }) => {
   const {
     student,
     term,
@@ -396,21 +397,35 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
                 <td className="text-left py-1 px-2 border-r border-black font-medium">
                   Punctuality
                 </td>
-                <td className="border-r border-black">{affectiveScores["Punctuality"] === 1 ? "✓" : ""}</td>
-                <td className="border-r border-black">{affectiveScores["Punctuality"] === 2 ? "✓" : ""}</td>
-                <td className="border-r border-black">{affectiveScores["Punctuality"] === 3 ? "✓" : ""}</td>
-                <td className="border-r border-black">{affectiveScores["Punctuality"] === 4 ? "✓" : ""}</td>
-                <td>{affectiveScores["Punctuality"] === 5 ? "✓" : ""}</td>
+                {[1, 2, 3, 4, 5].map((num) => (
+                  <td
+                    key={num}
+                    onClick={() => onUpdateSkill && onUpdateSkill("Punctuality", num)}
+                    className={`${num < 5 ? "border-r" : ""} border-black font-bold text-blue-900 ${
+                      onUpdateSkill ? "cursor-pointer hover:bg-sky-100 transition-colors" : ""
+                    }`}
+                    title={onUpdateSkill ? `Set Punctuality to ${num}` : undefined}
+                  >
+                    {affectiveScores["Punctuality"] === num ? "✓" : ""}
+                  </td>
+                ))}
               </tr>
               <tr>
                 <td className="text-left py-1 px-2 border-r border-black font-medium">
                   Neatness
                 </td>
-                <td className="border-r border-black">{affectiveScores["Neatness"] === 1 ? "✓" : ""}</td>
-                <td className="border-r border-black">{affectiveScores["Neatness"] === 2 ? "✓" : ""}</td>
-                <td className="border-r border-black">{affectiveScores["Neatness"] === 3 ? "✓" : ""}</td>
-                <td className="border-r border-black">{affectiveScores["Neatness"] === 4 ? "✓" : ""}</td>
-                <td>{affectiveScores["Neatness"] === 5 ? "✓" : ""}</td>
+                {[1, 2, 3, 4, 5].map((num) => (
+                  <td
+                    key={num}
+                    onClick={() => onUpdateSkill && onUpdateSkill("Neatness", num)}
+                    className={`${num < 5 ? "border-r" : ""} border-black font-bold text-blue-900 ${
+                      onUpdateSkill ? "cursor-pointer hover:bg-sky-100 transition-colors" : ""
+                    }`}
+                    title={onUpdateSkill ? `Set Neatness to ${num}` : undefined}
+                  >
+                    {affectiveScores["Neatness"] === num ? "✓" : ""}
+                  </td>
+                ))}
               </tr>
             </tbody>
           </table>
@@ -542,21 +557,18 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
                 const score = affectiveScores[skill.en] ?? null;
                 return (
                   <tr key={sIdx}>
-                    <td className="py-0.5 border-r border-black font-bold text-blue-900">
-                      {score === 5 ? "✓" : ""}
-                    </td>
-                    <td className="py-0.5 border-r border-black font-bold text-blue-900">
-                      {score === 4 ? "✓" : ""}
-                    </td>
-                    <td className="py-0.5 border-r border-black font-bold text-blue-900">
-                      {score === 3 ? "✓" : ""}
-                    </td>
-                    <td className="py-0.5 border-r border-black font-bold text-blue-900">
-                      {score === 2 ? "✓" : ""}
-                    </td>
-                    <td className="py-0.5 border-r border-black font-bold text-blue-900">
-                      {score === 1 ? "✓" : ""}
-                    </td>
+                    {[5, 4, 3, 2, 1].map((num) => (
+                      <td
+                        key={num}
+                        onClick={() => onUpdateSkill && onUpdateSkill(skill.en, num)}
+                        className={`w-5 py-0.5 border-r border-black font-bold text-blue-900 ${
+                          onUpdateSkill ? "cursor-pointer hover:bg-sky-100 transition-colors" : ""
+                        }`}
+                        title={onUpdateSkill ? `Set ${skill.en} to ${num}` : undefined}
+                      >
+                        {score === num ? "✓" : ""}
+                      </td>
+                    ))}
                     <td className="py-0.5 px-1 text-right">
                       <div className="flex justify-between items-center">
                         <span className="text-[8.5px] text-gray-700">{skill.en}</span>
@@ -706,26 +718,26 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data }) => {
 
           {/* Principal's comment */}
           <div className="p-1.5 flex flex-col justify-between min-h-[48px] relative">
-            <div className="text-[9px] text-gray-700 space-y-0.5">
-              <div className="flex justify-between">
-                <span style={{ fontFamily: "'Amiri', serif" }}>
-                  تعليق الوكيل:...........................................................................................
-                </span>
-              </div>
-              <div className="text-left">
-                Principal's comment:...................................................................................
-              </div>
+            <div
+              className="text-right font-bold text-[9.5px]"
+              style={{ fontFamily: "'Amiri', serif" }}
+            >
+              تعليق الوكيل / <span className="font-normal font-sans text-[8.5px]">:Principal's comment</span>
             </div>
-            <div className="text-center py-0.5">
-              {principalComment && (
-                <div className="text-[8.5px] font-medium text-gray-900">
+            <div className="text-center py-1 font-medium text-[9px] text-gray-800">
+              {principalComment?.en || principalComment?.ar ? (
+                <div>
                   {principalComment.ar && (
-                    <span style={{ fontFamily: "'Amiri', serif" }} className="font-bold mx-1">
+                    <div style={{ fontFamily: "'Amiri', serif" }} className="font-bold">
                       {principalComment.ar}
-                    </span>
+                    </div>
                   )}
-                  {principalComment.en && <span>{principalComment.en}</span>}
+                  {principalComment.en && <div>{principalComment.en}</div>}
                 </div>
+              ) : (
+                <span className="text-gray-500 italic">
+                  an exemplary student demonstrating diligence and character
+                </span>
               )}
               {templateSettings?.showPrincipalSignature && templateSettings.principalSignatureBase64 && (
                 <img

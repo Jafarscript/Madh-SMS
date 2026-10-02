@@ -71,6 +71,8 @@ export interface ReportCardData {
   subjects: SubjectResult[];
   overallTotal: number;
   overallPercentage: number;
+  cumulativeAverage?: number;
+  overallAverage?: number;
   grade?: string | null;
   remark?: string | null;
   remarkArabic?: string | null;
@@ -1514,26 +1516,21 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
 
           <!-- Principal's comment -->
           <div class="principal-comment-box">
-            <div class="princ-prompt">
-              <div class="ar-line">
-                <span class="ar">تعليق الوكيل:...........................................................................................</span>
-              </div>
-              <div class="en-line">
-                Principal's comment:...................................................................................
-              </div>
+            <div class="comment-title-ar">
+              تعليق الوكيل / <span class="comment-title-en">:Principal's comment</span>
             </div>
-            <div class="princ-body">
+            <div class="comment-body">
               ${
-                principalComment
-                  ? `<div class="princ-text">
-                      ${principalComment.ar ? `<span class="ar font-bold">${principalComment.ar}</span>` : ""}
-                      ${principalComment.en ? `<span>${principalComment.en}</span>` : ""}
+                principalComment?.en || principalComment?.ar
+                  ? `<div>
+                      ${principalComment.ar ? `<div class="comment-ar font-bold">${principalComment.ar}</div>` : ""}
+                      ${principalComment.en ? `<div class="comment-en">${principalComment.en}</div>` : ""}
                     </div>`
-                  : ""
+                  : `<span class="comment-placeholder italic">an exemplary student demonstrating diligence and character</span>`
               }
               ${
                 templateSettings?.showPrincipalSignature && templateSettings.principalSignatureBase64
-                  ? `<img src="${templateSettings.principalSignatureBase64.startsWith("data:") ? templateSettings.principalSignatureBase64 : `data:image/png;base64,${templateSettings.principalSignatureBase64}`}" alt="Principal Signature" class="princ-sig-img" />`
+                  ? `<img src="${templateSettings.principalSignatureBase64.startsWith("data:") ? templateSettings.principalSignatureBase64 : `data:image/png;base64,${templateSettings.principalSignatureBase64}`}" alt="Principal Signature" class="princ-sig-img" style="max-height: 20px; max-width: 80px; object-fit: contain; margin: 2px auto 0;" />`
                   : ""
               }
             </div>
@@ -1781,7 +1778,7 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
               ${termAverageRows}
               <tr class="cumulative-row">
                 <td class="cum-label">CUMULATIVE AVERAGE</td>
-                <td class="cum-val">${overallTotal}</td>
+                <td class="cum-val">${data.cumulativeAverage ?? overallPercentage}</td>
               </tr>
             </tbody>
           </table>

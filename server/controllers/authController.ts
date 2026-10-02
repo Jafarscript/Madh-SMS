@@ -8,6 +8,7 @@ import Class from "../models/Class";
 import Subject from "../models/Subject";
 import ReportCardSetting from "../models/ReportCardSetting";
 import { AuthRequest } from "../middleware/auth";
+import { sendPasswordResetEmail } from "../services/emailService";
 
 const generateToken = (id: string, role: string, branch?: string) => {
   return jwt.sign({ id, role, branch }, process.env.JWT_SECRET as string, {
@@ -318,8 +319,8 @@ export const login = async (req: Request, res: Response) => {
     if (!user) {
       console.warn(`[Auth] Login attempt failed: No user found with email "${normalizedEmail}" in DB "${mongoose.connection.name}"`);
       return res.status(401).json({
-        message: "No account found with this email address. Please verify your email or register.",
-        code: "USER_NOT_FOUND",
+        message: "Invalid email or password. Please check your credentials and try again.",
+        code: "INVALID_CREDENTIALS",
       });
     }
 
@@ -354,8 +355,8 @@ export const login = async (req: Request, res: Response) => {
     if (!isMatch) {
       console.warn(`[Auth] Login attempt failed: Incorrect password for "${normalizedEmail}"`);
       return res.status(401).json({
-        message: "Incorrect password. Please verify your password or use 'Forgot password' to reset it.",
-        code: "INVALID_PASSWORD",
+        message: "Invalid email or password. Please check your credentials and try again.",
+        code: "INVALID_CREDENTIALS",
       });
     }
 
@@ -467,7 +468,13 @@ export const forgotPassword = async (req: Request, res: Response) => {
     }
 
     if (!user) {
-      return res.status(404).json({ message: "No account found with this email address" });
+      // In accordance with security guidelines (preventing account enumeration):
+      return res.status(200).json({
+        message: "If an account exists with this email address, a password reset code has been sent.",
+        email: normalizedEmail,
+        emailSent: false,
+        expiresInMinutes: 15,
+      });
     }
 
     // Generate 6-digit numeric reset code
@@ -476,11 +483,18 @@ export const forgotPassword = async (req: Request, res: Response) => {
     user.resetPasswordExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins validity
     await user.save();
 
+    // Send reset code email via Resend
+    const emailResult = await sendPasswordResetEmail(user.email, user.name, resetCode);
+
     res.status(200).json({
-      message: `Password reset verification code generated for ${user.name}`,
-      resetCode, // Returned for instant direct use & testing
+      message: emailResult.success
+        ? `A 6-digit verification code has been sent to ${user.email}. Please check your email inbox.`
+        : `A password reset code has been generated. Please check your inbox or use the code below.`,
+      emailSent: emailResult.success,
       email: user.email,
       name: user.name,
+      // Provide resetCode only when email sending was not successful or in development without key:
+      resetCode: emailResult.success ? undefined : resetCode,
       expiresInMinutes: 15,
     });
   } catch (err) {

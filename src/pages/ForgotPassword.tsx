@@ -44,7 +44,7 @@ const ForgotPassword = () => {
       if (res.data.resetCode) {
         setCode(res.data.resetCode);
       }
-      setSuccessMsg(`Verification code generated for ${cleanEmail}. Please enter your new password below.`);
+      setSuccessMsg(res.data.message || `Verification code sent to ${cleanEmail}. Please enter the code below.`);
       setStep("reset");
     } catch (err: any) {
       setError(err.response?.data?.message || "Failed to find account. Please verify your email.");

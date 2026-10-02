@@ -10,18 +10,13 @@ import { isClassResultLocked } from "./resultPublicationController";
 // PUT /api/report-card-remarks
 // body: { student, term, field, commentId? }  ← picked from the list
 //   OR: { student, term, field, en, ar }       ← typed manually
+//   OR: { student, term, field: "affectiveScores", affectiveScores: { ... } }
 export const setRemark = async (req: AuthRequest, res: Response) => {
   try {
-    const { student, term, field, commentId, en, ar } = req.body;
+    const { student, term, field, commentId, en, ar, affectiveScores } = req.body;
 
-    if (!student || !term || !field) {
-      return res.status(400).json({ message: "student, term, and field are required" });
-    }
-    if (!["classTeacherComment", "principalComment"].includes(field)) {
-      return res.status(400).json({ message: "Invalid field" });
-    }
-    if (!commentId && !(en?.trim() || ar?.trim())) {
-      return res.status(400).json({ message: "Provide either a commentId, or comment text" });
+    if (!student || !term) {
+      return res.status(400).json({ message: "student and term are required" });
     }
 
     const studentDoc = await Student.findById(student).select("class");
@@ -37,14 +32,32 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
     }
 
     if (req.user?.role === "class_teacher") {
-      if (field !== "classTeacherComment") {
-        return res.status(403).json({ message: "Only super_admin/branch_admin can set the principal's comment" });
-      }
       const teacher = await User.findById(req.user.id);
       const allowedClassIds = (teacher?.classes || []).map((c) => c.toString());
       if (!allowedClassIds.includes(studentDoc.class.toString())) {
         return res.status(403).json({ message: "This student is not in one of your classes" });
       }
+    }
+
+    // Handle updating affective/psychomotor skills
+    if (field === "affectiveScores" || (affectiveScores !== undefined && !field)) {
+      const scores = affectiveScores || {};
+      const remark = await ReportCardRemark.findOneAndUpdate(
+        { student, term },
+        { affectiveScores: scores, enteredBy: req.user?.id },
+        { new: true, upsert: true }
+      );
+      return res.status(200).json(remark);
+    }
+
+    if (!field) {
+      return res.status(400).json({ message: "field is required" });
+    }
+    if (!["classTeacherComment", "principalComment"].includes(field)) {
+      return res.status(400).json({ message: "Invalid field" });
+    }
+    if (!commentId && !(en?.trim() || ar?.trim())) {
+      return res.status(400).json({ message: "Provide either a commentId, or comment text" });
     }
 
     // resolve to final en/ar text — either from the picked predefined
