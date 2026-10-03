@@ -109,11 +109,6 @@ export interface ReportCardData {
 const sharedStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap');
 
-  @page {
-    size: A4 portrait;
-    margin: 4.5mm 5mm;
-  }
-
   * {
     box-sizing: border-box;
     margin: 0;
@@ -140,7 +135,7 @@ const sharedStyles = `
   .sheet {
     width: 100%;
     max-width: 100%;
-    min-height: calc(297mm - 10mm);
+    min-height: 0;
     box-sizing: border-box;
     margin: 0 auto;
     border: 4px solid var(--primary-color, #16a34a);
@@ -148,11 +143,12 @@ const sharedStyles = `
     padding: 12px 14px;
     background: #ffffff;
     page-break-after: always;
-    page-break-inside: avoid;
+    page-break-inside: auto;
     position: relative;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
+    gap: 20px;
   }
   .sheet:last-child { page-break-after: auto; }
 
@@ -177,6 +173,19 @@ const sharedStyles = `
     text-align: center; font-size: 12px; font-weight: bold; color: var(--header-color, #1e3a8a);
     margin: 6px 0 10px 0; display: flex; justify-content: center; align-items: center; gap: 8px;
   }
+
+  .sheet > .header,
+  .sheet > .title-bar,
+  .sheet > .info-section,
+  .sheet > table.subjects,
+  .sheet > .bottom-section,
+  .elem-sheet > .elem-school-header,
+  .elem-sheet > .elem-banner,
+  .elem-sheet > .elem-top-grid,
+  .elem-sheet > .elem-subjects-box {
+    margin-bottom: 0;
+  }
+  .sheet > .title-bar { margin-top: 0; }
   .title-bar .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 13px; }
 
   .info-section { display: flex; border: 1px solid #000; margin-bottom: 10px; font-size: 10px; }
@@ -317,13 +326,14 @@ const sharedStyles = `
     box-sizing: border-box;
     width: 100% !important;
     max-width: 100% !important;
-    min-height: calc(297mm - 10mm);
+    min-height: 0;
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 20px;
     page-break-after: always;
-    page-break-inside: avoid;
+    page-break-inside: auto;
     position: relative;
   }
   .elem-school-header {
@@ -916,59 +926,6 @@ const sharedStyles = `
     display: block;
   }
 
-  @media print {
-    @page {
-      size: A4 portrait;
-      margin: 4.5mm 5mm;
-    }
-    html, body {
-      width: auto !important;
-      height: auto !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      background: #ffffff !important;
-      -webkit-print-color-adjust: exact !important;
-      print-color-adjust: exact !important;
-    }
-    .sheet, .elem-sheet {
-      width: 100% !important;
-      max-width: 100% !important;
-      min-height: calc(297mm - 9mm) !important;
-      height: calc(297mm - 9mm) !important;
-      margin: 0 !important;
-      padding: 10px 12px !important;
-      box-sizing: border-box !important;
-      display: flex !important;
-      flex-direction: column !important;
-      justify-content: flex-start !important;
-      gap: 20px !important;
-      page-break-inside: avoid !important;
-      page-break-after: always !important;
-    }
-    .sheet > .header,
-    .sheet > .title-bar,
-    .sheet > .info-section,
-    .sheet > table.subjects,
-    .sheet > .bottom-section,
-    .elem-sheet > .elem-school-header,
-    .elem-sheet > .elem-banner,
-    .elem-sheet > .elem-top-grid,
-    .elem-sheet > .elem-subjects-box {
-      margin-bottom: 0 !important;
-    }
-    .elem-sheet > .elem-top-grid,
-    .elem-sheet > .elem-bottom-grid {
-      gap: 0 !important;
-    }
-    .sheet > table.subjects,
-    .elem-sheet > .elem-subjects-box {
-      flex: 1 1 auto !important;
-      min-height: 0 !important;
-    }
-    .sheet:last-child, .elem-sheet:last-child {
-      page-break-after: auto !important;
-    }
-  }
 `;
 
 const ordinalEn = ["1ST", "2ND", "3RD"];
