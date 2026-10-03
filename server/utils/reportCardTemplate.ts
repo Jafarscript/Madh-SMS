@@ -152,7 +152,7 @@ const sharedStyles = `
     position: relative;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
+    justify-content: flex-start;
   }
   .sheet:last-child { page-break-after: auto; }
 
@@ -919,11 +919,11 @@ const sharedStyles = `
   @media print {
     @page {
       size: A4 portrait;
-      margin: 4mm 5mm;
+      margin: 4.5mm 5mm;
     }
     html, body {
-      width: 210mm !important;
-      height: 297mm !important;
+      width: auto !important;
+      height: auto !important;
       margin: 0 !important;
       padding: 0 !important;
       background: #ffffff !important;
@@ -940,9 +940,24 @@ const sharedStyles = `
       box-sizing: border-box !important;
       display: flex !important;
       flex-direction: column !important;
-      justify-content: space-between !important;
+      justify-content: flex-start !important;
       page-break-inside: avoid !important;
       page-break-after: always !important;
+    }
+    .sheet > .header,
+    .sheet > .title-bar,
+    .sheet > .info-section,
+    .sheet > table.subjects,
+    .sheet > .bottom-section,
+    .elem-sheet > .elem-school-header,
+    .elem-sheet > .elem-banner,
+    .elem-sheet > .elem-top-grid,
+    .elem-sheet > .elem-subjects-box {
+      margin-bottom: 0 !important;
+    }
+    .elem-sheet > .elem-top-grid,
+    .elem-sheet > .elem-bottom-grid {
+      gap: 0 !important;
     }
     .sheet:last-child, .elem-sheet:last-child {
       page-break-after: auto !important;

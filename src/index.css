@@ -150,7 +150,7 @@ table th button {
   }
 
   html, body {
-    width: 210mm !important;
+    width: auto !important;
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
@@ -184,9 +184,27 @@ table th button {
     box-sizing: border-box !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: space-between !important;
+    justify-content: flex-start !important;
     page-break-inside: avoid !important;
     page-break-after: always !important;
+  }
+
+  /* Keep report-card sections joined while preserving the page edge margin. */
+  .sheet > .header,
+  .sheet > .title-bar,
+  .sheet > .info-section,
+  .sheet > table.subjects,
+  .sheet > .bottom-section,
+  .elem-sheet > .elem-school-header,
+  .elem-sheet > .elem-banner,
+  .elem-sheet > .elem-top-grid,
+  .elem-sheet > .elem-subjects-box {
+    margin-bottom: 0 !important;
+  }
+
+  .elem-sheet > .elem-top-grid,
+  .elem-sheet > .elem-bottom-grid {
+    gap: 0 !important;
   }
 }
 
