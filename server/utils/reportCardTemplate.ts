@@ -198,8 +198,8 @@ const sharedStyles = `
   table.subjects { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; }
   table.subjects th, table.subjects td { border: 1px solid #000; padding: 4.5px 5px; text-align: center; }
   table.subjects th { font-size: 10px; font-weight: bold; background: #fafafa; line-height: 1.2; }
-  table.subjects td.subject-name { text-align: left; font-weight: bold; font-size: 14px;}
-  table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 12px; }
+  table.subjects td.subject-name { text-align: left; font-weight: 700;}
+  table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 11px; }
   table.subjects tr.total-row td { font-size: 16px; font-weight: bold; }
   td.score {font-size: 14px; font-weight: bold;}
    
