@@ -132,7 +132,7 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
 
   return (
     <div
-      className="border-4 rounded-sm p-4 bg-white relative min-w-[680px] sm:min-w-full print:min-w-0"
+      className="border-4 rounded-sm p-4 bg-white relative min-w-[680px] sm:min-w-full print:min-w-0 print:max-w-none print:w-full print:min-h-[285mm] print:m-0 print:p-3 flex flex-col justify-between"
       style={{ borderColor: primaryColor }}
     >
       {/* header */}

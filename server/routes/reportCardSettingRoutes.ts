@@ -4,12 +4,21 @@ import {
   getReportCardSetting,
   updateReportCardSetting,
   resetReportCardSetting,
+  testEmailSetting,
 } from "../controllers/reportCardSettingController";
 
 const router = Router();
 
 // Public / Authenticated read
 router.get("/", getReportCardSetting);
+
+// Send test email to verify Resend API key
+router.post(
+  "/test-email",
+  protect,
+  authorize("super_admin", "branch_admin"),
+  testEmailSetting
+);
 
 // Admin-only updates - supports both PUT and POST
 router.put(

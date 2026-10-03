@@ -10,6 +10,10 @@ import {
   RotateCcw,
   Sparkles,
   Trash2,
+  Mail,
+  Send,
+  KeyRound,
+  ShieldCheck,
 } from "lucide-react";
 import Spinner from "./Spinner";
 
@@ -46,6 +50,12 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
   const [showStamp, setShowStamp] = useState(false);
   const [stampBase64, setStampBase64] = useState("");
   const [watermarkText, setWatermarkText] = useState("");
+  const [resendApiKey, setResendApiKey] = useState("");
+  const [resendFromEmail, setResendFromEmail] = useState("");
+  const [hasResendApiKey, setHasResendApiKey] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+  const [testingEmail, setTestingEmail] = useState(false);
+  const [testEmailMsg, setTestEmailMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -78,11 +88,34 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
         setShowStamp(Boolean(res.data.showStamp));
         if (res.data.stampBase64) setStampBase64(res.data.stampBase64);
         if (res.data.watermarkText) setWatermarkText(res.data.watermarkText);
+        if (res.data.resendApiKey) setResendApiKey(res.data.resendApiKey);
+        if (res.data.resendFromEmail) setResendFromEmail(res.data.resendFromEmail);
+        setHasResendApiKey(Boolean(res.data.hasResendApiKey));
       }
     } catch (err: any) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestEmail = async () => {
+    if (!testEmail.trim()) {
+      setTestEmailMsg({ type: "error", text: "Please enter an email address to send the test message to." });
+      return;
+    }
+    setTestingEmail(true);
+    setTestEmailMsg(null);
+    try {
+      const res = await api.post("/report-card-settings/test-email", { email: testEmail.trim() });
+      setTestEmailMsg({ type: "success", text: res.data.message || "Test email sent successfully!" });
+    } catch (err: any) {
+      setTestEmailMsg({
+        type: "error",
+        text: err.response?.data?.message || "Failed to send test email. Please check your Resend API key.",
+      });
+    } finally {
+      setTestingEmail(false);
     }
   };
 
@@ -184,6 +217,8 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
         showStamp,
         stampBase64,
         watermarkText,
+        resendApiKey,
+        resendFromEmail,
       });
 
       setSuccess("Report card template saved successfully!");
@@ -501,6 +536,106 @@ const ReportCardTemplateModal: React.FC<ReportCardTemplateModalProps> = ({
                     </label>
                   </div>
                 </div>
+              </div>
+
+              {/* Email & Password Reset (Resend Integration) */}
+              <div className="bg-sky-50/60 p-4 rounded-2xl border border-sky-200/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-sky-950">
+                    <Mail className="w-4 h-4 text-sky-600" />
+                    <span>Password Reset Email Integration (Resend API)</span>
+                  </div>
+                  {hasResendApiKey ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" /> Key Configured
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                      Not Configured
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Provide your official Resend API key so staff and teachers can receive secure 6-digit verification codes to their inbox for self-service password recovery.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Resend API Key
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="password"
+                        value={resendApiKey}
+                        onChange={(e) => setResendApiKey(e.target.value)}
+                        placeholder={hasResendApiKey ? "re_•••••••• (Configured — enter new to change)" : "re_123456789..."}
+                        className="w-full text-xs font-mono border border-slate-300 rounded-xl px-3 py-2 pl-8 focus:ring-2 focus:ring-sky-500 outline-none bg-white"
+                      />
+                      <KeyRound className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">Get your free key from resend.com</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Sender Email ("From" Address)
+                    </label>
+                    <input
+                      type="text"
+                      value={resendFromEmail}
+                      onChange={(e) => setResendFromEmail(e.target.value)}
+                      placeholder='Institute of Arabic <onboarding@resend.dev>'
+                      className="w-full text-xs border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none bg-white"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">Defaults to onboarding@resend.dev or your verified domain</p>
+                  </div>
+                </div>
+
+                {/* Send Test Email Card */}
+                <div className="p-3 bg-white border border-sky-100 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                  <div className="w-full sm:w-auto flex-1">
+                    <p className="text-xs font-semibold text-slate-800">Test Resend Email Delivery</p>
+                    <p className="text-[11px] text-slate-500">Send an instant test email to verify your API key</p>
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <input
+                      type="email"
+                      value={testEmail}
+                      onChange={(e) => setTestEmail(e.target.value)}
+                      placeholder="your.email@domain.com"
+                      className="text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:ring-2 focus:ring-sky-500 outline-none w-full sm:w-56"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleTestEmail}
+                      disabled={testingEmail}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-sky-700 hover:bg-sky-800 text-white rounded-lg text-xs font-medium transition shadow-sm shrink-0 disabled:opacity-50"
+                    >
+                      {testingEmail ? (
+                        <span>Sending...</span>
+                      ) : (
+                        <>
+                          <Send className="w-3 h-3" />
+                          <span>Test Email</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {testEmailMsg && (
+                  <div
+                    className={`p-2.5 text-xs rounded-xl border ${
+                      testEmailMsg.type === "success"
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                        : "bg-rose-50 border-rose-200 text-rose-800"
+                    }`}
+                  >
+                    {testEmailMsg.text}
+                  </div>
+                )}
               </div>
             </form>
           )}

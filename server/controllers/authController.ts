@@ -319,7 +319,7 @@ export const login = async (req: Request, res: Response) => {
     if (!user) {
       console.warn(`[Auth] Login attempt failed: No user found with email "${normalizedEmail}" in DB "${mongoose.connection.name}"`);
       return res.status(401).json({
-        message: "Invalid email or password. Please check your credentials and try again.",
+        message: "Invalid email or password",
         code: "INVALID_CREDENTIALS",
       });
     }
@@ -355,7 +355,7 @@ export const login = async (req: Request, res: Response) => {
     if (!isMatch) {
       console.warn(`[Auth] Login attempt failed: Incorrect password for "${normalizedEmail}"`);
       return res.status(401).json({
-        message: "Invalid email or password. Please check your credentials and try again.",
+        message: "Invalid email or password",
         code: "INVALID_CREDENTIALS",
       });
     }

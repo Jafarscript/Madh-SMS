@@ -25,8 +25,12 @@ const AttendanceSettingSchema = new Schema<IAttendanceSetting>(
   { timestamps: true }
 );
 
-AttendanceSettingSchema.index({ term: 1, class: 1 }, { unique: true, sparse: true });
+AttendanceSettingSchema.index(
+  { term: 1, class: 1 },
+  { unique: true, partialFilterExpression: { class: { $type: "objectId" } } }
+);
 AttendanceSettingSchema.index({ term: 1, branch: 1 });
+AttendanceSettingSchema.index({ term: 1 });
 
 export default mongoose.model<IAttendanceSetting>(
   "AttendanceSetting",

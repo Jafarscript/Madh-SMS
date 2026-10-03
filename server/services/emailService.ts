@@ -13,32 +13,36 @@ export const sendPasswordResetEmail = async (
   userName: string,
   resetCode: string
 ): Promise<SendResetEmailResult> => {
-  const apiKey = process.env.RESEND_API_KEY?.trim();
+  let apiKey = process.env.RESEND_API_KEY?.trim() || "";
+  let customFrom = process.env.RESEND_FROM_EMAIL?.trim() || "";
+
+  // Fetch school name and email settings if available
+  let schoolEnglish = "Institute of Arabic and Islamic Studies";
+  let schoolArabic = "معهد التعليم العربي الإسلامي";
+  try {
+    const setting = await ReportCardSetting.findOne().lean();
+    if (setting?.schoolNameEnglish) schoolEnglish = setting.schoolNameEnglish;
+    if (setting?.schoolNameArabic) schoolArabic = setting.schoolNameArabic;
+    if (setting?.resendApiKey?.trim()) apiKey = setting.resendApiKey.trim();
+    if (setting?.resendFromEmail?.trim()) customFrom = setting.resendFromEmail.trim();
+  } catch {
+    // ignore
+  }
+
   if (!apiKey) {
-    console.warn("[EmailService] RESEND_API_KEY is not defined in environment variables. Email will not be sent.");
+    console.warn("[EmailService] RESEND_API_KEY is not defined in environment variables or database settings. Email will not be sent.");
     return {
       success: false,
       reason: "MISSING_API_KEY",
-      error: "RESEND_API_KEY environment variable is not configured.",
+      error: "RESEND_API_KEY is not configured. Please set it in Admin Settings or in .env file.",
     };
   }
 
   try {
     const resend = new Resend(apiKey);
 
-    // Fetch school name from settings if available
-    let schoolEnglish = "Institute of Arabic and Islamic Studies";
-    let schoolArabic = "معهد التعليم العربي الإسلامي";
-    try {
-      const setting = await ReportCardSetting.findOne().lean();
-      if (setting?.schoolNameEnglish) schoolEnglish = setting.schoolNameEnglish;
-      if (setting?.schoolNameArabic) schoolArabic = setting.schoolNameArabic;
-    } catch {
-      // ignore
-    }
-
     const fromAddress =
-      process.env.RESEND_FROM_EMAIL?.trim() ||
+      customFrom ||
       `${schoolEnglish} <onboarding@resend.dev>`;
 
     const subject = `Your Password Reset Verification Code: ${resetCode}`;
@@ -140,3 +144,53 @@ If you did not request a password reset, please ignore this email or contact you
     };
   }
 };
+
+export const sendTestEmail = async (toEmail: string): Promise<SendResetEmailResult> => {
+  let apiKey = process.env.RESEND_API_KEY?.trim() || "";
+  let customFrom = process.env.RESEND_FROM_EMAIL?.trim() || "";
+
+  let schoolEnglish = "Institute of Arabic and Islamic Studies";
+  try {
+    const setting = await ReportCardSetting.findOne().lean();
+    if (setting?.schoolNameEnglish) schoolEnglish = setting.schoolNameEnglish;
+    if (setting?.resendApiKey?.trim()) apiKey = setting.resendApiKey.trim();
+    if (setting?.resendFromEmail?.trim()) customFrom = setting.resendFromEmail.trim();
+  } catch {
+    // ignore
+  }
+
+  if (!apiKey) {
+    return {
+      success: false,
+      reason: "MISSING_API_KEY",
+      error: "RESEND_API_KEY is not configured.",
+    };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const fromAddress = customFrom || `${schoolEnglish} <onboarding@resend.dev>`;
+
+    const { data, error } = await resend.emails.send({
+      from: fromAddress,
+      to: [toEmail],
+      subject: `Resend Test Email - ${schoolEnglish}`,
+      html: `
+        <div style="font-family: sans-serif; padding: 20px; color: #1e293b;">
+          <h2 style="color: #0369a1;">Resend Email Configuration Verified!</h2>
+          <p>This is a test email sent from <strong>${schoolEnglish}</strong>.</p>
+          <p>Your Resend API key and email dispatch are functioning properly for password resets.</p>
+          <p style="color: #64748b; font-size: 12px; margin-top: 24px;">Sent at: ${new Date().toISOString()}</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      return { success: false, error: error.message || "Failed to send test email" };
+    }
+    return { success: true, id: data?.id };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Unexpected error" };
+  }
+};
+

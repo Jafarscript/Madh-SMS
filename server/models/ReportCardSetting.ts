@@ -13,6 +13,8 @@ export interface IReportCardSetting extends Document {
   stampBase64?: string;
   watermarkText?: string;
   staffRegistrationCode?: string;
+  resendApiKey?: string;
+  resendFromEmail?: string;
   updatedBy?: Types.ObjectId;
 }
 
@@ -40,6 +42,8 @@ const ReportCardSettingSchema = new Schema<IReportCardSetting>(
     stampBase64: { type: String, default: "" },
     watermarkText: { type: String, default: "" },
     staffRegistrationCode: { type: String, default: "STAFF-2026" },
+    resendApiKey: { type: String, default: "" },
+    resendFromEmail: { type: String, default: "" },
     updatedBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

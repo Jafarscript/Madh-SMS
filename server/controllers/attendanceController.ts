@@ -36,33 +36,53 @@ export const getClassAttendance = async (req: AuthRequest, res: Response) => {
     const classDoc = await Class.findById(classId);
     if (!classDoc) return res.status(404).json({ message: "Class not found" });
 
-    // 1. Resolve central settings (Class-specific -> Branch-specific -> Term defaults)
-    const [classSetting, branchSetting, globalSetting, termDoc] = await Promise.all([
+    // 1. Resolve central settings (Term Document -> Global School-wide -> Any Branch Setting -> Class)
+    const [classSetting, branchSetting, globalSetting, anySettingForTerm, termDoc] = await Promise.all([
       AttendanceSetting.findOne({ class: classId, term: termId }),
       classDoc.branch
         ? AttendanceSetting.findOne({ branch: classDoc.branch, term: termId, class: { $exists: false } })
         : null,
       AttendanceSetting.findOne({ term: termId, class: { $exists: false }, branch: { $exists: false } }),
+      AttendanceSetting.findOne({
+        term: termId,
+        $or: [
+          { nextResumption: { $exists: true, $ne: "" } },
+          { dateResumed: { $exists: true, $ne: "" } },
+          { timesSchoolOpened: { $exists: true, $ne: null } },
+        ],
+      }),
       Term.findById(termId),
     ]);
 
-    const activeSetting = classSetting || branchSetting || globalSetting;
+    // Calendar dates and resumption dates are unified school-wide for the whole school
     const settings = {
       timesSchoolOpened:
-        activeSetting?.timesSchoolOpened ??
         (termDoc as any)?.timesSchoolOpened ??
+        anySettingForTerm?.timesSchoolOpened ??
+        globalSetting?.timesSchoolOpened ??
+        branchSetting?.timesSchoolOpened ??
+        classSetting?.timesSchoolOpened ??
         null,
       dateResumed:
-        activeSetting?.dateResumed ||
         (termDoc as any)?.dateResumed ||
+        anySettingForTerm?.dateResumed ||
+        globalSetting?.dateResumed ||
+        branchSetting?.dateResumed ||
+        classSetting?.dateResumed ||
         "",
       dateClosed:
-        activeSetting?.dateClosed ||
         (termDoc as any)?.dateClosed ||
+        anySettingForTerm?.dateClosed ||
+        globalSetting?.dateClosed ||
+        branchSetting?.dateClosed ||
+        classSetting?.dateClosed ||
         "",
       nextResumption:
-        activeSetting?.nextResumption ||
         (termDoc as any)?.nextResumption ||
+        anySettingForTerm?.nextResumption ||
+        globalSetting?.nextResumption ||
+        branchSetting?.nextResumption ||
+        classSetting?.nextResumption ||
         "",
     };
 
@@ -145,7 +165,7 @@ export const saveClassAttendance = async (req: AuthRequest, res: Response) => {
     const classDoc = await Class.findById(classId);
     if (!classDoc) return res.status(404).json({ message: "Class not found" });
 
-    // 1. Update central settings if supplied
+    // 1. Update central settings if supplied (applies school-wide to all branches & classes)
     if (settings) {
       const timesOpened =
         settings.timesSchoolOpened !== undefined &&
@@ -153,36 +173,41 @@ export const saveClassAttendance = async (req: AuthRequest, res: Response) => {
         settings.timesSchoolOpened !== ("" as any)
           ? Number(settings.timesSchoolOpened)
           : null;
+      const cleanDateResumed = settings.dateResumed?.trim() || "";
+      const cleanDateClosed = settings.dateClosed?.trim() || "";
+      const cleanNextResumption = settings.nextResumption?.trim() || "";
 
-      if (req.user?.role === "super_admin" || req.user?.role === "branch_admin") {
-        if (settings.applyToWholeBranch && classDoc.branch) {
-          // Set for whole branch
-          await AttendanceSetting.findOneAndUpdate(
-            { term: termId, branch: classDoc.branch, class: { $exists: false } },
-            {
-              timesSchoolOpened: timesOpened,
-              dateResumed: settings.dateResumed?.trim() || "",
-              dateClosed: settings.dateClosed?.trim() || "",
-              nextResumption: settings.nextResumption?.trim() || "",
-              updatedBy: req.user.id,
-            },
-            { upsert: true, new: true, setDefaultsOnInsert: true }
-          );
-        }
-      }
-
-      // Also store/update class setting
+      // 1. Update school-wide global AttendanceSetting
       await AttendanceSetting.findOneAndUpdate(
-        { term: termId, class: classId },
+        { term: termId, class: { $exists: false }, branch: { $exists: false } },
         {
-          branch: classDoc.branch,
           timesSchoolOpened: timesOpened,
-          dateResumed: settings.dateResumed?.trim() || "",
-          dateClosed: settings.dateClosed?.trim() || "",
-          nextResumption: settings.nextResumption?.trim() || "",
+          dateResumed: cleanDateResumed,
+          dateClosed: cleanDateClosed,
+          nextResumption: cleanNextResumption,
           updatedBy: req.user?.id,
         },
         { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+
+      // 2. Update Term model directly for consistency
+      await Term.findByIdAndUpdate(termId, {
+        timesSchoolOpened: timesOpened,
+        dateResumed: cleanDateResumed,
+        dateClosed: cleanDateClosed,
+        nextResumption: cleanNextResumption,
+      });
+
+      // 3. Propagate to ALL existing AttendanceSetting records for this term across all branches and classes
+      await AttendanceSetting.updateMany(
+        { term: termId },
+        {
+          timesSchoolOpened: timesOpened,
+          dateResumed: cleanDateResumed,
+          dateClosed: cleanDateClosed,
+          nextResumption: cleanNextResumption,
+          updatedBy: req.user?.id,
+        }
       );
     }
 
@@ -252,11 +277,11 @@ export const getAttendanceSettings = async (req: AuthRequest, res: Response) => 
 
     res.status(200).json({
       timesSchoolOpened:
-        setting?.timesSchoolOpened ?? (termDoc as any)?.timesSchoolOpened ?? null,
-      dateResumed: setting?.dateResumed || (termDoc as any)?.dateResumed || "",
-      dateClosed: setting?.dateClosed || (termDoc as any)?.dateClosed || "",
+        (termDoc as any)?.timesSchoolOpened ?? setting?.timesSchoolOpened ?? null,
+      dateResumed: (termDoc as any)?.dateResumed || setting?.dateResumed || "",
+      dateClosed: (termDoc as any)?.dateClosed || setting?.dateClosed || "",
       nextResumption:
-        setting?.nextResumption || (termDoc as any)?.nextResumption || "",
+        (termDoc as any)?.nextResumption || setting?.nextResumption || "",
     });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
@@ -274,26 +299,44 @@ export const saveAttendanceSettings = async (req: AuthRequest, res: Response) =>
         ? Number(timesSchoolOpened)
         : null;
 
-    const query: any = { term: termId, class: { $exists: false } };
-    if (req.user?.role === "branch_admin" && req.user.branch) {
-      query.branch = req.user.branch;
-    } else if (branchId) {
-      query.branch = branchId;
-    }
+    const cleanDateResumed = dateResumed?.trim() || "";
+    const cleanDateClosed = dateClosed?.trim() || "";
+    const cleanNextResumption = nextResumption?.trim() || "";
 
+    // 1. Update the global school-wide AttendanceSetting for this term
     const updated = await AttendanceSetting.findOneAndUpdate(
-      query,
+      { term: termId, class: { $exists: false }, branch: { $exists: false } },
       {
         timesSchoolOpened: timesOpened,
-        dateResumed: dateResumed?.trim() || "",
-        dateClosed: dateClosed?.trim() || "",
-        nextResumption: nextResumption?.trim() || "",
+        dateResumed: cleanDateResumed,
+        dateClosed: cleanDateClosed,
+        nextResumption: cleanNextResumption,
         updatedBy: req.user?.id,
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
-    res.status(200).json({ message: "Central attendance settings saved", settings: updated });
+    // 2. Update Term model directly
+    await Term.findByIdAndUpdate(termId, {
+      timesSchoolOpened: timesOpened,
+      dateResumed: cleanDateResumed,
+      dateClosed: cleanDateClosed,
+      nextResumption: cleanNextResumption,
+    });
+
+    // 3. Synchronize to all existing AttendanceSetting records for this term across all branches and classes
+    await AttendanceSetting.updateMany(
+      { term: termId },
+      {
+        timesSchoolOpened: timesOpened,
+        dateResumed: cleanDateResumed,
+        dateClosed: cleanDateClosed,
+        nextResumption: cleanNextResumption,
+        updatedBy: req.user?.id,
+      }
+    );
+
+    res.status(200).json({ message: "School-wide term calendar and resumption dates saved across all branches", settings: updated });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
   }

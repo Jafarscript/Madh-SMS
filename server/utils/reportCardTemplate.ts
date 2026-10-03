@@ -111,7 +111,7 @@ const sharedStyles = `
 
   @page {
     size: A4 portrait;
-    margin: 6mm 7mm;
+    margin: 4.5mm 5mm;
   }
 
   * {
@@ -122,7 +122,10 @@ const sharedStyles = `
     print-color-adjust: exact !important;
   }
 
-  body {
+  html, body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: #111827;
     background: #ffffff;
@@ -137,14 +140,19 @@ const sharedStyles = `
   .sheet {
     width: 100%;
     max-width: 100%;
+    min-height: calc(297mm - 10mm);
+    box-sizing: border-box;
     margin: 0 auto;
     border: 4px solid var(--primary-color, #16a34a);
     border-radius: 2px;
-    padding: 14px 16px;
+    padding: 12px 14px;
     background: #ffffff;
     page-break-after: always;
     page-break-inside: avoid;
     position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
   }
   .sheet:last-child { page-break-after: auto; }
 
@@ -300,15 +308,23 @@ const sharedStyles = `
 
   /* Elementary Report Card Specific Styles matching ElementaryReportCardView.tsx */
   .elem-sheet {
-    border: 1px solid #000 !important;
-    padding: 12px 14px;
+    border: 1.5px solid #000 !important;
+    padding: 10px 12px;
     background: #ffffff;
     color: #030712;
     font-family: 'Inter', sans-serif;
     font-size: 11px;
     box-sizing: border-box;
-    max-width: 794px;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: calc(297mm - 10mm);
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    page-break-after: always;
+    page-break-inside: avoid;
+    position: relative;
   }
   .elem-school-header {
     position: relative;
@@ -898,6 +914,39 @@ const sharedStyles = `
     object-fit: contain;
     margin: 2px auto 0;
     display: block;
+  }
+
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 4mm 5mm;
+    }
+    html, body {
+      width: 210mm !important;
+      height: 297mm !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      background: #ffffff !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    .sheet, .elem-sheet {
+      width: 100% !important;
+      max-width: 100% !important;
+      min-height: calc(297mm - 9mm) !important;
+      height: calc(297mm - 9mm) !important;
+      margin: 0 !important;
+      padding: 10px 12px !important;
+      box-sizing: border-box !important;
+      display: flex !important;
+      flex-direction: column !important;
+      justify-content: space-between !important;
+      page-break-inside: avoid !important;
+      page-break-after: always !important;
+    }
+    .sheet:last-child, .elem-sheet:last-child {
+      page-break-after: auto !important;
+    }
   }
 `;
 

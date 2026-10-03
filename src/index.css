@@ -139,3 +139,54 @@ table th button {
   -webkit-overflow-scrolling: touch;
   max-width: 100%;
 }
+
+/* ==========================================================================
+   Print Optimization for Report Cards & A4 Outputs
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 4.5mm 5mm;
+  }
+
+  html, body {
+    width: 210mm !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide app chrome, header, sidebar, navigation, action buttons */
+  header, nav, aside, .no-print, button, [role="navigation"] {
+    display: none !important;
+  }
+
+  /* Make report card container take full page width */
+  .report-card-container,
+  .printable-report-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  .sheet, .elem-sheet {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: calc(297mm - 9mm) !important;
+    height: calc(297mm - 9mm) !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    page-break-inside: avoid !important;
+    page-break-after: always !important;
+  }
+}
+

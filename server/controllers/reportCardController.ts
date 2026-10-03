@@ -353,15 +353,33 @@ const principalComment =
       ReportCardSetting.findOne(),
     ]);
 
-  const activeAttSetting = attSettingClass || attSettingBranch || attSettingGlobal;
   const timesSchoolOpened =
-    activeAttSetting?.timesSchoolOpened !== undefined && activeAttSetting?.timesSchoolOpened !== null
-      ? activeAttSetting.timesSchoolOpened
-      : (currentTerm as any).timesSchoolOpened ?? null;
+    (currentTerm as any)?.timesSchoolOpened ??
+    attSettingGlobal?.timesSchoolOpened ??
+    attSettingBranch?.timesSchoolOpened ??
+    attSettingClass?.timesSchoolOpened ??
+    null;
 
-  const dateResumed = activeAttSetting?.dateResumed || (currentTerm as any).dateResumed || "";
-  const dateClosed = activeAttSetting?.dateClosed || (currentTerm as any).dateClosed || "";
-  const nextResumption = activeAttSetting?.nextResumption || (currentTerm as any).nextResumption || "";
+  const dateResumed =
+    (currentTerm as any)?.dateResumed ||
+    attSettingGlobal?.dateResumed ||
+    attSettingBranch?.dateResumed ||
+    attSettingClass?.dateResumed ||
+    "";
+
+  const dateClosed =
+    (currentTerm as any)?.dateClosed ||
+    attSettingGlobal?.dateClosed ||
+    attSettingBranch?.dateClosed ||
+    attSettingClass?.dateClosed ||
+    "";
+
+  const nextResumption =
+    (currentTerm as any)?.nextResumption ||
+    attSettingGlobal?.nextResumption ||
+    attSettingBranch?.nextResumption ||
+    attSettingClass?.nextResumption ||
+    "";
 
   const timesPresent =
     attDoc?.timesPresent !== undefined && attDoc?.timesPresent !== null

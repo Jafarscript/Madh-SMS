@@ -40,7 +40,9 @@ const Login = () => {
     } catch (err: any) {
       const status = err.response?.status;
       const respData = err.response?.data;
-      if (respData?.diagnostic) {
+      if (status === 401) {
+        setError("Invalid email or password");
+      } else if (respData?.diagnostic) {
         setError(`${respData.message} (${respData.diagnostic})`);
       } else if (respData?.message) {
         setError(respData.message);

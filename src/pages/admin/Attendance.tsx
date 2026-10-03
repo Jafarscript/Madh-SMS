@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { Link } from "react-router";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import {
@@ -312,16 +313,25 @@ const Attendance = () => {
 
       {/* Central Term Calendar Settings Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h3 className="font-semibold text-slate-900 text-base">Term Calendar & Resumption Dates</h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-semibold text-slate-900 text-base">School-Wide Term Calendar & Resumption Dates</h3>
+              <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                All Branches & Classes
+              </span>
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              These dates and total times opened appear automatically on every student's report sheet for this term.
+              Unified schedule across the entire school. Standard central place to configure: <Link to="/admin/terms" className="text-sky-700 underline font-semibold hover:text-sky-900">/admin/terms</Link>.
             </p>
           </div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-100 text-sky-800 border border-sky-200">
-            Central Settings
-          </span>
+          <Link
+            to="/admin/terms"
+            className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-white text-sky-700 hover:bg-sky-50 border border-sky-200 inline-flex items-center gap-1.5 transition shadow-2xs shrink-0 self-start sm:self-auto"
+          >
+            <Calendar className="w-3.5 h-3.5 text-sky-600" />
+            <span>Manage in Terms & Sessions &rarr;</span>
+          </Link>
         </div>
 
         <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -341,7 +351,7 @@ const Attendance = () => {
               }
               className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none disabled:bg-slate-100"
             />
-            <p className="text-[11px] text-slate-500 mt-1">Leave blank to display "-" on sheet</p>
+            <p className="text-[11px] text-slate-500 mt-1">Total school session days (whole school)</p>
           </div>
 
           <div>
@@ -359,7 +369,7 @@ const Attendance = () => {
               }
               className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none disabled:bg-slate-100"
             />
-            <p className="text-[11px] text-slate-500 mt-1">resumption date for this term</p>
+            <p className="text-[11px] text-slate-500 mt-1">Term start date (all branches)</p>
           </div>
 
           <div>
@@ -377,7 +387,7 @@ const Attendance = () => {
               }
               className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none disabled:bg-slate-100"
             />
-            <p className="text-[11px] text-slate-500 mt-1">closing/vacation date</p>
+            <p className="text-[11px] text-slate-500 mt-1">Term closing/vacation date</p>
           </div>
 
           <div>
@@ -395,23 +405,15 @@ const Attendance = () => {
               }
               className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-sky-500 outline-none disabled:bg-slate-100"
             />
-            <p className="text-[11px] text-slate-500 mt-1">next term start date</p>
+            <p className="text-[11px] text-slate-500 mt-1">Next term start date (all branches)</p>
           </div>
         </div>
 
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-          <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              disabled={isLocked}
-              checked={settings.applyToWholeBranch}
-              onChange={(e) =>
-                setSettings((s) => ({ ...s, applyToWholeBranch: e.target.checked }))
-              }
-              className="rounded text-sky-600 focus:ring-sky-500"
-            />
-            <span>Apply these 4 calendar values to all classes in this branch</span>
-          </label>
+        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
+          <span className="flex items-center gap-1.5 font-medium text-emerald-800">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+            School-wide Unified Calendar: All branches and classes share this identical term schedule.
+          </span>
         </div>
       </div>
 
