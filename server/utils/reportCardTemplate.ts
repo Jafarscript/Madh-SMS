@@ -198,10 +198,11 @@ const sharedStyles = `
   table.subjects { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; }
   table.subjects th, table.subjects td { border: 1px solid #000; padding: 4.5px 5px; text-align: center; }
   table.subjects th { font-size: 10px; font-weight: bold; background: #fafafa; line-height: 1.2; }
-  table.subjects td.subject-name { text-align: left; font-weight: bold; }
-  table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 11px; }
-  table.subjects tr.total-row td { font-weight: bold; }
-
+  table.subjects td.subject-name { text-align: left; font-weight: bold; font-size: 16px;}
+  table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 16px; }
+  table.subjects tr.total-row td { font-size: 16px; font-weight: bold; }
+  td.score {font-size: 14px; font-weight: bold;}
+   
   .bottom-section { display: flex; margin-bottom: 10px; border: 1px solid #000; font-size: 10px; }
   .bottom-box { flex: 1; border-right: 1px solid #000; display: flex; flex-direction: column; justify-content: space-between; }
   .bottom-box:last-child { border-right: none; }
@@ -288,8 +289,8 @@ const sharedStyles = `
     flex: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; padding: 4px 10px; position: relative;
   }
-  .comment-row .comment-value .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 11.5px; }
-  .comment-row .comment-value .en { font-size: 10px; margin-top: 1px; }
+  .comment-row .comment-value .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 14px; font-wieght: bold; }
+  .comment-row .comment-value .en { font-size: 14px; margin-top: 1px; font-weight: bold; }
   .comment-row .comment-value .empty { color: #d1d5db; }
   .comment-row .comment-value .signature-img {
     max-height: 32px; max-width: 120px; object-fit: contain; margin-top: 2px;
@@ -1613,12 +1614,12 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
       (s) => `
       <tr>
       <td class="subject-name">${s.nameEnglish} ${s.nameArabic ? `<span class="ar">${s.nameArabic}</span>` : ""}</td>
-      <td>${s.ca ?? "-"}</td>
-      <td>${s.exam ?? "-"}</td>
-      <td>${s.currentTermScore ?? "-"}</td>
-      ${showCascadeColumns ? `<td>${s.priorPeriodValue ?? "-"}</td>` : ""}
-      ${showCascadeColumns ? `<td>${s.combinedTotal ?? "-"}</td>` : ""}
-      <td>${s.cumulativeAverage ?? "-"}</td>
+      <td class="score">${s.ca ?? "-"}</td>
+      <td class="score">${s.exam ?? "-"}</td>
+      <td class="score">${s.currentTermScore ?? "-"}</td>
+      ${showCascadeColumns ? `<td class="score">${s.priorPeriodValue ?? "-"}</td>` : ""}
+      ${showCascadeColumns ? `<td class="score">${s.combinedTotal ?? "-"}</td>` : ""}
+      <td class="score">${s.cumulativeAverage ?? "-"}</td>
     </tr>`
     )
     .join("");
