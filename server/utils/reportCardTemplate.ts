@@ -941,6 +941,7 @@ const sharedStyles = `
       display: flex !important;
       flex-direction: column !important;
       justify-content: flex-start !important;
+      gap: 20px !important;
       page-break-inside: avoid !important;
       page-break-after: always !important;
     }
@@ -958,6 +959,11 @@ const sharedStyles = `
     .elem-sheet > .elem-top-grid,
     .elem-sheet > .elem-bottom-grid {
       gap: 0 !important;
+    }
+    .sheet > table.subjects,
+    .elem-sheet > .elem-subjects-box {
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
     }
     .sheet:last-child, .elem-sheet:last-child {
       page-break-after: auto !important;

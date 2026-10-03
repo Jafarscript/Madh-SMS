@@ -185,11 +185,12 @@ table th button {
     display: flex !important;
     flex-direction: column !important;
     justify-content: flex-start !important;
+    gap: 20px !important;
     page-break-inside: avoid !important;
     page-break-after: always !important;
   }
 
-  /* Keep report-card sections joined while preserving the page edge margin. */
+  /* Use one consistent gap between sections while preserving the page edge margin. */
   .sheet > .header,
   .sheet > .title-bar,
   .sheet > .info-section,
@@ -205,6 +206,13 @@ table th button {
   .elem-sheet > .elem-top-grid,
   .elem-sheet > .elem-bottom-grid {
     gap: 0 !important;
+  }
+
+  /* Allocate unused A4 height to score rows, not blank space below the card. */
+  .sheet > table.subjects,
+  .elem-sheet > .elem-subjects-box {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
   }
 }
 
