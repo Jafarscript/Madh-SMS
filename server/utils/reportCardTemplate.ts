@@ -1587,7 +1587,6 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
     principalComment,
     attendance,
     templateSettings,
-    grade,
     remark,
     remarkArabic,
   } = data;
@@ -1813,9 +1812,8 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
         <div class="bottom-box">
           <div class="row"><div class="label">النسبة المئوية<br/>PERCENTAGE</div><div class="val">${overallPercentage}%</div></div>
           <div class="row">
-            <div class="label">التقدير<br/>GRADE</div>
+            <div class="label">ملاحظات<br/>REMARKS</div>
             <div class="val">
-              ${grade ? `<span style="font-weight: 700; margin-right: 4px;">${grade} -</span>` : ""}
               ${displayRemark}
               ${displayRemarkArabic ? `<span class="arabic" style="margin-left: 6px; font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">${displayRemarkArabic}</span>` : ""}
             </div>

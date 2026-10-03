@@ -44,7 +44,6 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
     termAverages,
     attendance,
     templateSettings,
-    grade,
     remark,
     remarkArabic,
   } = data;
@@ -497,14 +496,11 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
               className="flex-1 flex items-center justify-center font-bold text-center"
               style={{ backgroundColor: "#fafafa" }}
             >
-              التقدير
+              ملاحظات
               <br />
-              GRADE
+              REMARKS
             </div>
             <div className="flex-1 flex items-center justify-center font-bold text-center gap-1.5 px-1">
-              {grade && (
-                <span className="font-extrabold text-gray-900 mr-0.5">{grade} -</span>
-              )}
               <span>{displayRemark}</span>
               {displayRemarkArabic && (
                 <span style={{ fontFamily: "Amiri, serif" }} dir="rtl">
