@@ -109,6 +109,11 @@ export interface ReportCardData {
 const sharedStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap');
 
+  @page {
+    size: A4 portrait;
+    margin: 6mm 7mm;
+  }
+
   * {
     box-sizing: border-box;
     margin: 0;
@@ -117,10 +122,7 @@ const sharedStyles = `
     print-color-adjust: exact !important;
   }
 
-  html, body {
-    width: 100%;
-    margin: 0;
-    padding: 0;
+  body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     color: #111827;
     background: #ffffff;
@@ -135,20 +137,14 @@ const sharedStyles = `
   .sheet {
     width: 100%;
     max-width: 100%;
-    min-height: 0;
-    box-sizing: border-box;
     margin: 0 auto;
     border: 4px solid var(--primary-color, #16a34a);
     border-radius: 2px;
-    padding: 12px 14px;
+    padding: 14px 16px;
     background: #ffffff;
     page-break-after: always;
-    page-break-inside: auto;
+    page-break-inside: avoid;
     position: relative;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 20px;
   }
   .sheet:last-child { page-break-after: auto; }
 
@@ -173,19 +169,6 @@ const sharedStyles = `
     text-align: center; font-size: 12px; font-weight: bold; color: var(--header-color, #1e3a8a);
     margin: 6px 0 10px 0; display: flex; justify-content: center; align-items: center; gap: 8px;
   }
-
-  .sheet > .header,
-  .sheet > .title-bar,
-  .sheet > .info-section,
-  .sheet > table.subjects,
-  .sheet > .bottom-section,
-  .elem-sheet > .elem-school-header,
-  .elem-sheet > .elem-banner,
-  .elem-sheet > .elem-top-grid,
-  .elem-sheet > .elem-subjects-box {
-    margin-bottom: 0;
-  }
-  .sheet > .title-bar { margin-top: 0; }
   .title-bar .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 13px; }
 
   .info-section { display: flex; border: 1px solid #000; margin-bottom: 10px; font-size: 10px; }
@@ -317,24 +300,15 @@ const sharedStyles = `
 
   /* Elementary Report Card Specific Styles matching ElementaryReportCardView.tsx */
   .elem-sheet {
-    border: 1.5px solid #000 !important;
-    padding: 10px 12px;
+    border: 1px solid #000 !important;
+    padding: 12px 14px;
     background: #ffffff;
     color: #030712;
     font-family: 'Inter', sans-serif;
     font-size: 11px;
     box-sizing: border-box;
-    width: 100% !important;
-    max-width: 100% !important;
-    min-height: 0;
+    max-width: 794px;
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 20px;
-    page-break-after: always;
-    page-break-inside: auto;
-    position: relative;
   }
   .elem-school-header {
     position: relative;
@@ -925,7 +899,6 @@ const sharedStyles = `
     margin: 2px auto 0;
     display: block;
   }
-
 `;
 
 const ordinalEn = ["1ST", "2ND", "3RD"];
@@ -1587,6 +1560,7 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
     principalComment,
     attendance,
     templateSettings,
+    grade,
     remark,
     remarkArabic,
   } = data;
@@ -1812,8 +1786,9 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
         <div class="bottom-box">
           <div class="row"><div class="label">النسبة المئوية<br/>PERCENTAGE</div><div class="val">${overallPercentage}%</div></div>
           <div class="row">
-            <div class="label">ملاحظات<br/>REMARKS</div>
+            <div class="label">التقدير<br/>GRADE</div>
             <div class="val">
+              ${grade ? `<span style="font-weight: 700; margin-right: 4px;">${grade} -</span>` : ""}
               ${displayRemark}
               ${displayRemarkArabic ? `<span class="arabic" style="margin-left: 6px; font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">${displayRemarkArabic}</span>` : ""}
             </div>

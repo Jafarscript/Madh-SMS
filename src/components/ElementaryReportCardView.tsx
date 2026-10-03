@@ -197,7 +197,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
   const displayRemarkArabic = data.remarkArabic || (!isEnrolled ? "لم يلتحق" : fallbackRemarkArabic);
 
   return (
-    <div className="max-w-[794px] w-full print:max-w-none print:w-full print:min-h-[285mm] print:m-0 print:p-3 mx-auto p-4 bg-white text-gray-950 border border-black shadow-sm font-sans text-xs select-none flex flex-col justify-between">
+    <div className="max-w-[794px] mx-auto p-4 bg-white text-gray-950 border border-black shadow-sm font-sans text-xs select-none">
       {/* Top School Header */}
       <div className="relative text-center pb-2 mb-2 border-b border-gray-300">
         <h1
