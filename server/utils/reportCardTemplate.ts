@@ -200,7 +200,7 @@ const sharedStyles = `
   table.subjects th { font-size: 10px; font-weight: bold; background: #fafafa; line-height: 1.2; }
   table.subjects td.subject-name { text-align: left; font-weight: 700;}
   table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 11px; }
-  table.subjects tr.total-row td { font-size: 16px; font-weight: bold; }
+  table.subjects tr.total-row td { font-size: 12px; font-weight: bold; }
   td.score {font-size: 14px; font-weight: bold;}
    
   .bottom-section { display: flex; margin-bottom: 10px; border: 1px solid #000; font-size: 10px; }
