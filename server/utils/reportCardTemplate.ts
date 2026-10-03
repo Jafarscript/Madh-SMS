@@ -1788,8 +1788,7 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
           <div class="row">
             <div class="label">التقدير<br/>GRADE</div>
             <div class="val">
-              ${grade ? `<span style="font-weight: 700; margin-right: 4px;">${grade} -</span>` : ""}
-              ${displayRemark}
+              ${displayRemark}-
               ${displayRemarkArabic ? `<span class="arabic" style="margin-left: 6px; font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">${displayRemarkArabic}</span>` : ""}
             </div>
           </div>
