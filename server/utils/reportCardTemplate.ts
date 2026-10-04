@@ -969,6 +969,49 @@ const sharedStyles = `
     margin: 2px auto 0;
     display: block;
   }
+
+  /* ---------- Density tiers for secondary report cards ----------
+     Applied only when a card has many subjects, so everything still fits on
+     one A4 page. Row padding / section heights shrink; score digits stay
+     12px+ and pure black so they remain readable on paper. */
+  .sheet.density-1 { --row-pad: 3px;   --score-fs: 13px;   --info-h: 28px; --att-pad: 2.5px; --cmt-h: 34px; --gap: 7px; }
+  .sheet.density-2 { --row-pad: 2px;   --score-fs: 12.5px; --info-h: 24px; --att-pad: 1.5px; --cmt-h: 30px; --gap: 5px; }
+  .sheet.density-3 { --row-pad: 1.5px; --score-fs: 12px;   --info-h: 21px; --att-pad: 1px;   --cmt-h: 26px; --gap: 4px; }
+  .sheet.density-4 { --row-pad: 1px;   --score-fs: 12px;   --info-h: 19px; --att-pad: 1px;   --cmt-h: 24px; --gap: 3px; zoom: 0.92; }
+
+  .sheet[class*="density-"] { padding: 10px 14px; }
+
+  /* header */
+  .sheet[class*="density-"] .header { margin-bottom: var(--gap); min-height: 50px; }
+  .sheet[class*="density-"] .header .logo,
+  .sheet[class*="density-"] .header .logo-placeholder { width: 50px; height: 50px; }
+  .sheet[class*="density-"] .header .school-name-ar { font-size: 20px; }
+  .sheet[class*="density-"] .title-bar { margin: var(--gap) 0; }
+
+  /* attendance + student info */
+  .sheet[class*="density-"] .info-section { margin-bottom: var(--gap); }
+  .sheet[class*="density-"] .attendance-row { padding: var(--att-pad) 6px; }
+  .sheet[class*="density-"] .student-info { display: flex; flex-direction: column; }
+  .sheet[class*="density-"] .student-info-row { height: auto; flex: 1; min-height: var(--info-h); }
+  .sheet[class*="density-"] .student-info-row .value { font-size: 12px; }
+
+  /* subjects table: the main saver */
+  .sheet[class*="density-"] table.subjects { margin-bottom: var(--gap); }
+  .sheet[class*="density-"] table.subjects th { padding: 2px 3px; font-size: 9.5px; }
+  .sheet[class*="density-"] table.subjects td { padding: var(--row-pad) 4px; line-height: 1.15; }
+  .sheet[class*="density-"] table.subjects td.score { font-size: var(--score-fs); color: #000; }
+  .sheet[class*="density-"] table.subjects tr { page-break-inside: avoid; }
+  .sheet[class*="density-"] table.subjects tr.total-row td { font-size: 11.5px; }
+
+  /* bottom + comments */
+  .sheet[class*="density-"] .bottom-section { margin-bottom: var(--gap); }
+  .sheet[class*="density-"] .bottom-box .row { height: var(--info-h); }
+  .sheet[class*="density-"] .term-averages-table td { padding: 2px 8px; }
+  .sheet[class*="density-"] .comment-row { min-height: var(--cmt-h); }
+  .sheet[class*="density-"] .comment-row .comment-value { padding: 2px 10px; }
+  .sheet[class*="density-"] .comment-row .comment-value .ar,
+  .sheet[class*="density-"] .comment-row .comment-value .en { font-size: 12px; }
+  .sheet[class*="density-"] .comment-row .comment-value .signature-img { max-height: 22px; }
 `;
 
 const ordinalEn = ["1ST", "2ND", "3RD"];
@@ -1681,6 +1724,20 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
 
   const showCascadeColumns = term.termNumber === 2 || term.termNumber === 3;
 
+  // Density tier: tighten spacing as the subject count grows so the card
+  // always stays on a single A4 page. <= 12 subjects renders exactly as before.
+  const subjectCount = subjects.length;
+  const density =
+    subjectCount <= 12
+      ? ""
+      : subjectCount <= 15
+      ? "density-1"
+      : subjectCount <= 18
+      ? "density-2"
+      : subjectCount <= 22
+      ? "density-3"
+      : "density-4";
+
   const subjectRows = subjects
     .map(
       (s) => `
@@ -1696,7 +1753,19 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
     )
     .join("");
 
-  const termAverageRows = termAverages
+  // Only show terms up to the one being printed, so a 2nd term card never
+  // includes 3rd term data in its term list or cumulative average.
+  const visibleTermAverages = (termAverages || []).filter(
+    (t) => t.termNumber <= term.termNumber
+  );
+  const validAvgs = visibleTermAverages
+    .map((t) => t.average)
+    .filter((v): v is number => v !== null && v !== undefined);
+  const safeCumulative = validAvgs.length
+    ? Math.round((validAvgs.reduce((a, b) => a + b, 0) / validAvgs.length) * 100) / 100
+    : null;
+
+  const termAverageRows = visibleTermAverages
     .map(
       (t) => `
       <tr class="term-row">
@@ -1723,7 +1792,7 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
   const nextResumptionVal = formatVal(attendance?.nextResumption);
 
   return `
-    <div class="sheet" style="--primary-color: ${primaryColor}; --header-color: ${headerColor};">
+    <div class="sheet ${density}" style="--primary-color: ${primaryColor}; --header-color: ${headerColor};">
       <div class="header">
         ${
           effectiveLogo
@@ -1851,7 +1920,7 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
               ${termAverageRows}
               <tr class="cumulative-row">
                 <td class="cum-label">CUMULATIVE AVERAGE</td>
-                <td class="cum-val">${data.cumulativeAverage ?? overallPercentage}</td>
+                <td class="cum-val">${safeCumulative ?? "-"}</td>
               </tr>
             </tbody>
           </table>
