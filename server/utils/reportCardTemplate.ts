@@ -199,7 +199,7 @@ const sharedStyles = `
   table.subjects th, table.subjects td { border: 1px solid #000; padding: 4.5px 5px; text-align: center; }
   table.subjects th { font-size: 10px; font-weight: bold; background: #fafafa; line-height: 1.2; }
   table.subjects td.subject-name { text-align: left; font-weight: 700;}
-  table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 11px; }
+  table.subjects td.subject-name .ar { font-family: 'Amiri', 'Traditional Arabic', serif; float: right; font-size: 12px; }
   table.subjects tr.total-row td { font-size: 12px; font-weight: bold; }
   td.score {font-size: 14px; font-weight: bold;}
    
@@ -974,9 +974,9 @@ const sharedStyles = `
      Applied only when a card has many subjects, so everything still fits on
      one A4 page. Row padding / section heights shrink; score digits stay
      12px+ and pure black so they remain readable on paper. */
-  .sheet.density-1 { --row-pad: 5px;   --score-fs: 13px;   --info-h: 30px; --att-pad: 3px; --cmt-h: 38px; --gap: 7px; }
-  .sheet.density-2 { --row-pad: 3px;   --score-fs: 12.5px; --info-h: 28px; --att-pad: 2.5px; --cmt-h: 34px; --gap: 5px; }
-  .sheet.density-3 { --row-pad: 2.5px; --score-fs: 12px;   --info-h: 24px; --att-pad: 2px;   --cmt-h: 30px; --gap: 4px; }
+  .sheet.density-1 { --row-pad: 10px;   --score-fs: 13px;   --info-h: 30px; --att-pad: 10px; --cmt-h: 45px; --gap: 7px; }
+  .sheet.density-2 { --row-pad: 8px;   --score-fs: 12.5px; --info-h: 28px; --att-pad: 8px; --cmt-h: 40px; --gap: 5px; }
+  .sheet.density-3 { --row-pad: 5px; --score-fs: 12px;   --info-h: 24px; --att-pad: 6px;   --cmt-h: 40px; --gap: 4px; }
   .sheet.density-4 { --row-pad: 1.5px;   --score-fs: 12px;   --info-h: 21px; --att-pad: 1.5px;   --cmt-h: 24px; --gap: 3px; zoom: 0.92; }
 
   .sheet[class*="density-"] { padding: 10px 14px; }
@@ -1006,7 +1006,7 @@ const sharedStyles = `
   /* bottom + comments */
   .sheet[class*="density-"] .bottom-section { margin-bottom: var(--gap); }
   .sheet[class*="density-"] .bottom-box .row { height: var(--info-h); }
-  .sheet[class*="density-"] .term-averages-table td { padding: 2px 8px; }
+  .sheet[class*="density-"] .term-averages-table td { padding: 8px 8px; }
   .sheet[class*="density-"] .comment-row { min-height: var(--cmt-h); }
   .sheet[class*="density-"] .comment-row .comment-value { padding: 2px 10px; }
   .sheet[class*="density-"] .comment-row .comment-value .ar,
