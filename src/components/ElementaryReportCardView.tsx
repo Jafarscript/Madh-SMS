@@ -197,7 +197,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
   const displayRemarkArabic = data.remarkArabic || (!isEnrolled ? "لم يلتحق" : fallbackRemarkArabic);
 
   return (
-    <div className="max-w-[794px] min-h-[1000px] mx-auto p-4 md:p-5 bg-white text-gray-950 border border-black shadow-sm font-sans text-xs select-none flex flex-col justify-between">
+    <div className="max-w-198.5 min-h-250 mx-auto p-4 md:p-5 bg-white text-gray-950 border border-black shadow-sm font-sans text-xs select-none flex flex-col justify-between">
       {/* Top School Header */}
       <div className="relative text-center pb-2 mb-2 border-b border-gray-300">
         <h1
@@ -687,7 +687,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
           </div>
 
           {/* Teacher's comment */}
-          <div className="p-2 border-b border-black flex flex-col justify-between min-h-[55px]">
+          <div className="p-2 border-b border-black flex flex-col justify-between min-h-13.75">
             <div
               className="text-right font-bold text-[9.5px]"
               style={{ fontFamily: "'Amiri', serif" }}
@@ -717,7 +717,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
           </div>
 
           {/* Principal's comment */}
-          <div className="p-2 flex flex-col justify-between min-h-[55px] relative">
+          <div className="p-2 flex flex-col justify-between min-h-13.75 relative">
             <div
               className="text-right font-bold text-[9.5px]"
               style={{ fontFamily: "'Amiri', serif" }}
@@ -743,7 +743,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
                 <img
                   src={templateSettings.principalSignatureBase64}
                   alt="Principal Signature"
-                  className="max-h-6 max-w-[85px] object-contain mx-auto mt-1"
+                  className="max-h-6 max-w-21.25 object-contain mx-auto mt-1"
                 />
               )}
             </div>
