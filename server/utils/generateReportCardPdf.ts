@@ -5,12 +5,25 @@ const launchOptions = {
   args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--single-process", "--no-zygote"],
 };
 
+let cachedBrowser: any = null;
+
+const getBrowser = async () => {
+  if (cachedBrowser && cachedBrowser.connected) {
+    return cachedBrowser;
+  }
+  const puppeteer = await import("puppeteer");
+  cachedBrowser = await puppeteer.default.launch(launchOptions);
+  cachedBrowser.on("disconnected", () => {
+    cachedBrowser = null;
+  });
+  return cachedBrowser;
+};
+
 export const generateSingleReportCardPdf = async (data: ReportCardData): Promise<Buffer | null> => {
   try {
-    const puppeteer = await import("puppeteer");
-    const browser = await puppeteer.default.launch(launchOptions);
+    const browser = await getBrowser();
+    const page = await browser.newPage();
     try {
-      const page = await browser.newPage();
       const html = buildSingleReportCardHtml(data);
       
       await page.setContent(html, { waitUntil: "load" });
@@ -23,7 +36,7 @@ export const generateSingleReportCardPdf = async (data: ReportCardData): Promise
       });
       return Buffer.from(pdfBuffer);
     } finally {
-      await browser.close();
+      await page.close();
     }
   } catch (err) {
     console.warn("Puppeteer PDF generation not available in current environment, falling back to HTML print rendering:", (err as Error).message);
@@ -33,10 +46,9 @@ export const generateSingleReportCardPdf = async (data: ReportCardData): Promise
 
 export const generateBulkReportCardPdf = async (dataList: ReportCardData[]): Promise<Buffer | null> => {
   try {
-    const puppeteer = await import("puppeteer");
-    const browser = await puppeteer.default.launch(launchOptions);
+    const browser = await getBrowser();
+    const page = await browser.newPage();
     try {
-      const page = await browser.newPage();
       const html = buildBulkReportCardHtml(dataList);
       
       await page.setContent(html, { waitUntil: "load" });
@@ -49,7 +61,7 @@ export const generateBulkReportCardPdf = async (dataList: ReportCardData[]): Pro
       });
       return Buffer.from(pdfBuffer);
     } finally {
-      await browser.close();
+      await page.close();
     }
   } catch (err) {
     console.warn("Puppeteer PDF generation not available in current environment, falling back to HTML print rendering:", (err as Error).message);

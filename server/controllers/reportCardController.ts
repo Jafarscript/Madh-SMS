@@ -17,6 +17,20 @@ import User from "../models/User";
 import { isElementaryClass, ensureElementarySubjectsForClass } from "./classController";
 import { ELEMENTARY_FIXED_SUBJECTS } from "../constants/elementarySubjects";
 
+export interface ReportCardSharedContext {
+  positionMap?: Map<string, number>;
+  totalStudentsInClass?: number;
+  allTermsInSession?: any[];
+  priorTerms?: any[];
+  gradingScale?: any;
+  subjects?: any[];
+  currentTerm?: any;
+  attSettingClass?: any;
+  attSettingBranch?: any;
+  attSettingGlobal?: any;
+  templateSetting?: any;
+}
+
 // Returns the full report card data object, or null if the student/term
 // can't be found. No `req`/`res` here on purpose — this is a plain function
 // so both getReportCard (JSON) and the PDF controllers can reuse it.
@@ -24,6 +38,7 @@ export const buildReportCardData = async (
   studentId: string,
   termId: string,
   scaleId?: string,
+  context?: ReportCardSharedContext,
 ) => {
   if (!studentId || !termId) {
     return null;
@@ -32,18 +47,20 @@ export const buildReportCardData = async (
   const student = await Student.findById(studentId).populate("class");
   if (!student) return null;
 
-  const currentTerm = await Term.findById(termId);
+  const currentTerm = context?.currentTerm || (await Term.findById(termId));
   if (!currentTerm) return null;
 
   // every term in the same session up to and including the current one,
   // in chronological order — this order matters now, since the cascade
   // must fold term 1 → term 2 → term 3, not just average them all at once
-  const priorTerms = await Term.find({
-    session: currentTerm.session,
-    termNumber: { $lte: currentTerm.termNumber },
-  }).sort({ termNumber: 1 });
+  const priorTerms =
+    context?.priorTerms ||
+    (await Term.find({
+      session: currentTerm.session,
+      termNumber: { $lte: currentTerm.termNumber },
+    }).sort({ termNumber: 1 }));
 
-  const priorTermIds = priorTerms.map((t) => t._id);
+  const priorTermIds = priorTerms.map((t: any) => t._id);
 
   let classDoc = student.class as any;
   if (!classDoc || !classDoc.name) {
@@ -65,16 +82,18 @@ export const buildReportCardData = async (
     isElementaryClass(className, rawCategory);
   const classCategory: "secondary" | "elementary" = isElementary ? "elementary" : "secondary";
 
-  if (isElementary && classId) {
+  if (isElementary && classId && !context?.subjects) {
     await ensureElementarySubjectsForClass(classId.toString());
   }
 
-  const subjects = await Subject.find({
-    class: classId,
-  }).sort({
-    order: 1,
-    nameEnglish: 1,
-  });
+  const subjects =
+    context?.subjects ||
+    (await Subject.find({
+      class: classId,
+    }).sort({
+      order: 1,
+      nameEnglish: 1,
+    }));
 
   const scoresBySubject = await Score.find({
     student: studentId,
@@ -93,8 +112,8 @@ export const buildReportCardData = async (
     scoresBySubjectMap.get(subjectKey)!.set(sc.term.toString(), sc.total);
   });
 
-  let gradingScale: any = null;
-  if (scaleId && scaleId !== "undefined" && scaleId !== "null" && mongoose.Types.ObjectId.isValid(scaleId)) {
+  let gradingScale: any = context?.gradingScale || null;
+  if (!gradingScale && scaleId && scaleId !== "undefined" && scaleId !== "null" && mongoose.Types.ObjectId.isValid(scaleId)) {
     try {
       gradingScale = await GradingScale.findById(scaleId);
     } catch {
@@ -257,41 +276,47 @@ const overallPercentage =
   totalSubjectsCount > 0 ? overallTotal / totalSubjectsCount : 0;
 
   const classIdStr = classId ? classId.toString() : "";
-  const positionMap = await getClassCumulativePositions(classIdStr, termId);
-  const position = positionMap.get(studentId) ?? null;
+  const position = context?.positionMap
+    ? (context.positionMap.get(studentId) ?? null)
+    : ((await getClassCumulativePositions(classIdStr, termId)).get(studentId) ?? null);
 
-  const totalStudentsInClass = await Student.countDocuments({ class: classId });
+  const totalStudentsInClass =
+    context?.totalStudentsInClass !== undefined
+      ? context.totalStudentsInClass
+      : await Student.countDocuments({ class: classId });
 
   const remarkDoc = await ReportCardRemark.findOne({
-  student: studentId,
-  term: termId,
-});
+    student: studentId,
+    term: termId,
+  });
 
-const classTeacherComment =
-  remarkDoc && (remarkDoc.classTeacherCommentEn || remarkDoc.classTeacherCommentAr || remarkDoc.classTeacherCommentId)
-    ? {
-        id: remarkDoc.classTeacherCommentId || "",
-        en: remarkDoc.classTeacherCommentEn || "",
-        ar: remarkDoc.classTeacherCommentAr || "",
-      }
-    : null;
+  const classTeacherComment =
+    remarkDoc && (remarkDoc.classTeacherCommentEn || remarkDoc.classTeacherCommentAr || remarkDoc.classTeacherCommentId)
+      ? {
+          id: remarkDoc.classTeacherCommentId || "",
+          en: remarkDoc.classTeacherCommentEn || "",
+          ar: remarkDoc.classTeacherCommentAr || "",
+        }
+      : null;
 
-const principalComment =
-  remarkDoc && (remarkDoc.principalCommentEn || remarkDoc.principalCommentAr || remarkDoc.principalCommentId)
-    ? {
-        id: remarkDoc.principalCommentId || "",
-        en: remarkDoc.principalCommentEn || "",
-        ar: remarkDoc.principalCommentAr || "",
-      }
-    : null;
+  const principalComment =
+    remarkDoc && (remarkDoc.principalCommentEn || remarkDoc.principalCommentAr || remarkDoc.principalCommentId)
+      ? {
+          id: remarkDoc.principalCommentId || "",
+          en: remarkDoc.principalCommentEn || "",
+          ar: remarkDoc.principalCommentAr || "",
+        }
+      : null;
 
-  const allTermsInSession = await Term.find({
-    session: currentTerm.session,
-  }).sort({ termNumber: 1 });
+  const allTermsInSession =
+    context?.allTermsInSession ||
+    (await Term.find({
+      session: currentTerm.session,
+    }).sort({ termNumber: 1 }));
 
   const termAverages = [1, 2, 3].map((termNum) => {
     const isEnrolled = studentEnrolledTerms.includes(termNum);
-    const termDoc = allTermsInSession.find((t) => t.termNumber === termNum);
+    const termDoc = allTermsInSession.find((t: any) => t.termNumber === termNum);
 
     if (!isEnrolled || termNum > currentTerm.termNumber || !termDoc) {
       return {
@@ -303,7 +328,7 @@ const principalComment =
 
     const termScoresThisTerm: number[] = [];
 
-    subjects.forEach((subject) => {
+    subjects.forEach((subject: any) => {
       const subjectKey = subject._id.toString();
       const termScoreMap = scoresBySubjectMap.get(subjectKey) || new Map();
       const rawScoreInTerm = termScoreMap.get(termDoc._id.toString());
@@ -334,24 +359,32 @@ const principalComment =
       : (isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0);
 
   const classBranchId = (student.class as any)?.branch;
-  const [attSettingClass, attSettingBranch, attSettingGlobal, attDoc, templateSetting] =
-    await Promise.all([
-      AttendanceSetting.findOne({ class: classId, term: termId }),
-      classBranchId
-        ? AttendanceSetting.findOne({
+  const attSettingClass =
+    context?.attSettingClass !== undefined
+      ? context.attSettingClass
+      : await AttendanceSetting.findOne({ class: classId, term: termId });
+  const attSettingBranch =
+    context?.attSettingBranch !== undefined
+      ? context.attSettingBranch
+      : classBranchId
+        ? await AttendanceSetting.findOne({
             branch: classBranchId,
             term: termId,
             class: { $exists: false },
           })
-        : null,
-      AttendanceSetting.findOne({
-        term: termId,
-        class: { $exists: false },
-        branch: { $exists: false },
-      }),
-      Attendance.findOne({ student: studentId, term: termId }),
-      ReportCardSetting.findOne(),
-    ]);
+        : null;
+  const attSettingGlobal =
+    context?.attSettingGlobal !== undefined
+      ? context.attSettingGlobal
+      : await AttendanceSetting.findOne({
+          term: termId,
+          class: { $exists: false },
+          branch: { $exists: false },
+        });
+  const [attDoc, templateSetting] = await Promise.all([
+    Attendance.findOne({ student: studentId, term: termId }),
+    context?.templateSetting !== undefined ? Promise.resolve(context.templateSetting) : ReportCardSetting.findOne(),
+  ]);
 
   const timesSchoolOpened =
     (currentTerm as any)?.timesSchoolOpened ??

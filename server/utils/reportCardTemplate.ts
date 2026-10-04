@@ -289,7 +289,7 @@ const sharedStyles = `
     flex: 2; display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; padding: 4px 10px; position: relative;
   }
-  .comment-row .comment-value .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 14px; font-wieght: bold; }
+  .comment-row .comment-value .ar { font-family: 'Amiri', 'Traditional Arabic', serif; font-size: 14px; font-weight: bold; }
   .comment-row .comment-value .en { font-size: 14px; margin-top: 1px; font-weight: bold; }
   .comment-row .comment-value .empty { color: #d1d5db; }
   .comment-row .comment-value .signature-img {
@@ -302,14 +302,19 @@ const sharedStyles = `
   /* Elementary Report Card Specific Styles matching ElementaryReportCardView.tsx */
   .elem-sheet {
     border: 1px solid #000 !important;
-    padding: 12px 14px;
+    padding: 14px 16px;
     background: #ffffff;
     color: #030712;
     font-family: 'Inter', sans-serif;
-    font-size: 11px;
+    font-size: 10.5px;
     box-sizing: border-box;
     max-width: 794px;
     margin: 0 auto;
+    min-height: 252mm;
+    max-height: 278mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
   }
   .elem-school-header {
     position: relative;
@@ -320,7 +325,7 @@ const sharedStyles = `
   }
   .elem-school-header .school-name-ar {
     font-family: 'Amiri', serif;
-    font-size: 24px;
+    font-size: 26px;
     font-weight: bold;
     color: #030712;
     line-height: 1.2;
@@ -329,14 +334,14 @@ const sharedStyles = `
   }
   .elem-school-header .school-city-ar {
     font-family: 'Amiri', serif;
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: bold;
     color: #1f2937;
     margin-top: 2px;
     direction: rtl;
   }
   .elem-school-header .school-name-en {
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: bold;
     letter-spacing: 0.5px;
     color: #111827;
@@ -344,7 +349,7 @@ const sharedStyles = `
     text-transform: uppercase;
   }
   .elem-school-header .school-charity-en {
-    font-size: 10px;
+    font-size: 10.5px;
     letter-spacing: 0.8px;
     color: #374151;
     font-weight: 600;
@@ -352,7 +357,7 @@ const sharedStyles = `
     margin-top: 1px;
   }
   .elem-school-header .school-address-en {
-    font-size: 8.5px;
+    font-size: 9px;
     color: #4b5563;
     margin-top: 2px;
     line-height: 1.35;
@@ -361,16 +366,16 @@ const sharedStyles = `
     position: absolute;
     right: 0;
     top: 0;
-    width: 68px;
-    height: 68px;
+    width: 72px;
+    height: 72px;
     object-fit: contain;
   }
   .elem-school-header .elem-logo-placeholder {
     position: absolute;
     right: 0;
     top: 0;
-    width: 64px;
-    height: 64px;
+    width: 68px;
+    height: 68px;
     border: 1px dashed #9ca3af;
     display: flex;
     align-items: center;
@@ -385,11 +390,11 @@ const sharedStyles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 16px;
+    padding: 5px 18px;
     font-weight: bold;
-    font-size: 13px;
+    font-size: 13.5px;
     letter-spacing: 0.5px;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     border: 1px solid #000;
   }
   .elem-banner .banner-en {
@@ -397,7 +402,7 @@ const sharedStyles = `
   }
   .elem-banner .banner-ar {
     font-family: 'Amiri', serif;
-    font-size: 16px;
+    font-size: 16.5px;
     direction: rtl;
   }
 
@@ -405,19 +410,19 @@ const sharedStyles = `
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 8px;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
   .attendance-box {
     border: 1px solid #000;
   }
   .attendance-table {
     width: 100%;
-    font-size: 9.5px;
+    font-size: 10px;
     text-align: center;
     border-collapse: collapse;
   }
   .attendance-table th, .attendance-table td {
-    padding: 2.2px 5px;
+    padding: 3.5px 5px;
   }
   .att-head-row {
     border-bottom: 1px solid #000;
@@ -436,7 +441,7 @@ const sharedStyles = `
   .att-th-right {
     text-align: right;
     width: 36%;
-    font-size: 11px;
+    font-size: 11.5px;
     font-family: 'Amiri', serif;
     direction: rtl;
   }
@@ -452,29 +457,32 @@ const sharedStyles = `
   .att-td-mid {
     border-left: 1px solid #000;
     border-right: 1px solid #000;
-    font-weight: 600;
+    font-weight: bold;
+    font-size: 11px;
     text-align: center;
+    color: #000;
   }
   .att-td-right {
     text-align: right;
     font-family: 'Amiri', serif;
     direction: rtl;
+    font-size: 11px;
   }
 
   .elem-meta-col {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    gap: 4px;
+    gap: 6px;
   }
   .elem-info-table {
     width: 100%;
-    font-size: 10px;
+    font-size: 10.5px;
     border: 1px solid #000;
     border-collapse: collapse;
   }
   .elem-info-table td {
-    padding: 2.5px 6px;
+    padding: 4px 6px;
     font-weight: bold;
   }
   .elem-info-table tr.border-b {
@@ -482,34 +490,47 @@ const sharedStyles = `
   }
   .info-td-label {
     text-align: left;
+    font-weight: bold;
+    color: #374151;
   }
   .info-td-val {
     text-align: center;
+    font-weight: bold;
+    font-size: 13px;
+    color: #000;
   }
   .info-td-val.name-val {
-    font-size: 12px;
+    font-size: 14.5px;
+    font-weight: bold;
     font-family: 'Amiri', serif;
+    color: #000;
+  }
+  .info-td-val.class-val {
+    font-size: 13.5px;
+    font-weight: bold;
+    color: #000;
   }
   .term-ar-val {
     font-family: 'Amiri', serif;
     margin-left: 6px;
     margin-right: 6px;
+    font-weight: bold;
   }
   .info-td-ar {
     text-align: right;
     font-family: 'Amiri', serif;
-    direction: rtl;
+    font-weight: bold;
   }
 
   .elem-mini-aff-table {
     width: 100%;
-    font-size: 9.5px;
+    font-size: 10px;
     text-align: center;
     border: 1px solid #000;
     border-collapse: collapse;
   }
   .elem-mini-aff-table th, .elem-mini-aff-table td {
-    padding: 2px 4px;
+    padding: 3px 4px;
   }
   .elem-mini-aff-table thead tr {
     background: #f1f5f9;
@@ -522,7 +543,7 @@ const sharedStyles = `
     padding-left: 6px;
   }
   .mini-aff-th-num {
-    width: 20px;
+    width: 22px;
     border-right: 1px solid #000;
     font-weight: bold;
   }
@@ -550,11 +571,15 @@ const sharedStyles = `
   .elem-subjects-box {
     border: 1px solid #000;
     overflow: hidden;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
   }
   .elem-sub-table {
     width: 100%;
-    font-size: 10.5px;
+    height: 100%;
+    font-size: 11px;
     border-collapse: collapse;
   }
   .sub-head-row {
@@ -564,7 +589,7 @@ const sharedStyles = `
     font-weight: bold;
   }
   .sub-th {
-    padding: 3.5px 3px;
+    padding: 6px 4px;
     border-right: 1px solid #000;
   }
   .sub-th.grade-col { width: 14%; }
@@ -573,14 +598,14 @@ const sharedStyles = `
   .sub-th.ca-col { width: 16%; }
   .sub-th .ar-lbl {
     font-family: 'Amiri', serif;
-    font-size: 11px;
+    font-size: 11.5px;
   }
   .sub-th .en-lbl {
-    font-size: 9px;
+    font-size: 9.5px;
     font-weight: 600;
   }
   .sub-th-subject {
-    padding: 3.5px 10px;
+    padding: 6px 10px;
     text-align: right;
   }
   .sub-head-flex {
@@ -594,42 +619,61 @@ const sharedStyles = `
   }
   .sub-head-ar {
     font-family: 'Amiri', serif;
-    font-size: 13px;
+    font-size: 13.5px;
     direction: rtl;
   }
   .sub-data-row {
     border-bottom: 1px solid #000;
     text-align: center;
-    font-weight: 500;
+    font-weight: bold;
   }
   .sub-td {
-    padding: 3px 3px;
+    padding: 2.5px 3px;
     border-right: 1px solid #000;
+    font-weight: bold;
+    font-size: 12px;
+    color: #000;
   }
   .sub-td.grade-val {
-    font-weight: 600;
-    color: #1f2937;
+    font-weight: bold;
+    font-size: 12px;
+    color: #111827;
   }
   .sub-td.total-val {
-    font-weight: 600;
+    font-weight: bold;
+    font-size: 12.5px;
+    color: #000;
+  }
+  .sub-td.exam-val {
+    font-weight: bold;
+    font-size: 12px;
+    color: #000;
+  }
+  .sub-td.ca-val {
+    font-weight: bold;
+    font-size: 12px;
+    color: #000;
   }
   .sub-td-name {
-    padding: 3px 10px;
+    padding: 2.5px 8px;
     text-align: right;
   }
   .sub-name-flex {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-weight: 600;
+    font-weight: bold;
   }
   .sub-name-en {
     letter-spacing: 0.5px;
     text-transform: uppercase;
+    font-weight: bold;
+    font-size: 11.5px;
   }
   .sub-name-ar {
     font-family: 'Amiri', serif;
-    font-size: 12.5px;
+    font-size: 13.5px;
+    font-weight: bold;
     direction: rtl;
   }
   .sub-total-row {
@@ -637,31 +681,38 @@ const sharedStyles = `
     background: #ffffff;
     font-weight: bold;
     text-align: center;
+    height: 38px;
   }
   .sub-td.total-result {
     color: #be123c;
     font-weight: bold;
+    font-size: 14px;
   }
   .sub-td.total-sum {
     font-weight: bold;
+    font-size: 14.5px;
+    color: #000;
   }
   .total-label-cell {
     font-weight: bold;
   }
   .total-en {
     letter-spacing: 0.5px;
+    font-weight: bold;
+    font-size: 11.5px;
   }
   .total-ar {
     font-family: 'Amiri', serif;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: bold;
     direction: rtl;
   }
 
   .elem-bottom-grid {
     display: grid;
     grid-template-columns: 5fr 2fr 5fr;
-    gap: 6px;
-    font-size: 9.5px;
+    gap: 8px;
+    font-size: 10px;
   }
   .elem-skills-col {
     border: 1px solid #000;
@@ -672,7 +723,7 @@ const sharedStyles = `
   }
   .elem-psych-table {
     width: 100%;
-    font-size: 9px;
+    font-size: 9.5px;
     text-align: center;
     border-collapse: collapse;
   }
@@ -682,8 +733,8 @@ const sharedStyles = `
     font-weight: bold;
   }
   .psych-top-head th {
-    padding: 2.5px 2px;
-    font-size: 9.5px;
+    padding: 4px 2px;
+    font-size: 10px;
   }
   .psych-top-head .ar {
     font-family: 'Amiri', serif;
@@ -694,12 +745,12 @@ const sharedStyles = `
     font-weight: bold;
   }
   .psych-sub-head th.p-num {
-    width: 18px;
-    padding: 2px 0;
+    width: 20px;
+    padding: 3px 0;
     border-right: 1px solid #000;
   }
   .psych-sub-head th.p-title {
-    padding: 2px 4px;
+    padding: 3px 4px;
     text-align: right;
   }
   .elem-psych-table tbody tr {
@@ -709,13 +760,14 @@ const sharedStyles = `
     border-bottom: none;
   }
   .p-check {
-    padding: 2px 0;
+    padding: 3.5px 0;
     border-right: 1px solid #000;
     font-weight: bold;
     color: #1e3a8a;
+    font-size: 11px;
   }
   .p-label-cell {
-    padding: 2px 4px;
+    padding: 3.5px 5px;
     text-align: right;
   }
   .p-label-flex {
@@ -724,19 +776,19 @@ const sharedStyles = `
     align-items: center;
   }
   .p-en {
-    font-size: 8px;
+    font-size: 8.5px;
     color: #374151;
   }
   .p-ar {
     font-family: 'Amiri', serif;
     font-weight: 600;
-    font-size: 9.5px;
+    font-size: 10.5px;
     direction: rtl;
   }
 
   .elem-seal-col {
     border: 1px solid #000;
-    padding: 3px;
+    padding: 5px 4px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -745,11 +797,11 @@ const sharedStyles = `
     background: #ffffff;
   }
   .scale-list {
-    font-size: 8.5px;
+    font-size: 9px;
     font-weight: bold;
-    line-height: 1.45;
+    line-height: 1.55;
     border-bottom: 1px solid #d1d5db;
-    padding-bottom: 3px;
+    padding-bottom: 4px;
     width: 100%;
     text-align: left;
     padding-left: 3px;
@@ -758,13 +810,13 @@ const sharedStyles = `
     margin: 3px 0;
   }
   .seal-container .stamp-img {
-    max-height: 60px;
-    max-width: 60px;
+    max-height: 65px;
+    max-width: 65px;
     object-fit: contain;
   }
   .official-seal-svg {
-    width: 60px;
-    height: 60px;
+    width: 68px;
+    height: 68px;
     margin: 0 auto;
     display: block;
   }
@@ -777,7 +829,7 @@ const sharedStyles = `
   }
   .sum-grid-box {
     border-bottom: 1px solid #000;
-    font-size: 9px;
+    font-size: 9.5px;
     font-weight: 600;
   }
   .sum-grid-row {
@@ -788,7 +840,7 @@ const sharedStyles = `
     border-bottom: 1px solid #000;
   }
   .sum-cell {
-    padding: 2px 4px;
+    padding: 3.5px 5px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -797,74 +849,77 @@ const sharedStyles = `
     border-right: 1px solid #000;
   }
   .sum-cell .sum-val {
-    font-size: 10.5px;
+    font-size: 12.5px;
+    font-weight: bold;
+    color: #000;
   }
   .sum-cell .sum-val.text-rose {
     color: #be123c;
+    font-weight: bold;
   }
   .sum-cell .ar {
     font-family: 'Amiri', serif;
-    direction: rtl;
   }
 
   .teacher-comment-box {
-    padding: 3.5px 4px;
+    padding: 4px 6px;
     border-bottom: 1px solid #000;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 42px;
+    min-height: 46px;
   }
   .comment-title-ar {
     text-align: right;
     font-weight: bold;
-    font-size: 9px;
+    font-size: 9.5px;
     font-family: 'Amiri', serif;
-    direction: rtl;
   }
   .comment-title-en {
-    font-weight: normal;
+    font-weight: bold;
     font-family: 'Inter', sans-serif;
-    font-size: 8px;
+    font-size: 8.5px;
     direction: ltr;
   }
   .comment-body {
     text-align: center;
     padding: 2px 0;
-    font-weight: 500;
-    font-size: 8.5px;
-    color: #1f2937;
+    font-weight: bold;
+    font-size: 10px;
+    color: #111827;
   }
   .comment-ar {
     font-family: 'Amiri', serif;
-    font-size: 9.5px;
+    font-size: 11.5px;
+    font-weight: bold;
   }
   .comment-placeholder {
     color: #6b7280;
+    font-weight: bold;
   }
   .sig-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 8px;
+    font-size: 8.5px;
     color: #374151;
   }
   .sig-row .ar {
     font-family: 'Amiri', serif;
-    direction: rtl;
   }
 
   .principal-comment-box {
-    padding: 3.5px 4px;
+    padding: 4px 6px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    min-height: 42px;
+    min-height: 46px;
     position: relative;
   }
   .princ-prompt {
-    font-size: 8.5px;
+    font-size: 9px;
     color: #374151;
+    font-weight: bold;
   }
   .princ-prompt .ar-line {
     display: flex;
@@ -874,28 +929,32 @@ const sharedStyles = `
   .princ-prompt .ar-line .ar {
     font-family: 'Amiri', serif;
     direction: rtl;
+    font-weight: bold;
   }
   .princ-prompt .en-line {
     text-align: left;
     margin-top: 1px;
+    font-weight: bold;
   }
   .princ-body {
     text-align: center;
-    padding: 1px 0;
+    padding: 2px 0;
+    font-weight: bold;
   }
   .princ-text {
-    font-size: 8px;
-    font-weight: 500;
+    font-size: 10px;
+    font-weight: bold;
     color: #111827;
   }
   .princ-text .ar {
     font-family: 'Amiri', serif;
     margin: 0 4px;
-    font-size: 9px;
+    font-size: 11.5px;
+    font-weight: bold;
   }
   .princ-sig-img {
-    max-height: 20px;
-    max-width: 80px;
+    max-height: 25px;
+    max-width: 90px;
     object-fit: contain;
     margin: 2px auto 0;
     display: block;
@@ -1175,37 +1234,37 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
             <tbody>
               <tr>
                 <td class="att-td-left">No. of times school opened</td>
-                <td class="att-td-mid">${timesOpened || "-"}</td>
+                <td class="att-td-mid"><strong>${timesOpened || "-"}</strong></td>
                 <td class="att-td-right">عدد أيام الدوام</td>
               </tr>
               <tr>
                 <td class="att-td-left">No. of times present</td>
-                <td class="att-td-mid">${timesPresent || "-"}</td>
+                <td class="att-td-mid"><strong>${timesPresent || "-"}</strong></td>
                 <td class="att-td-right">نسبة الحضور</td>
               </tr>
               <tr>
                 <td class="att-td-left">No. of times absent</td>
-                <td class="att-td-mid">${timesAbsent || "-"}</td>
+                <td class="att-td-mid"><strong>${timesAbsent || "-"}</strong></td>
                 <td class="att-td-right">نسبة الغياب</td>
               </tr>
               <tr>
                 <td class="att-td-left">No. of Students in the class</td>
-                <td class="att-td-mid">${totalStudentsInClass || "-"}</td>
+                <td class="att-td-mid"><strong>${totalStudentsInClass || "-"}</strong></td>
                 <td class="att-td-right">عدد الطلاب في الصف</td>
               </tr>
               <tr>
                 <td class="att-td-left">Date School resumed</td>
-                <td class="att-td-mid">${dateResumed || "-"}</td>
+                <td class="att-td-mid"><strong>${dateResumed || "-"}</strong></td>
                 <td class="att-td-right">بدء الدراسة</td>
               </tr>
               <tr>
                 <td class="att-td-left">Date School closes</td>
-                <td class="att-td-mid">${dateClosed || "-"}</td>
+                <td class="att-td-mid"><strong>${dateClosed || "-"}</strong></td>
                 <td class="att-td-right">ختم الدراسة</td>
               </tr>
               <tr>
                 <td class="att-td-left">Next resumption</td>
-                <td class="att-td-mid">${nextResumption || "-"}</td>
+                <td class="att-td-mid"><strong>${nextResumption || "-"}</strong></td>
                 <td class="att-td-right">العودة إلى الدراسة</td>
               </tr>
             </tbody>
@@ -1219,14 +1278,14 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
             <tbody>
               <tr class="border-b">
                 <td class="info-td-label" style="width: 22%;">Session:</td>
-                <td class="info-td-val" style="width: 56%;">${term.session}</td>
+                <td class="info-td-val" style="width: 56%;"><strong>${term.session}</strong></td>
                 <td class="info-td-ar" style="width: 22%;">:عام</td>
               </tr>
               <tr>
                 <td class="info-td-label">Term:</td>
                 <td class="info-td-val">
-                  <span>${ordinalEn[term.termNumber - 1] || "1st"} Term</span>
-                  <span class="term-ar-val">${ordinalAr[term.termNumber - 1] || "الأولى"}</span>
+                  <strong><span>${ordinalEn[term.termNumber - 1] || "1st"} Term</span>
+                  <span class="term-ar-val">${ordinalAr[term.termNumber - 1] || "الأولى"}</span></strong>
                 </td>
                 <td class="info-td-ar">:الفترة</td>
               </tr>
@@ -1238,14 +1297,14 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
             <tbody>
               <tr class="border-b">
                 <td class="info-td-label" style="width: 20%;">Name:</td>
-                <td class="info-td-val name-val" style="width: 60%;">${student.name}</td>
+                <td class="info-td-val name-val" style="width: 60%;"><strong>${student.name}</strong></td>
                 <td class="info-td-ar" style="width: 20%;">:الإسم</td>
               </tr>
               <tr>
                 <td class="info-td-label">Class:</td>
-                <td class="info-td-val">
-                  <span style="text-transform: uppercase;">${student.class}</span>
-                  ${student.arm ? `<span> (${student.arm})</span>` : ""}
+                <td class="info-td-val class-val">
+                  <strong style="text-transform: uppercase;">${student.class}</strong>
+                  ${student.arm ? `<strong> (${student.arm})</strong>` : ""}
                 </td>
                 <td class="info-td-ar">:الصف</td>
               </tr>
@@ -1320,14 +1379,14 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
               .map(
                 (sub) => `
               <tr class="sub-data-row">
-                <td class="sub-td grade-val">${sub.grade ?? ""}</td>
-                <td class="sub-td total-val">${sub.total !== null && sub.total !== undefined ? sub.total : ""}</td>
-                <td class="sub-td exam-val">${sub.exam !== null && sub.exam !== undefined ? sub.exam : ""}</td>
-                <td class="sub-td ca-val">${sub.ca !== null && sub.ca !== undefined ? sub.ca : ""}</td>
+                <td class="sub-td grade-val"><strong>${sub.grade ?? ""}</strong></td>
+                <td class="sub-td total-val"><strong>${sub.total !== null && sub.total !== undefined ? sub.total : ""}</strong></td>
+                <td class="sub-td exam-val"><strong>${sub.exam !== null && sub.exam !== undefined ? sub.exam : ""}</strong></td>
+                <td class="sub-td ca-val"><strong>${sub.ca !== null && sub.ca !== undefined ? sub.ca : ""}</strong></td>
                 <td class="sub-td-name">
                   <div class="sub-name-flex">
-                    <span class="sub-name-en">${sub.nameEnglish}</span>
-                    <span class="sub-name-ar">${sub.nameArabic}</span>
+                    <span class="sub-name-en"><strong>${sub.nameEnglish}</strong></span>
+                    <span class="sub-name-ar"><strong>${sub.nameArabic}</strong></span>
                   </div>
                 </td>
               </tr>
@@ -1337,8 +1396,8 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
 
             <!-- Total Row -->
             <tr class="sub-total-row">
-              <td class="sub-td total-result">${result || "Fail"}</td>
-              <td class="sub-td total-sum">${overallTotal > 0 ? overallTotal : "."}</td>
+              <td class="sub-td total-result"><strong>${result || "Fail"}</strong></td>
+              <td class="sub-td total-sum"><strong>${overallTotal > 0 ? overallTotal : "."}</strong></td>
               <td class="sub-td" style="border-right: 1px solid #000;"></td>
               <td class="sub-td" style="border-right: 1px solid #000;"></td>
               <td class="sub-td-name total-label-cell">
@@ -1476,7 +1535,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
               <div class="sum-cell">
                 <span>Percentage%</span>
                 <strong class="sum-val">${overallPercentage.toFixed(1)} %</strong>
-                <span class="ar">النسبة المئوية:</span>
+                <span class="ar">:النسبة المئوية</span>
               </div>
             </div>
 
@@ -1488,7 +1547,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
               </div>
               <div class="sum-cell">
                 <span>Grade:</span>
-                <strong class="sum-val text-rose ar">${displayRemark} ${displayRemarkArabic ? `<span class="ar" style="font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">(${displayRemarkArabic})</span>` : ""}</strong>
+                <strong class="sum-val text-rose">${displayRemark} ${displayRemarkArabic ? `<span class="ar" style="font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">(${displayRemarkArabic})</span>` : ""}</strong>
                 <span class="ar">:التقدير</span>
               </div>
             </div>

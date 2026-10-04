@@ -28,6 +28,10 @@ import {
   Activity,
   Check,
   CheckCircle2,
+  Download,
+  Printer,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 
 interface ClassItem {
@@ -73,7 +77,11 @@ const ReportCard = () => {
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [bulkDownloading, setBulkDownloading] = useState(false);
+  const [printingSingle, setPrintingSingle] = useState(false);
+  const [printingBulk, setPrintingBulk] = useState(false);
   const [error, setError] = useState("");
+
+  const isAnyExporting = downloading || bulkDownloading || printingSingle || printingBulk;
 
   const { user } = useAuth();
   const [commentsBank, setCommentsBank] = useState<ReportCardComment[]>(REPORT_CARD_COMMENTS);
@@ -366,7 +374,9 @@ const ReportCard = () => {
   );
 
   const handlePrintSingle = async () => {
-    if (!canView) return;
+    if (!canView || isAnyExporting) return;
+    setPrintingSingle(true);
+    setError("");
     try {
       const elemParam = isCurrentClassElementary ? "&isElementary=true&classCategory=elementary" : "";
       const res = await api.get(
@@ -376,14 +386,20 @@ const ReportCard = () => {
       openPrintWindow(res.data);
     } catch {
       setError("Failed to generate printable report card");
+    } finally {
+      setPrintingSingle(false);
     }
   };
 
   const handlePrintBulk = async () => {
-    if (!selectedClass || !selectedTerm || !selectedScale) {
-      setError("Select a class, term, and grading scale first");
+    if (!selectedClass || !selectedTerm || !selectedScale || isAnyExporting) {
+      if (!selectedClass || !selectedTerm || !selectedScale) {
+        setError("Select a class, term, and grading scale first");
+      }
       return;
     }
+    setPrintingBulk(true);
+    setError("");
     try {
       const elemParam = isCurrentClassElementary ? "&isElementary=true&classCategory=elementary" : "";
       const res = await api.get(
@@ -393,12 +409,15 @@ const ReportCard = () => {
       openPrintWindow(res.data);
     } catch {
       setError("Failed to generate bulk printable report cards");
+    } finally {
+      setPrintingBulk(false);
     }
   };
 
   const handleDownloadSingle = async () => {
-    if (!canView) return;
+    if (!canView || isAnyExporting) return;
     setDownloading(true);
+    setError("");
     try {
       const elemParam = isCurrentClassElementary ? "&isElementary=true&classCategory=elementary" : "";
       await downloadBlob(
@@ -407,15 +426,17 @@ const ReportCard = () => {
       );
     } catch {
       // If direct PDF failed, fallback to print view
-      handlePrintSingle();
+      await handlePrintSingle();
     } finally {
       setDownloading(false);
     }
   };
 
   const handleDownloadBulk = async () => {
-    if (!selectedClass || !selectedTerm || !selectedScale) {
-      setError("Select a class, term, and grading scale first");
+    if (!selectedClass || !selectedTerm || !selectedScale || isAnyExporting) {
+      if (!selectedClass || !selectedTerm || !selectedScale) {
+        setError("Select a class, term, and grading scale first");
+      }
       return;
     }
     setBulkDownloading(true);
@@ -427,7 +448,7 @@ const ReportCard = () => {
         `class-report-cards.pdf`,
       );
     } catch {
-      handlePrintBulk();
+      await handlePrintBulk();
     } finally {
       setBulkDownloading(false);
     }
@@ -736,34 +757,82 @@ const ReportCard = () => {
           </div>
         )}
 
+        {/* Active Export / Print Progress Banner */}
+        {isAnyExporting && (
+          <div className="bg-sky-50 border border-sky-200 text-sky-900 rounded-xl p-3 flex items-center justify-between shadow-xs mb-3 animate-pulse">
+            <div className="flex items-center gap-2.5 text-xs font-semibold">
+              <Loader2 className="w-4 h-4 text-sky-600 animate-spin flex-shrink-0" />
+              <span>
+                {bulkDownloading && "Generating bulk PDF for whole class... Compiling student report cards, please wait."}
+                {printingBulk && "Preparing bulk printable document for class... Formatting sheets, please wait."}
+                {downloading && "Generating official report card PDF (A4)... Please wait a moment."}
+                {printingSingle && "Preparing printable report card sheet... Opening print dialog shortly."}
+              </span>
+            </div>
+            <span className="text-[11px] text-sky-700 bg-sky-100 font-bold px-2 py-0.5 rounded-full flex-shrink-0">
+              Working...
+            </span>
+          </div>
+        )}
+
         {/* Action Buttons */}
         <div className="flex gap-3 flex-wrap items-center justify-between pt-1 border-t border-gray-100">
           <div className="flex gap-2 flex-wrap">
             <button
               id="view-report-card-btn"
               onClick={handleView}
-              disabled={!canView || loading}
+              disabled={!canView || loading || isAnyExporting}
               className="px-4 py-2 rounded-xl text-white text-xs font-semibold flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 shadow-md shadow-sky-600/20 active:scale-[0.99] transition disabled:opacity-50"
             >
-              {loading ? "Loading..." : "Reload Report Sheet"}
+              {loading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Reload Report Sheet
+                </>
+              )}
             </button>
 
             <button
               id="download-single-pdf-btn"
               onClick={handleDownloadSingle}
-              disabled={!canView || downloading}
-              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs transition disabled:opacity-50"
+              disabled={!canView || isAnyExporting}
+              className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
             >
-              {downloading ? "Preparing PDF..." : "Download PDF (A4)"}
+              {downloading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Preparing PDF (A4)...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  Download PDF (A4)
+                </>
+              )}
             </button>
 
             <button
               id="print-single-pdf-btn"
               onClick={handlePrintSingle}
-              disabled={!canView}
-              className="px-4 py-2 rounded-xl border border-sky-600 text-sky-700 text-xs font-semibold hover:bg-sky-50 shadow-xs transition disabled:opacity-50"
+              disabled={!canView || isAnyExporting}
+              className="px-4 py-2 rounded-xl border border-sky-600 text-sky-700 text-xs font-semibold hover:bg-sky-50 shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
             >
-              Print / Save as PDF
+              {printingSingle ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-sky-600" />
+                  Preparing Print...
+                </>
+              ) : (
+                <>
+                  <Printer className="w-3.5 h-3.5" />
+                  Print / Save as PDF
+                </>
+              )}
             </button>
           </div>
 
@@ -771,18 +840,38 @@ const ReportCard = () => {
             <button
               id="download-bulk-pdf-btn"
               onClick={handleDownloadBulk}
-              disabled={!selectedClass || !selectedTerm || bulkDownloading}
-              className="px-4 py-2 rounded-xl text-xs font-semibold shadow-xs transition disabled:opacity-50 bg-amber-500 hover:bg-amber-600 text-white"
+              disabled={!selectedClass || !selectedTerm || isAnyExporting}
+              className="px-4 py-2 rounded-xl text-xs font-semibold shadow-xs flex items-center gap-1.5 transition disabled:opacity-50 bg-amber-500 hover:bg-amber-600 text-white"
             >
-              {bulkDownloading ? "Generating Class PDFs..." : "Download Class (Bulk PDF)"}
+              {bulkDownloading ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Generating Class PDFs...
+                </>
+              ) : (
+                <>
+                  <Download className="w-3.5 h-3.5" />
+                  Download Class (Bulk PDF)
+                </>
+              )}
             </button>
             <button
               id="print-bulk-pdf-btn"
               onClick={handlePrintBulk}
-              disabled={!selectedClass || !selectedTerm}
-              className="px-4 py-2 rounded-xl border border-amber-600 text-amber-700 text-xs font-semibold hover:bg-amber-50 shadow-xs transition disabled:opacity-50"
+              disabled={!selectedClass || !selectedTerm || isAnyExporting}
+              className="px-4 py-2 rounded-xl border border-amber-600 text-amber-700 text-xs font-semibold hover:bg-amber-50 shadow-xs flex items-center gap-1.5 transition disabled:opacity-50"
             >
-              Print Whole Class
+              {printingBulk ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                  Preparing Class Print...
+                </>
+              ) : (
+                <>
+                  <Printer className="w-3.5 h-3.5" />
+                  Print Whole Class
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -2,8 +2,14 @@ import { Response } from "express";
 import Student from "../models/Student";
 import ClassModel from "../models/Class";
 import User from "../models/User";
+import Subject from "../models/Subject";
+import Term from "../models/Term";
+import GradingScale from "../models/GradingScale";
+import AttendanceSetting from "../models/AttendanceSetting";
+import ReportCardSetting from "../models/ReportCardSetting";
 import { AuthRequest } from "../middleware/auth";
-import { buildReportCardData } from "./reportCardController";
+import { buildReportCardData, ReportCardSharedContext } from "./reportCardController";
+import { getClassCumulativePositions } from "./broadsheetController";
 import {
   generateSingleReportCardPdf,
   generateBulkReportCardPdf,
@@ -12,7 +18,7 @@ import {
   buildSingleReportCardHtml,
   buildBulkReportCardHtml,
 } from "../utils/reportCardTemplate";
-import { isElementaryClass } from "./classController";
+import { isElementaryClass, ensureElementarySubjectsForClass } from "./classController";
 
 const setPdfDownloadHeaders = (res: Response, rawName: string) => {
   const safeAsciiFallback = "report_card.pdf";
@@ -138,19 +144,77 @@ export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response)
       return res.status(404).json({ message: "No students found in this class" });
     }
 
+    const termDoc = await Term.findById(term);
+    if (!termDoc) return res.status(404).json({ message: "Term not found" });
+
+    if (isClassElementary && classId) {
+      await ensureElementarySubjectsForClass(classId.toString());
+    }
+
+    // Pre-fetch shared class context once to speed up bulk generation from 30s to 3s
+    const [
+      positionMap,
+      subjects,
+      allTermsInSession,
+      priorTerms,
+      totalStudentsInClass,
+      gradingScaleDoc,
+      attSettingClass,
+      attSettingBranch,
+      attSettingGlobal,
+      templateSetting,
+    ] = await Promise.all([
+      getClassCumulativePositions(classId.toString(), term.toString()),
+      Subject.find({ class: classId as any }).sort({ order: 1, nameEnglish: 1 }),
+      Term.find({ session: termDoc.session }).sort({ termNumber: 1 }),
+      Term.find({ session: termDoc.session, termNumber: { $lte: termDoc.termNumber } }).sort({ termNumber: 1 }),
+      Student.countDocuments({ class: classId as any }),
+      gradingScale && gradingScale !== "undefined"
+        ? GradingScale.findById(gradingScale as string)
+        : (await GradingScale.findOne({ name: "التقدير" })) || (await GradingScale.findOne()),
+      AttendanceSetting.findOne({ class: classId as any, term: term as any }),
+      cls.branch ? AttendanceSetting.findOne({ branch: cls.branch as any, term: term as any, class: { $exists: false } }) : null,
+      AttendanceSetting.findOne({ term: term as any, class: { $exists: false }, branch: { $exists: false } }),
+      ReportCardSetting.findOne(),
+    ]);
+
+    const sharedContext: ReportCardSharedContext = {
+      positionMap,
+      subjects,
+      allTermsInSession,
+      priorTerms,
+      totalStudentsInClass,
+      gradingScale: gradingScaleDoc,
+      currentTerm: termDoc,
+      attSettingClass,
+      attSettingBranch,
+      attSettingGlobal,
+      templateSetting,
+    };
+
+    // Parallel fetch with chunking for fast and reliable data compilation
+    const chunkSize = 10;
     const reportDataList = [];
-    for (const student of students) {
-      const data = await buildReportCardData(
-        student._id.toString(),
-        term as string,
-        gradingScale as string
+    for (let i = 0; i < students.length; i += chunkSize) {
+      const chunk = students.slice(i, i + chunkSize);
+      const results = await Promise.all(
+        chunk.map((student) =>
+          buildReportCardData(
+            student._id.toString(),
+            term as string,
+            gradingScale as string,
+            sharedContext
+          )
+        )
       );
-      if (data) {
-        if (isClassElementary) {
-          data.isElementary = true;
-          data.classCategory = "elementary";
+      for (const data of results) {
+        if (data) {
+          if (isClassElementary) {
+            data.isElementary = true;
+            data.classCategory = "elementary";
+          }
+          reportDataList.push(data);
         }
-        reportDataList.push(data);
       }
     }
 

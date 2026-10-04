@@ -4,7 +4,7 @@ import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 import ReportCardView from "../components/ReportCardView";
 import type { ReportCardData } from "../types/reportCard";
-import { Users, Plus, CheckCircle, AlertCircle, Sparkles, GraduationCap, X, ChevronRight } from "lucide-react";
+import { Users, Plus, CheckCircle, AlertCircle, Sparkles, GraduationCap, X, ChevronRight, Loader2, Download, Printer } from "lucide-react";
 
 interface Term {
   _id: string;
@@ -37,6 +37,7 @@ const ParentHome = () => {
   const [reportData, setReportData] = useState<ReportCardData | null>(null);
   const [loading, setLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState("");
 
   // Link another child modal state
@@ -129,7 +130,8 @@ const ParentHome = () => {
   };
 
   const handlePrint = async () => {
-    if (!selectedTerm) return;
+    if (!selectedTerm || printing || downloading) return;
+    setPrinting(true);
     try {
       const queryParams = new URLSearchParams({
         term: selectedTerm,
@@ -147,6 +149,8 @@ const ParentHome = () => {
       openPrintWindow(res.data);
     } catch {
       setError("Failed to open printable report card");
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -290,17 +294,37 @@ const ParentHome = () => {
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={handleDownload}
-              disabled={!reportData || downloading}
-              className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold bg-sky-600 hover:bg-sky-700 active:scale-[0.99] shadow-md shadow-sky-600/20 disabled:opacity-50 transition"
+              disabled={!reportData || downloading || printing}
+              className="px-5 py-2.5 rounded-xl text-white text-sm font-semibold flex items-center gap-2 bg-sky-600 hover:bg-sky-700 active:scale-[0.99] shadow-md shadow-sky-600/20 disabled:opacity-50 transition"
             >
-              {downloading ? "Downloading PDF..." : "Download Official PDF"}
+              {downloading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Downloading PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download Official PDF
+                </>
+              )}
             </button>
             <button
               onClick={handlePrint}
-              disabled={!reportData}
-              className="px-5 py-2.5 rounded-xl text-sky-700 text-sm font-semibold border border-sky-600 hover:bg-sky-50 active:scale-[0.99] shadow-xs disabled:opacity-50 transition"
+              disabled={!reportData || downloading || printing}
+              className="px-5 py-2.5 rounded-xl text-sky-700 text-sm font-semibold flex items-center gap-2 border border-sky-600 hover:bg-sky-50 active:scale-[0.99] shadow-xs disabled:opacity-50 transition"
             >
-              Print / Save as PDF
+              {printing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-sky-600" />
+                  Preparing Print...
+                </>
+              ) : (
+                <>
+                  <Printer className="w-4 h-4" />
+                  Print / Save as PDF
+                </>
+              )}
             </button>
           </div>
         </div>

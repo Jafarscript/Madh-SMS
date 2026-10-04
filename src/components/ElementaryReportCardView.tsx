@@ -197,7 +197,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
   const displayRemarkArabic = data.remarkArabic || (!isEnrolled ? "لم يلتحق" : fallbackRemarkArabic);
 
   return (
-    <div className="max-w-[794px] mx-auto p-4 bg-white text-gray-950 border border-black shadow-sm font-sans text-xs select-none">
+    <div className="max-w-[794px] min-h-[1000px] mx-auto p-4 md:p-5 bg-white text-gray-950 border border-black shadow-sm font-sans text-xs select-none flex flex-col justify-between">
       {/* Top School Header */}
       <div className="relative text-center pb-2 mb-2 border-b border-gray-300">
         <h1
@@ -260,49 +260,49 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
             <tbody className="divide-y divide-black">
               <tr>
                 <td className="py-1 px-2 text-left">No. of times school opened</td>
-                <td className="py-1 px-1 border-x border-black font-semibold">{timesOpened || "-"}</td>
+                <td className="py-1 px-1 border-x border-black font-bold">{timesOpened || "-"}</td>
                 <td className="py-1 px-2 text-right" style={{ fontFamily: "'Amiri', serif" }}>
                   عدد أيام الدوام
                 </td>
               </tr>
               <tr>
                 <td className="py-1 px-2 text-left">No. of times present</td>
-                <td className="py-1 px-1 border-x border-black font-semibold">{timesPresent || "-"}</td>
+                <td className="py-1 px-1 border-x border-black font-bold">{timesPresent || "-"}</td>
                 <td className="py-1 px-2 text-right" style={{ fontFamily: "'Amiri', serif" }}>
                   نسبة الحضور
                 </td>
               </tr>
               <tr>
                 <td className="py-1 px-2 text-left">No. of times absent</td>
-                <td className="py-1 px-1 border-x border-black font-semibold">{timesAbsent || "-"}</td>
+                <td className="py-1 px-1 border-x border-black font-bold">{timesAbsent || "-"}</td>
                 <td className="py-1 px-2 text-right" style={{ fontFamily: "'Amiri', serif" }}>
                   نسبة الغياب
                 </td>
               </tr>
               <tr>
                 <td className="py-1 px-2 text-left">No. of Students in the class</td>
-                <td className="py-1 px-1 border-x border-black font-semibold">{totalStudentsInClass || "-"}</td>
+                <td className="py-1 px-1 border-x border-black font-bold">{totalStudentsInClass || "-"}</td>
                 <td className="py-1 px-2 text-right" style={{ fontFamily: "'Amiri', serif" }}>
                   عدد الطلاب في الصف
                 </td>
               </tr>
               <tr>
                 <td className="py-1 px-2 text-left">Date School resumed</td>
-                <td className="py-1 px-1 border-x border-black font-semibold">{dateResumed || "-"}</td>
+                <td className="py-1 px-1 border-x border-black font-bold">{dateResumed || "-"}</td>
                 <td className="py-1 px-2 text-right" style={{ fontFamily: "'Amiri', serif" }}>
                   بدء الدراسة
                 </td>
               </tr>
               <tr>
                 <td className="py-1 px-2 text-left">Date School closes</td>
-                <td className="py-1 px-1 border-x border-black font-semibold">{dateClosed || "-"}</td>
+                <td className="py-1 px-1 border-x border-black font-bold">{dateClosed || "-"}</td>
                 <td className="py-1 px-2 text-right" style={{ fontFamily: "'Amiri', serif" }}>
                   ختم الدراسة
                 </td>
               </tr>
               <tr>
                 <td className="py-1 px-2 text-left">Next resumption</td>
-                <td className="py-1 px-1 border-x border-black font-semibold">{nextResumption || "-"}</td>
+                <td className="py-1 px-1 border-x border-black font-bold">{nextResumption || "-"}</td>
                 <td className="py-1 px-2 text-right" style={{ fontFamily: "'Amiri', serif" }}>
                   العودة إلى الدراسة
                 </td>
@@ -477,23 +477,23 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
           </thead>
           <tbody className="divide-y divide-black">
             {displaySubjects.map((sub, idx) => (
-              <tr key={idx} className="text-center font-medium">
-                <td className="py-1.5 px-1 border-r border-black font-semibold text-gray-800">
+              <tr key={idx} className="text-center font-bold h-10">
+                <td className="py-2 px-1 border-r border-black font-bold text-gray-950">
                   {sub.grade ?? ""}
                 </td>
-                <td className="py-1.5 px-1 border-r border-black font-semibold">
+                <td className="py-2 px-1 border-r border-black font-bold text-sm">
                   {sub.total !== null && sub.total !== undefined ? sub.total : ""}
                 </td>
-                <td className="py-1.5 px-1 border-r border-black">
+                <td className="py-2 px-1 border-r border-black font-bold text-sm">
                   {sub.exam !== null && sub.exam !== undefined ? sub.exam : ""}
                 </td>
-                <td className="py-1.5 px-1 border-r border-black">
+                <td className="py-2 px-1 border-r border-black font-bold text-sm">
                   {sub.ca !== null && sub.ca !== undefined ? sub.ca : ""}
                 </td>
-                <td className="py-1.5 px-3 text-right">
-                  <div className="flex justify-between items-center font-semibold">
-                    <span className="tracking-wider uppercase">{sub.nameEnglish}</span>
-                    <span className="text-sm" style={{ fontFamily: "'Amiri', serif" }}>
+                <td className="py-2 px-3 text-right">
+                  <div className="flex justify-between items-center font-bold">
+                    <span className="tracking-wider uppercase font-bold">{sub.nameEnglish}</span>
+                    <span className="text-sm font-bold" style={{ fontFamily: "'Amiri', serif" }}>
                       {sub.nameArabic}
                     </span>
                   </div>
@@ -502,16 +502,16 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
             ))}
 
             {/* Total Row */}
-            <tr className="border-t-2 border-black bg-white font-bold text-center">
-              <td className="py-1.5 px-1 border-r border-black text-rose-700 font-bold">
+            <tr className="border-t-2 border-black bg-white font-bold text-center h-10">
+              <td className="py-2 px-1 border-r border-black text-rose-700 font-bold">
                 {result || "Fail"}
               </td>
-              <td className="py-1.5 px-1 border-r border-black font-bold">
+              <td className="py-2 px-1 border-r border-black font-bold">
                 {overallTotal > 0 ? overallTotal : "."}
               </td>
-              <td className="py-1.5 px-1 border-r border-black"></td>
-              <td className="py-1.5 px-1 border-r border-black"></td>
-              <td className="py-1.5 px-3 text-right font-bold">
+              <td className="py-2 px-1 border-r border-black"></td>
+              <td className="py-2 px-1 border-r border-black"></td>
+              <td className="py-2 px-3 text-right font-bold">
                 <div className="flex justify-between items-center">
                   <span className="tracking-wider">TOTAL</span>
                   <span className="text-sm" style={{ fontFamily: "'Amiri', serif" }}>
@@ -659,7 +659,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
               <div className="p-1 flex justify-between items-center">
                 <span>Percentage%</span>
                 <strong className="text-[11px]">{overallPercentage.toFixed(1)} %</strong>
-                <span style={{ fontFamily: "'Amiri', serif" }}>النسبة المئوية:</span>
+                <span style={{ fontFamily: "'Amiri', serif" }}>:النسبة المئوية</span>
               </div>
             </div>
 
@@ -687,14 +687,14 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
           </div>
 
           {/* Teacher's comment */}
-          <div className="p-1.5 border-b border-black flex flex-col justify-between min-h-[48px]">
+          <div className="p-2 border-b border-black flex flex-col justify-between min-h-[55px]">
             <div
               className="text-right font-bold text-[9.5px]"
               style={{ fontFamily: "'Amiri', serif" }}
             >
               تعليق أستاذ الصف / <span className="font-normal font-sans text-[8.5px]">:Teacher's comment</span>
             </div>
-            <div className="text-center py-1 font-medium text-[9px] text-gray-800">
+            <div className="text-center py-1.5 font-medium text-[9.5px] text-gray-800">
               {classTeacherComment?.en || classTeacherComment?.ar ? (
                 <div>
                   {classTeacherComment.ar && (
@@ -710,21 +710,21 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
                 </span>
               )}
             </div>
-            <div className="flex justify-between items-center text-[8.5px] text-gray-700">
+            <div className="flex justify-between items-center text-[8.5px] text-gray-700 mt-1">
               <span>Signature: ....................................................</span>
               <span style={{ fontFamily: "'Amiri', serif" }}>:التوقيع</span>
             </div>
           </div>
 
           {/* Principal's comment */}
-          <div className="p-1.5 flex flex-col justify-between min-h-[48px] relative">
+          <div className="p-2 flex flex-col justify-between min-h-[55px] relative">
             <div
               className="text-right font-bold text-[9.5px]"
               style={{ fontFamily: "'Amiri', serif" }}
             >
               تعليق الوكيل / <span className="font-normal font-sans text-[8.5px]">:Principal's comment</span>
             </div>
-            <div className="text-center py-1 font-medium text-[9px] text-gray-800">
+            <div className="text-center py-1.5 font-medium text-[9.5px] text-gray-800">
               {principalComment?.en || principalComment?.ar ? (
                 <div>
                   {principalComment.ar && (
@@ -743,11 +743,11 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
                 <img
                   src={templateSettings.principalSignatureBase64}
                   alt="Principal Signature"
-                  className="max-h-5 max-w-[80px] object-contain mx-auto mt-0.5"
+                  className="max-h-6 max-w-[85px] object-contain mx-auto mt-1"
                 />
               )}
             </div>
-            <div className="flex justify-between items-center text-[8.5px] text-gray-700">
+            <div className="flex justify-between items-center text-[8.5px] text-gray-700 mt-1">
               <span>Signature: ....................................................</span>
               <span style={{ fontFamily: "'Amiri', serif" }}>:التوقيع</span>
             </div>
