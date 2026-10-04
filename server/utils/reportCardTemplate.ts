@@ -302,16 +302,15 @@ const sharedStyles = `
   /* Elementary Report Card Specific Styles matching ElementaryReportCardView.tsx */
   .elem-sheet {
     border: 1px solid #000 !important;
-    padding: 14px 16px;
+    padding: 20px;
     background: #ffffff;
     color: #030712;
     font-family: 'Inter', sans-serif;
-    font-size: 10.5px;
+    font-size: 12px;
     box-sizing: border-box;
     max-width: 794px;
     margin: 0 auto;
-    min-height: 252mm;
-    max-height: 278mm;
+    min-height: 1000px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -320,12 +319,12 @@ const sharedStyles = `
     position: relative;
     text-align: center;
     padding-bottom: 6px;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     border-bottom: 1px solid #d1d5db;
   }
   .elem-school-header .school-name-ar {
     font-family: 'Amiri', serif;
-    font-size: 26px;
+    font-size: 24px;
     font-weight: bold;
     color: #030712;
     line-height: 1.2;
@@ -334,14 +333,14 @@ const sharedStyles = `
   }
   .elem-school-header .school-city-ar {
     font-family: 'Amiri', serif;
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: bold;
     color: #1f2937;
     margin-top: 2px;
     direction: rtl;
   }
   .elem-school-header .school-name-en {
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: bold;
     letter-spacing: 0.5px;
     color: #111827;
@@ -349,7 +348,7 @@ const sharedStyles = `
     text-transform: uppercase;
   }
   .elem-school-header .school-charity-en {
-    font-size: 10.5px;
+    font-size: 11px;
     letter-spacing: 0.8px;
     color: #374151;
     font-weight: 600;
@@ -366,8 +365,8 @@ const sharedStyles = `
     position: absolute;
     right: 0;
     top: 0;
-    width: 72px;
-    height: 72px;
+    width: 80px;
+    height: 80px;
     object-fit: contain;
   }
   .elem-school-header .elem-logo-placeholder {
@@ -390,9 +389,9 @@ const sharedStyles = `
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 5px 18px;
+    padding: 6px 16px;
     font-weight: bold;
-    font-size: 13.5px;
+    font-size: 14px;
     letter-spacing: 0.5px;
     margin-bottom: 8px;
     border: 1px solid #000;
@@ -402,7 +401,7 @@ const sharedStyles = `
   }
   .elem-banner .banner-ar {
     font-family: 'Amiri', serif;
-    font-size: 16.5px;
+    font-size: 16px;
     direction: rtl;
   }
 
@@ -572,13 +571,9 @@ const sharedStyles = `
     border: 1px solid #000;
     overflow: hidden;
     margin-bottom: 8px;
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
   }
   .elem-sub-table {
     width: 100%;
-    height: 100%;
     font-size: 11px;
     border-collapse: collapse;
   }
@@ -589,7 +584,7 @@ const sharedStyles = `
     font-weight: bold;
   }
   .sub-th {
-    padding: 6px 4px;
+    padding: 4px;
     border-right: 1px solid #000;
   }
   .sub-th.grade-col { width: 14%; }
@@ -605,7 +600,7 @@ const sharedStyles = `
     font-weight: 600;
   }
   .sub-th-subject {
-    padding: 6px 10px;
+    padding: 4px 12px;
     text-align: right;
   }
   .sub-head-flex {
@@ -626,9 +621,10 @@ const sharedStyles = `
     border-bottom: 1px solid #000;
     text-align: center;
     font-weight: bold;
+    height: 40px;
   }
   .sub-td {
-    padding: 2.5px 3px;
+    padding: 8px 4px;
     border-right: 1px solid #000;
     font-weight: bold;
     font-size: 12px;
@@ -641,21 +637,21 @@ const sharedStyles = `
   }
   .sub-td.total-val {
     font-weight: bold;
-    font-size: 12.5px;
+    font-size: 14px;
     color: #000;
   }
   .sub-td.exam-val {
     font-weight: bold;
-    font-size: 12px;
+    font-size: 14px;
     color: #000;
   }
   .sub-td.ca-val {
     font-weight: bold;
-    font-size: 12px;
+    font-size: 14px;
     color: #000;
   }
   .sub-td-name {
-    padding: 2.5px 8px;
+    padding: 8px 12px;
     text-align: right;
   }
   .sub-name-flex {
@@ -668,11 +664,11 @@ const sharedStyles = `
     letter-spacing: 0.5px;
     text-transform: uppercase;
     font-weight: bold;
-    font-size: 11.5px;
+    font-size: 12px;
   }
   .sub-name-ar {
     font-family: 'Amiri', serif;
-    font-size: 13.5px;
+    font-size: 14px;
     font-weight: bold;
     direction: rtl;
   }
@@ -681,7 +677,7 @@ const sharedStyles = `
     background: #ffffff;
     font-weight: bold;
     text-align: center;
-    height: 38px;
+    height: 40px;
   }
   .sub-td.total-result {
     color: #be123c;
@@ -834,7 +830,7 @@ const sharedStyles = `
   }
   .sum-grid-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 2fr;
   }
   .sum-grid-row.border-b {
     border-bottom: 1px solid #000;
@@ -849,13 +845,27 @@ const sharedStyles = `
     border-right: 1px solid #000;
   }
   .sum-cell .sum-val {
-    font-size: 12.5px;
+    font-size: 11px;
     font-weight: bold;
     color: #000;
   }
   .sum-cell .sum-val.text-rose {
     color: #be123c;
     font-weight: bold;
+  }
+  .sum-cell .remark-value {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-width: 0;
+    font-size: 11px;
+    line-height: 1.1;
+  }
+  .sum-cell .remark-value span {
+    white-space: nowrap;
   }
   .sum-cell .ar {
     font-family: 'Amiri', serif;
@@ -1533,7 +1543,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
                 <span class="ar">:الترتيب</span>
               </div>
               <div class="sum-cell">
-                <span>Percentage%</span>
+                <span>Percentage</span>
                 <strong class="sum-val">${overallPercentage.toFixed(1)} %</strong>
                 <span class="ar">:النسبة المئوية</span>
               </div>
@@ -1547,7 +1557,10 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
               </div>
               <div class="sum-cell">
                 <span>Grade:</span>
-                <strong class="sum-val text-rose">${displayRemark} ${displayRemarkArabic ? `<span class="ar" style="font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">(${displayRemarkArabic})</span>` : ""}</strong>
+                <strong class="sum-val text-rose remark-value">
+                  <span>${displayRemark}</span>
+                  ${displayRemarkArabic ? `<span class="ar" style="font-family: 'Amiri', 'Traditional Arabic', serif;" dir="rtl">(${displayRemarkArabic})</span>` : ""}
+                </strong>
                 <span class="ar">:التقدير</span>
               </div>
             </div>

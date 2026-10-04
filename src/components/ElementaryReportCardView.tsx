@@ -657,7 +657,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
                 <span style={{ fontFamily: "'Amiri', serif" }}>:الترتيب</span>
               </div>
               <div className="p-1 flex justify-between items-center">
-                <span>Percentage%</span>
+                <span>Percentage</span>
                 <strong className="text-[11px]">{overallPercentage.toFixed(1)} %</strong>
                 <span style={{ fontFamily: "'Amiri', serif" }}>:النسبة المئوية</span>
               </div>
