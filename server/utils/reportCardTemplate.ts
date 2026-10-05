@@ -1126,7 +1126,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
       ? "Good"
       : overallPercentage >= 50
       ? "Fair"
-      : "Poor";
+      : "Fail";
   const fallbackRemarkArabic =
     overallPercentage >= 85
       ? "ممتاز"
@@ -1136,7 +1136,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
       ? "جيد"
       : overallPercentage >= 50
       ? "مقبول"
-      : "ضعيف";
+      : "راسب";
 
   const isEnrolled = (data.student as any)?.isEnrolledInCurrentTerm !== false;
   const displayRemark = data.remark || (!isEnrolled ? "Not Enrolled" : fallbackRemark);
