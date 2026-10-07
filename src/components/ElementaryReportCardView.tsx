@@ -19,7 +19,7 @@ const toArabicNumerals = (val: number | string | null | undefined): string => {
 };
 
 const getArabicGradeRemark = (grade: string | null | undefined, percentage: number): string => {
-  if (percentage < 50 || grade === "Fail" || grade === "Poor" || grade === "F") return "ضعيف";
+  if (percentage < 50 || grade === "Fail" || grade === "Poor" || grade === "F") return "راسب";
   if (percentage >= 85 || grade === "Excellent" || grade === "A") return "ممتاز";
   if (percentage >= 75 || grade === "V. Good" || grade === "V.Good" || grade === "B") return "جيد جداً";
   if (percentage >= 65 || grade === "Good" || grade === "C") return "جيد";
@@ -32,7 +32,7 @@ const getElementaryGrade = (score: number | null | undefined, existingGrade?: st
     if (score >= 75) return "V.Good";
     if (score >= 65) return "Good";
     if (score >= 50) return "Fair";
-    return "Poor";
+    return "Fail";
   }
   if (existingGrade) {
     if (existingGrade === "A1" || existingGrade === "A") return "Excellent";
@@ -47,7 +47,7 @@ const getElementaryGrade = (score: number | null | undefined, existingGrade?: st
     }
     if (existingGrade === "C4" || existingGrade === "C") return "Good";
     if (existingGrade === "D7" || existingGrade === "D" || existingGrade === "Pass") return "Fair";
-    if (existingGrade === "F9" || existingGrade === "F" || existingGrade === "Fail") return "Poor";
+    if (existingGrade === "F9" || existingGrade === "F" || existingGrade === "Fail" || existingGrade === "Poor") return "Fail";
     return existingGrade;
   }
   return "";
@@ -180,7 +180,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
       ? "Good"
       : overallPercentage >= 50
       ? "Fair"
-      : "Poor";
+      : "Fail";
   const fallbackRemarkArabic =
     overallPercentage >= 85
       ? "ممتاز"
@@ -190,7 +190,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
       ? "جيد"
       : overallPercentage >= 50
       ? "مقبول"
-      : "ضعيف";
+      : "راسب";
 
   const isEnrolled = (student as any)?.isEnrolledInCurrentTerm !== false;
   const displayRemark = data.remark || (!isEnrolled ? "Not Enrolled" : fallbackRemark);
@@ -591,7 +591,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
             <div>75 - 84 = V.Good</div>
             <div>65 - 74 = Good</div>
             <div>50 - 64 = Fair</div>
-            <div>1 - 49 = Poor</div>
+            <div>1 - 49 = Fail</div>
           </div>
 
           <div className="my-1">

@@ -454,7 +454,7 @@ const overallPercentage =
             ? { grade: "Good", remark: "Good", remarkArabic: "جيد" }
             : effectiveOverallPercentage >= 50
             ? { grade: "Fair", remark: "Fair", remarkArabic: "مقبول" }
-            : { grade: "Poor", remark: "Poor", remarkArabic: "ضعيف" })
+            : { grade: "Fail", remark: "Fail", remarkArabic: "راسب" })
         : getGradeRemark(effectiveOverallPercentage))
     : { grade: "—", remark: "Not Enrolled", remarkArabic: "لم يلتحق" };
 

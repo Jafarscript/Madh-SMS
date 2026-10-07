@@ -50,7 +50,7 @@ A comprehensive, full-stack school management and academic tracking system desig
     * Standardized columns: `التقدير (GRADE)`, `المحصلة (TOTAL)`, `الامتحان (EXAM 60%)`, `المراقبة المستمرة (CA 40%)`, and `المواد (SUBJECTS)`.
     * **Attendance Table**: Preserves the complete bilingual attendance statistics (school days opened, present, absent, resumption dates).
     * **Psychomotor & Affective Skills Matrix**: 5-point rating grid for punctuality, neatness, attitude to school work, attentiveness, speaking habit/writing, verbal fluency, and sports.
-    * **Grading Scale Legend & Official Seal**: Dedicated scale (85-100 Excellent, 75-84 V. Good, 65-74 Good, 50-64 Fair, 1-49 Poor) and official seal/stamp.
+    * **Grading Scale Legend & Official Seal**: Dedicated scale (85-100 Excellent, 75-84 V. Good, 65-74 Good, 50-64 Fair, 1-49 Fail) and official seal/stamp.
     * Class Teacher & Principal comment blocks with signature lines and stamps.
 * Attendance statistics (school days, present days, absent days, resumption dates).
 * Bilingual teacher and principal remarks.
