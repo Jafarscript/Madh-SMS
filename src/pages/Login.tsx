@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { Eye, EyeOff } from "lucide-react";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import { getFriendlyErrorMessage } from "../utils/friendlyError";
 
 const roleToRoute: Record<string, string> = {
   super_admin: "/admin/dashboard",
@@ -19,17 +20,37 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [wakingNotice, setWakingNotice] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Pre-warm the portal connection as soon as the login screen opens
+  useEffect(() => {
+    api.get("/health", { timeout: 75000 }).catch(() => {
+      // Ignore silent pre-warm failures
+    });
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
+    setWakingNotice(false);
+    const wakeTimer = window.setTimeout(() => setWakingNotice(true), 4000);
     try {
       const cleanEmail = email.trim();
       const cleanPassword = password.trim();
-      const res = await api.post("/auth/login", { email: cleanEmail, password: cleanPassword });
+      let res;
+      try {
+        res = await api.post("/auth/login", { email: cleanEmail, password: cleanPassword });
+      } catch (firstErr: any) {
+        if (firstErr?.message === "Network Error" || !firstErr?.response) {
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+          res = await api.post("/auth/login", { email: cleanEmail, password: cleanPassword });
+        } else {
+          throw firstErr;
+        }
+      }
       login(res.data.user, res.data.token);
 
       if (res.data.user.mustChangePassword) {
@@ -38,27 +59,16 @@ const Login = () => {
         navigate(roleToRoute[res.data.user.role] || "/");
       }
     } catch (err: any) {
-      const status = err.response?.status;
-      const respData = err.response?.data;
-      if (status === 401) {
-        setError("Invalid email or password");
-      } else if (respData?.diagnostic) {
-        setError(`${respData.message} (${respData.diagnostic})`);
-      } else if (respData?.message) {
-        setError(respData.message);
-      } else if (status === 404) {
-        setError("API route not found (404). Please verify Vercel serverless functions deployment.");
-      } else if (status === 504 || status === 502) {
-        setError("Server timeout (504/502). Could not reach MongoDB Atlas. Please ensure IP access list allows 0.0.0.0/0 in MongoDB Atlas Network Access.");
-      } else if (status === 500) {
-        setError("Server error (500). Please check Vercel function logs and environment variables (MONGODB_URI, JWT_SECRET).");
-      } else if (err.message === "Network Error" || !err.response) {
-        setError("Network error: Unable to contact backend. Please check internet connection or Vercel deployment.");
-      } else {
-        setError(typeof respData === "string" ? respData.slice(0, 120) : "Invalid email or password");
-      }
+      setError(
+        getFriendlyErrorMessage(err, {
+          unauthorizedMessage: "Incorrect email or password. Please check your details and try again.",
+          fallback: "Unable to sign in right now. Please try again in a moment.",
+        })
+      );
     } finally {
+      window.clearTimeout(wakeTimer);
       setLoading(false);
+      setWakingNotice(false);
     }
   };
 
@@ -195,6 +205,11 @@ const Login = () => {
                 >
                   {loading ? "Signing in..." : "Sign In"}
                 </button>
+                {wakingNotice && loading && (
+                  <p className="text-xs text-center text-sky-700 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                    Connecting to the school portal, please hold on a moment...
+                  </p>
+                )}
               </form>
 
               {/* Self-Registration Links */}

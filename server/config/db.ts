@@ -88,9 +88,10 @@ const connectDB = async (): Promise<typeof mongoose> => {
     }
 
     // In-memory MongoDB only for local non-production development
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
       console.log("[Database] Starting in-memory MongoDB server for local development...");
-      const { MongoMemoryServer } = await import("mongodb-memory-server");
+      const memoryServerPkg = "mongodb-memory-server";
+      const { MongoMemoryServer } = await import(/* @vite-ignore */ memoryServerPkg);
       const mongoServer = await MongoMemoryServer.create();
       const uri = mongoServer.getUri();
       const conn = await mongoose.connect(uri, {

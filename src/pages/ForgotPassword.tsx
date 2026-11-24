@@ -4,6 +4,7 @@ import { useNavigate, Link } from "react-router";
 import { Eye, EyeOff, KeyRound, ArrowLeft, CheckCircle2, ShieldCheck, Mail } from "lucide-react";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import { getFriendlyErrorMessage } from "../utils/friendlyError";
 
 const roleToRoute: Record<string, string> = {
   super_admin: "/admin/dashboard",
@@ -47,7 +48,7 @@ const ForgotPassword = () => {
       setSuccessMsg(res.data.message || `Verification code sent to ${cleanEmail}. Please enter the code below.`);
       setStep("reset");
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to find account. Please verify your email.");
+      setError(getFriendlyErrorMessage(err, "We couldn't find an account with that email address. Please check and try again."));
     } finally {
       setLoading(false);
     }
@@ -92,7 +93,7 @@ const ForgotPassword = () => {
         }, 1500);
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || "Invalid or expired reset code. Please try again.");
+      setError(getFriendlyErrorMessage(err, "Invalid or expired reset code. Please try again."));
     } finally {
       setLoading(false);
     }

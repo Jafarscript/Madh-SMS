@@ -98,9 +98,6 @@ export const userBelongsToBranch = async (user: any, branchId: string): Promise<
 // GET /api/users?role=<optional>&status=<optional>
 export const getUsers = async (req: AuthRequest, res: Response) => {
   try {
-    // Run background sync so teachers are always kept updated with their branch
-    autoSyncTeacherBranches().catch(() => {});
-
     const filter: Record<string, any> = {};
     if (req.query.role) filter.role = req.query.role as string;
     if (req.query.status) {

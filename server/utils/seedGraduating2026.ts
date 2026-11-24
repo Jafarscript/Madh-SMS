@@ -30,7 +30,29 @@ export interface GraduatingSetupSummary {
   subjectsSeeded: number;
 }
 
-export const ensureGraduating2026Setup = async (): Promise<GraduatingSetupSummary> => {
+export const ensureGraduating2026Setup = async (
+  options: { force?: boolean } = {}
+): Promise<GraduatingSetupSummary> => {
+  const expectedTotal = GRADUATING_ROSTER_2026.reduce((sum, g) => sum + g.students.length, 0);
+
+  if (!options.force) {
+    const [gradClassCount, gradStudentCount] = await Promise.all([
+      ClassModel.countDocuments({ isGraduating: true }),
+      Student.countDocuments({ seatNumber: { $exists: true, $ne: "" } }),
+    ]);
+
+    if (gradClassCount >= GRADUATING_ROSTER_2026.length && gradStudentCount >= expectedTotal) {
+      return {
+        branchName: "Permanent site (Ronik)",
+        classesCreated: 0,
+        classesExisting: gradClassCount,
+        studentsInserted: 0,
+        studentsUpdated: 0,
+        subjectsSeeded: 0,
+      };
+    }
+  }
+
   // All graduating classes & result collation are handled by Permanent site (Ronik)
   let ronikBranch =
     (await Branch.findOne({ name: /ronik/i })) ||
@@ -89,16 +111,28 @@ export const ensureGraduating2026Setup = async (): Promise<GraduatingSetupSummar
     const seededCount = await seedGraduatingClassSubjects(classId, group.graduatingLevel, branchId);
     subjectsSeeded += seededCount;
 
+    const seatNumbers = group.students.map((s) => s.seatNumber);
+    const existingList = await Student.find({
+      $or: [
+        { seatNumber: { $in: seatNumbers } },
+        { admissionNumber: { $in: seatNumbers } },
+      ],
+    });
+
+    const existingBySeat = new Map<string, (typeof existingList)[number]>();
+    for (const st of existingList) {
+      if (st.seatNumber) existingBySeat.set(st.seatNumber, st);
+      if (st.admissionNumber) existingBySeat.set(st.admissionNumber, st);
+    }
+
+    let groupChanged = false;
+    const toInsert: any[] = [];
+
     for (const s of group.students) {
-      const existingStudent = await Student.findOne({
-        $or: [
-          { seatNumber: s.seatNumber },
-          { admissionNumber: s.seatNumber },
-        ],
-      });
+      const existingStudent = existingBySeat.get(s.seatNumber);
 
       if (!existingStudent) {
-        await Student.create({
+        toInsert.push({
           name: s.name,
           gender: s.gender,
           class: classId,
@@ -113,7 +147,6 @@ export const ensureGraduating2026Setup = async (): Promise<GraduatingSetupSummar
           enrolledTerms: [1, 2, 3],
           resultModeOverride: "default",
         });
-        studentsInserted++;
       } else {
         const stUpdates: Record<string, any> = {};
         if (existingStudent.seatNumber !== s.seatNumber) stUpdates.seatNumber = s.seatNumber;
@@ -123,11 +156,20 @@ export const ensureGraduating2026Setup = async (): Promise<GraduatingSetupSummar
         if (Object.keys(stUpdates).length > 0) {
           await Student.updateOne({ _id: existingStudent._id }, { $set: stUpdates });
           studentsUpdated++;
+          groupChanged = true;
         }
       }
     }
 
-    await renumberClassStudents(classId);
+    if (toInsert.length > 0) {
+      await Student.insertMany(toInsert);
+      studentsInserted += toInsert.length;
+      groupChanged = true;
+    }
+
+    if (groupChanged || options.force) {
+      await renumberClassStudents(classId);
+    }
   }
 
   return {

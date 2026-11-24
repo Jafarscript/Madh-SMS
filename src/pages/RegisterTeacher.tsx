@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router";
 import { Eye, EyeOff, CheckCircle, ShieldCheck, UserCheck, AlertCircle, ArrowLeft } from "lucide-react";
 import api from "../api/axios";
+import { getFriendlyErrorMessage } from "../utils/friendlyError";
 
 interface Branch {
   _id: string;
@@ -66,7 +67,7 @@ const RegisterTeacher = () => {
       });
       setSubmitted(true);
     } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to submit teacher registration");
+      setError(getFriendlyErrorMessage(err, "Unable to complete registration right now. Please try again."));
     } finally {
       setLoading(false);
     }

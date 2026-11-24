@@ -24,31 +24,14 @@ import attendanceRoutes from "./routes/attendanceRoutes";
 import reportCardSettingRoutes from "./routes/reportCardSettingRoutes";
 import predefinedCommentRoutes from "./routes/predefinedCommentRoutes";
 import { errorHandler } from "./middleware/errorHandler";
-import { ensureGraduating2026Setup } from "./utils/seedGraduating2026";
 
 dotenv.config();
 
 export const app = express();
 
-let graduatingSetupPromise: Promise<void> | null = null;
-const triggerGraduatingSetupOnce = () => {
-  if (!graduatingSetupPromise && mongoose.connection.readyState === 1) {
-    graduatingSetupPromise = ensureGraduating2026Setup()
-      .then((res) => {
-        if (res.classesCreated > 0 || res.studentsInserted > 0 || res.subjectsSeeded > 0) {
-          console.log(
-            `[Graduating2026] Synced under ${res.branchName}: +${res.classesCreated} classes, +${res.studentsInserted} students, +${res.subjectsSeeded} subjects`
-          );
-        }
-      })
-      .catch((err) => {
-        console.error("[Graduating2026] Startup sync error:", (err as Error).message);
-      });
-  }
-};
-
 // Middlewares
 app.use(cors());
+app.options("*", cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
@@ -93,41 +76,30 @@ app.get(["/api/health", "/health"], async (_req, res) => {
   });
 });
 
-// Middleware to ensure DB connection for serverless/local environments
+// Middleware to ensure DB connection for API routes only
 app.use(async (req, res, next) => {
-  // Skip DB connection check for preflight requests
-  if (req.method === "OPTIONS") {
+  if (
+    req.method === "OPTIONS" ||
+    req.path === "/" ||
+    /\.(html|js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|map|webmanifest)$/i.test(req.path) ||
+    req.path.startsWith("/assets/") ||
+    req.path.startsWith("/@vite/") ||
+    req.path.startsWith("/src/")
+  ) {
     return next();
   }
 
   try {
     await connectDB();
-    triggerGraduatingSetupOnce();
     next();
   } catch (err) {
     const errorMsg = (err as Error)?.message || "Unknown database error";
-    console.error("[Database] Connection middleware error:", errorMsg);
-
-    let diagnostic = "Database connection error. Check server logs.";
-    const hasMongoUri = Boolean(process.env.MONGODB_URI || process.env.MONGO_URI);
-
-    if (!hasMongoUri) {
-      diagnostic = "MONGODB_URI environment variable is missing on this deployment.";
-    } else if (
-      errorMsg.includes("ETIMEDOUT") ||
-      errorMsg.includes("timed out") ||
-      errorMsg.includes("selection timed out") ||
-      errorMsg.includes("querySrv ENOTFOUND")
-    ) {
-      diagnostic = "Could not reach MongoDB Atlas. Please ensure IP access list allows 0.0.0.0/0 in MongoDB Atlas Network Access.";
-    } else if (errorMsg.includes("bad auth") || errorMsg.includes("Authentication failed")) {
-      diagnostic = "MongoDB Atlas authentication failed. Please verify database username and password in MONGODB_URI.";
-    }
+    console.error("[Database] Connection middleware error:", errorMsg, {
+      hasMongoUri: Boolean(process.env.MONGODB_URI || process.env.MONGO_URI),
+    });
 
     return res.status(503).json({
-      message: "Database connection temporarily unavailable. Please try again shortly.",
-      diagnostic,
-      error: errorMsg,
+      message: "The school portal is temporarily unavailable. Please try again in a moment.",
     });
   }
 });

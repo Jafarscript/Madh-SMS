@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router";
 import { Eye, EyeOff, Search, CheckCircle2, AlertCircle, ArrowLeft, GraduationCap, ShieldCheck, HeartHandshake } from "lucide-react";
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
+import { getFriendlyErrorMessage } from "../utils/friendlyError";
 
 interface ClassItem {
   _id: string;
@@ -72,8 +73,10 @@ const RegisterParent = () => {
       }
     } catch (err: any) {
       setVerifyError(
-        err.response?.data?.message ||
+        getFriendlyErrorMessage(
+          err,
           "Could not locate a student with those details. Please check the Admission Number or select the student's class."
+        )
       );
     } finally {
       setVerifying(false);
@@ -117,7 +120,7 @@ const RegisterParent = () => {
         navigate("/login");
       }
     } catch (err: any) {
-      setSubmitError(err.response?.data?.message || "Failed to create parent account");
+      setSubmitError(getFriendlyErrorMessage(err, "Unable to create parent account right now. Please try again."));
     } finally {
       setSubmitting(false);
     }

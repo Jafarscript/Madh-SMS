@@ -485,7 +485,7 @@ export const setupGraduating2026 = async (req: AuthRequest, res: Response) => {
     if (!isSuperAdmin(req)) {
       return res.status(403).json({ message: "Forbidden: Super Admin access required." });
     }
-    const summary = await ensureGraduating2026Setup();
+    const summary = await ensureGraduating2026Setup({ force: true });
     res.status(200).json({
       message: `Graduating classes & 2026 roster synced under ${summary.branchName}.`,
       summary,

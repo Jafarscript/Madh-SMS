@@ -3,21 +3,14 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import app from "./server/app";
 import connectDB from "./server/config/db";
-import { autoSyncTeacherBranches } from "./server/controllers/userController";
-import { ensureDefaultGradingScale } from "./server/controllers/gradingScaleController";
 
 async function startServer() {
   const PORT = 3000;
 
-  // Initialize DB Connection
-  connectDB()
-    .then(async () => {
-      await autoSyncTeacherBranches();
-      await ensureDefaultGradingScale();
-    })
-    .catch((err) => {
-      console.warn("[Database] Initial connection notice:", (err as Error).message);
-    });
+  // Initialize DB Connection without startup seedings
+  connectDB().catch((err) => {
+    console.warn("[Database] Initial connection notice:", (err as Error).message);
+  });
 
   // Vite middleware for development or static serving for production
   if (process.env.NODE_ENV !== "production") {

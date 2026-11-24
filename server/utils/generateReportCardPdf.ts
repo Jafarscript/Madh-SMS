@@ -8,10 +8,14 @@ const launchOptions = {
 let cachedBrowser: any = null;
 
 const getBrowser = async () => {
+  if (process.env.VERCEL && !process.env.PUPPETEER_EXECUTABLE_PATH) {
+    throw new Error("Puppeteer disabled in serverless runtime without PUPPETEER_EXECUTABLE_PATH");
+  }
   if (cachedBrowser && cachedBrowser.connected) {
     return cachedBrowser;
   }
-  const puppeteer = await import("puppeteer");
+  const puppeteerPkg = "puppeteer";
+  const puppeteer = await import(/* @vite-ignore */ puppeteerPkg);
   cachedBrowser = await puppeteer.default.launch(launchOptions);
   cachedBrowser.on("disconnected", () => {
     cachedBrowser = null;
