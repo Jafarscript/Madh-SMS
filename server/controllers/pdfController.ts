@@ -19,6 +19,7 @@ import {
   buildBulkReportCardHtml,
 } from "../utils/reportCardTemplate";
 import { isElementaryClass, ensureElementarySubjectsForClass } from "./classController";
+import { isClassGraduatingDoc, isSuperAdmin } from "../utils/graduatingAccess";
 
 const setPdfDownloadHeaders = (res: Response, rawName: string) => {
   const safeAsciiFallback = "report_card.pdf";
@@ -42,6 +43,16 @@ export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Respons
     const studentDoc = await Student.findById(studentId).select("class branch");
     if (!studentDoc) return res.status(404).json({ message: "Student not found" });
 
+    let cls = null;
+    if (studentDoc.class) {
+      cls = await ClassModel.findById(studentDoc.class);
+      if (isClassGraduatingDoc(cls) && !isSuperAdmin(req)) {
+        return res.status(403).json({
+          message: "Forbidden: Graduating class report cards are restricted to Super Admin.",
+        });
+      }
+    }
+
     if (req.user?.role === "branch_admin" && req.user.branch) {
       if (studentDoc.branch && studentDoc.branch.toString() !== req.user.branch.toString()) {
         return res.status(403).json({ message: "Forbidden: Student is not in your branch" });
@@ -56,14 +67,11 @@ export const downloadSingleReportCardPdf = async (req: AuthRequest, res: Respons
 
     // Direct Class Model lookup to accurately verify elementary category
     let isClassElementary = false;
-    if (studentDoc.class) {
-      const cls = await ClassModel.findById(studentDoc.class);
-      if (cls) {
-        isClassElementary =
-          cls.category === "elementary" ||
-          isElementaryClass(cls.name, cls.category) ||
-          isElementaryClass(cls.name);
-      }
+    if (cls) {
+      isClassElementary =
+        cls.category === "elementary" ||
+        isElementaryClass(cls.name, cls.category) ||
+        isElementaryClass(cls.name);
     }
 
     const reportData = await buildReportCardData(
@@ -119,6 +127,12 @@ export const downloadBulkReportCardPdf = async (req: AuthRequest, res: Response)
 
     const cls = await ClassModel.findById(classId);
     if (!cls) return res.status(404).json({ message: "Class not found" });
+
+    if (isClassGraduatingDoc(cls) && !isSuperAdmin(req)) {
+      return res.status(403).json({
+        message: "Forbidden: Graduating class report cards are restricted to Super Admin.",
+      });
+    }
 
     if (req.user?.role === "branch_admin" && req.user.branch) {
       if (cls.branch && cls.branch.toString() !== req.user.branch.toString()) {

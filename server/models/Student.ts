@@ -1,5 +1,7 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
 
+export type StudentResultModeOverride = "default" | "current_only" | "combine_1st_and_3rd";
+
 export interface IStudent extends Document {
   name: string;
   gender: "M" | "F";
@@ -8,6 +10,10 @@ export interface IStudent extends Document {
   numberInClass?: number;
   admissionNumber?: string;
   studentCode?: string;
+  seatNumber?: string;
+  sourceSchool?: string;
+  resultModeOverride?: StudentResultModeOverride;
+  excludedSubjects?: Types.ObjectId[];
   parentPhone?: string;
   parentEmail?: string;
   status: "active" | "graduated" | "transferred" | "archived";
@@ -27,6 +33,19 @@ const StudentSchema = new Schema<IStudent>(
     numberInClass: { type: Number },
     admissionNumber: { type: String, trim: true },
     studentCode: { type: String, trim: true },
+    seatNumber: { type: String, trim: true },
+    sourceSchool: { type: String, trim: true },
+    resultModeOverride: {
+      type: String,
+      enum: ["default", "current_only", "combine_1st_and_3rd"],
+      default: "default",
+    },
+    excludedSubjects: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Subject",
+      },
+    ],
     parentPhone: { type: String, trim: true },
     parentEmail: { type: String, trim: true },
     status: {

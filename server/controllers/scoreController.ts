@@ -5,7 +5,13 @@ import { AuthRequest } from "../middleware/auth";
 import User from "../models/User";
 import Student from "../models/Student";
 import ClassModel from "../models/Class";
+import Subject from "../models/Subject";
 import { isClassResultLocked } from "./resultPublicationController";
+import {
+  assertSuperAdminForClass,
+  getAllGraduatingClassIds,
+  isSuperAdmin,
+} from "../utils/graduatingAccess";
 
 export const submitScore = async (req: AuthRequest, res: Response) => {
   try {
@@ -17,6 +23,13 @@ export const submitScore = async (req: AuthRequest, res: Response) => {
 
     const studentDoc = await Student.findById(student).select("class branch");
     if (!studentDoc) return res.status(404).json({ message: "Student not found" });
+
+    const access = await assertSuperAdminForClass(req, studentDoc.class.toString());
+    if (!access.allowed) {
+      return res.status(403).json({
+        message: "Forbidden: Only Super Admin can enter or modify graduating class scores.",
+      });
+    }
 
     // Branch Admin Scoping
     if (req.user?.role === "branch_admin" && req.user.branch) {
@@ -119,12 +132,29 @@ export const getScores = async (req: AuthRequest, res: Response) => {
     if (req.query.subject) filter.subject = req.query.subject as string;
     if (req.query.term) filter.term = req.query.term as string;
 
+    const userIsSuperAdmin = isSuperAdmin(req);
+    const gradClassIds = userIsSuperAdmin ? [] : await getAllGraduatingClassIds();
+
+    if (!userIsSuperAdmin && filter.subject) {
+      const subj = await Subject.findById(filter.subject).select("class");
+      if (subj?.class && gradClassIds.includes(subj.class.toString())) {
+        return res.status(403).json({
+          message: "Forbidden: Graduating class scores are restricted to Super Admin.",
+        });
+      }
+    }
+
     if (req.user?.role === "branch_admin" && req.user.branch) {
-      const branchStudents = await Student.find({ branch: req.user.branch }).select("_id");
+      const branchStudents = await Student.find({
+        branch: req.user.branch,
+        ...(gradClassIds.length > 0 ? { class: { $nin: gradClassIds } } : {}),
+      }).select("_id");
       filter.student = { $in: branchStudents.map((s) => s._id) };
     } else if (req.user?.role === "class_teacher") {
       const teacher = await User.findById(req.user.id);
-      const teacherClasses = (teacher?.classes || []).map((c) => c.toString());
+      const teacherClasses = (teacher?.classes || [])
+        .map((c) => c.toString())
+        .filter((cid) => !gradClassIds.includes(cid));
       const classStudents = await Student.find({ class: { $in: teacherClasses } }).select("_id");
       filter.student = { $in: classStudents.map((s) => s._id) };
     } else if (req.user?.role === "subject_teacher") {
@@ -136,10 +166,14 @@ export const getScores = async (req: AuthRequest, res: Response) => {
       if (!filter.subject) {
         filter.subject = { $in: allowedSubjects };
       }
+      if (gradClassIds.length > 0) {
+        const nonGradStudents = await Student.find({ class: { $nin: gradClassIds } }).select("_id");
+        filter.student = { $in: nonGradStudents.map((s) => s._id) };
+      }
     }
 
     const scores = await Score.find(filter)
-      .populate("student", "name numberInClass")
+      .populate("student", "name numberInClass seatNumber")
       .populate("subject", "nameEnglish nameArabic");
 
     res.status(200).json(scores);
@@ -153,6 +187,15 @@ export const getScoreAuditLogs = async (req: AuthRequest, res: Response) => {
   try {
     const { class: classId, subject: subjectId, term: termId, student: studentId, changedBy, limit = "100", page = "1" } = req.query;
 
+    const userIsSuperAdmin = isSuperAdmin(req);
+    const gradClassIds = userIsSuperAdmin ? [] : await getAllGraduatingClassIds();
+
+    if (!userIsSuperAdmin && classId && gradClassIds.includes(classId.toString())) {
+      return res.status(403).json({
+        message: "Forbidden: Graduating class audit logs are restricted to Super Admin.",
+      });
+    }
+
     const filter: Record<string, any> = {};
     if (classId) filter.class = classId;
     if (subjectId) filter.subject = subjectId;
@@ -162,13 +205,24 @@ export const getScoreAuditLogs = async (req: AuthRequest, res: Response) => {
 
     if (req.user?.role === "branch_admin" && req.user.branch) {
       const branchClasses = await ClassModel.find({ branch: req.user.branch }).select("_id");
-      filter.class = { $in: branchClasses.map((c) => c._id) };
+      const allowed = branchClasses
+        .map((c) => c._id.toString())
+        .filter((cid) => !gradClassIds.includes(cid));
+      filter.class = { $in: allowed };
     } else if (req.user?.role === "class_teacher") {
       const teacher = await User.findById(req.user.id);
-      filter.class = { $in: teacher?.classes || [] };
+      const allowed = (teacher?.classes || [])
+        .map((c) => c.toString())
+        .filter((cid) => !gradClassIds.includes(cid));
+      filter.class = { $in: allowed };
     } else if (req.user?.role === "subject_teacher") {
       const teacher = await User.findById(req.user.id);
       filter.subject = { $in: teacher?.subjects || [] };
+      if (gradClassIds.length > 0 && !filter.class) {
+        filter.class = { $nin: gradClassIds };
+      }
+    } else if (!userIsSuperAdmin && gradClassIds.length > 0 && !filter.class) {
+      filter.class = { $nin: gradClassIds };
     }
 
     const lim = Math.min(200, Math.max(1, parseInt(limit as string, 10) || 100));
@@ -180,7 +234,7 @@ export const getScoreAuditLogs = async (req: AuthRequest, res: Response) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(lim)
-      .populate("student", "name numberInClass gender")
+      .populate("student", "name numberInClass gender seatNumber")
       .populate("subject", "nameEnglish nameArabic")
       .populate("term", "session termNumber isActive")
       .populate("class", "name arm")

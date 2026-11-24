@@ -14,6 +14,8 @@ interface ClassItem {
 interface ParsedStudentRow {
   name: string;
   gender: "M" | "F";
+  seatNumber?: string;
+  sourceSchool?: string;
   admissionNumber?: string;
   parentPhone?: string;
   parentEmail?: string;
@@ -49,6 +51,8 @@ export const BulkStudentUploader: React.FC<Props> = ({
       {
         "Student Full Name": "Ahmad Abdullah",
         "Gender (M or F)": "M",
+        "Seat Number (Optional)": "30001",
+        "Source School (Optional)": "المقر الدائم / Ronik",
         "Admission Number (Optional)": "IAIS/2026/001",
         "Parent Phone": "08012345678",
         "Parent Email": "parent1@gmail.com",
@@ -57,6 +61,8 @@ export const BulkStudentUploader: React.FC<Props> = ({
       {
         "Student Full Name": "Fatima Zaid",
         "Gender (M or F)": "F",
+        "Seat Number (Optional)": "30002",
+        "Source School (Optional)": "فرع لافنوا",
         "Admission Number (Optional)": "IAIS/2026/002",
         "Parent Phone": "08098765432",
         "Parent Email": "parent2@gmail.com",
@@ -115,6 +121,24 @@ export const BulkStudentUploader: React.FC<Props> = ({
 
           const gender: "M" | "F" = rawGender.startsWith("F") ? "F" : "M";
 
+          const seatNumber = (
+            row["Seat Number (Optional)"] ||
+            row["Seat Number"] ||
+            row["Seat No"] ||
+            row["Sit Number"] ||
+            row["seatNumber"] ||
+            row["رقم الجلوس"] ||
+            ""
+          ).toString().trim();
+
+          const sourceSchool = (
+            row["Source School (Optional)"] ||
+            row["Source School"] ||
+            row["School"] ||
+            row["sourceSchool"] ||
+            ""
+          ).toString().trim();
+
           const admissionNumber = (
             row["Admission Number (Optional)"] ||
             row["Admission Number"] ||
@@ -163,6 +187,8 @@ export const BulkStudentUploader: React.FC<Props> = ({
           return {
             name,
             gender,
+            seatNumber: seatNumber || undefined,
+            sourceSchool: sourceSchool || undefined,
             admissionNumber: admissionNumber || undefined,
             parentPhone: parentPhone || undefined,
             parentEmail: parentEmail || undefined,
@@ -203,6 +229,8 @@ export const BulkStudentUploader: React.FC<Props> = ({
         students: validRows.map((r) => ({
           name: r.name,
           gender: r.gender,
+          seatNumber: r.seatNumber,
+          sourceSchool: r.sourceSchool,
           admissionNumber: r.admissionNumber,
           parentPhone: r.parentPhone,
           parentEmail: r.parentEmail,
@@ -348,6 +376,7 @@ export const BulkStudentUploader: React.FC<Props> = ({
                       <th className="py-2 px-3">#</th>
                       <th className="py-2 px-3">Student Name</th>
                       <th className="py-2 px-3">Gender</th>
+                      <th className="py-2 px-3">Seat No.</th>
                       <th className="py-2 px-3">Adm No.</th>
                       <th className="py-2 px-3">Parent Contact</th>
                       <th className="py-2 px-3">Status</th>
@@ -364,6 +393,9 @@ export const BulkStudentUploader: React.FC<Props> = ({
                           }`}>
                             {r.gender === "M" ? "Male" : "Female"}
                           </span>
+                        </td>
+                        <td className="py-2 px-3 font-mono text-indigo-700 font-semibold">
+                          {r.seatNumber || "—"}
                         </td>
                         <td className="py-2 px-3 font-mono text-slate-600">
                           {r.admissionNumber || <span className="text-slate-400 italic font-sans">Auto</span>}

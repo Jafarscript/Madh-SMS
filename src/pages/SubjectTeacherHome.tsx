@@ -39,6 +39,8 @@ interface Student {
   _id: string;
   name: string;
   numberInClass?: number;
+  seatNumber?: string;
+  excludedSubjects?: string[];
 }
 interface Term {
   _id: string;
@@ -216,33 +218,41 @@ const SubjectTeacherHome = () => {
         const q = searchQuery.toLowerCase();
         const matchesName = s.name.toLowerCase().includes(q);
         const matchesNo = s.numberInClass ? String(s.numberInClass).includes(q) : false;
-        if (!matchesName && !matchesNo) return false;
+        const matchesSeat = s.seatNumber ? s.seatNumber.toLowerCase().includes(q) : false;
+        if (!matchesName && !matchesNo && !matchesSeat) return false;
       }
+
+      const isExcluded = Boolean(
+        selectedSubject && (s.excludedSubjects || []).map(String).includes(selectedSubject)
+      );
 
       // Filter
       const entry = entries[s._id];
       const hasCa = entry && entry.ca !== "";
       const hasExam = entry && entry.exam !== "";
-      const isComplete = hasCa && hasExam;
+      const isComplete = !isExcluded && hasCa && hasExam;
       const total = isComplete ? Number(entry.ca) + Number(entry.exam) : null;
 
-      if (filterType === "missing" && isComplete) return false;
+      if (filterType === "missing" && (isComplete || isExcluded)) return false;
       if (filterType === "completed" && !isComplete) return false;
       if (filterType === "at_risk" && (!isComplete || (total !== null && total >= 50))) return false;
 
       return true;
     });
-  }, [sortedStudents, searchQuery, filterType, entries]);
+  }, [sortedStudents, searchQuery, filterType, entries, selectedSubject]);
 
   // Live Class Statistics calculations
   const classStats = useMemo(() => {
+    const activeStudents = sortedStudents.filter(
+      (s) => !selectedSubject || !(s.excludedSubjects || []).map(String).includes(selectedSubject)
+    );
     let completedCount = 0;
     let totalScoreSum = 0;
     let highest = -1;
     let lowest = 101;
     let passCount = 0;
 
-    sortedStudents.forEach((s) => {
+    activeStudents.forEach((s) => {
       const entry = entries[s._id];
       if (entry && entry.ca !== "" && entry.exam !== "") {
         const ca = Number(entry.ca);
@@ -262,15 +272,15 @@ const SubjectTeacherHome = () => {
     const passRate = completedCount > 0 ? `${Math.round((passCount / completedCount) * 100)}%` : "-";
 
     return {
-      totalStudents: sortedStudents.length,
+      totalStudents: activeStudents.length,
       completedCount,
-      completionRate: sortedStudents.length > 0 ? Math.round((completedCount / sortedStudents.length) * 100) : 0,
+      completionRate: activeStudents.length > 0 ? Math.round((completedCount / activeStudents.length) * 100) : 0,
       average,
       highest: highest >= 0 ? highest : "-",
       lowest: lowest <= 100 ? lowest : "-",
       passRate,
     };
-  }, [sortedStudents, entries]);
+  }, [sortedStudents, entries, selectedSubject]);
 
   const handleChange = (studentId: string, field: Field, value: string) => {
     if (field === "total") {
@@ -343,6 +353,9 @@ const SubjectTeacherHome = () => {
     setSavedMsg("");
 
     const toSave = sortedStudents.filter((s) => {
+      if (selectedSubject && (s.excludedSubjects || []).map(String).includes(selectedSubject)) {
+        return false;
+      }
       const entry = entries[s._id];
       return entry && entry.ca !== "" && entry.exam !== "";
     });
@@ -802,6 +815,9 @@ const SubjectTeacherHome = () => {
                       </tr>
                     ) : (
                       filteredStudents.map((s, rowIndex) => {
+                        const isExcluded = Boolean(
+                          selectedSubject && (s.excludedSubjects || []).map(String).includes(selectedSubject)
+                        );
                         const entry = entries[s._id] || { ca: "", exam: "" };
                         const hasCa = entry.ca !== "";
                         const hasExam = entry.exam !== "";
@@ -814,7 +830,7 @@ const SubjectTeacherHome = () => {
                         const isCaInvalid = caNum !== null && (caNum < 0 || caNum > 40);
                         const isExamInvalid = examNum !== null && (examNum < 0 || examNum > 60);
                         const isTotalInvalid = totalNum !== null && (totalNum < 0 || totalNum > 100);
-                        const isIncomplete = (hasCa && !hasExam) || (!hasCa && hasExam);
+                        const isIncomplete = !isExcluded && ((hasCa && !hasExam) || (!hasCa && hasExam));
                         const isSaved = existingScores[s._id] &&
                           String(existingScores[s._id].ca) === entry.ca &&
                           String(existingScores[s._id].exam) === entry.exam;
@@ -823,7 +839,9 @@ const SubjectTeacherHome = () => {
                           <tr
                             key={s._id}
                             className={`transition-colors hover:bg-gray-50/70 ${
-                              isCaInvalid || isExamInvalid || isTotalInvalid
+                              isExcluded
+                                ? "bg-gray-50/70 opacity-60"
+                                : isCaInvalid || isExamInvalid || isTotalInvalid
                                 ? "bg-red-50/40"
                                 : isIncomplete
                                 ? "bg-amber-50/30"
@@ -834,7 +852,19 @@ const SubjectTeacherHome = () => {
                               {s.numberInClass ?? "-"}
                             </td>
                             <td className="p-3.5 font-medium text-gray-900">
-                              {s.name}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span>{s.name}</span>
+                                {s.seatNumber && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded">
+                                    Seat: {s.seatNumber}
+                                  </span>
+                                )}
+                                {isExcluded && (
+                                  <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 rounded">
+                                    Not Offered
+                                  </span>
+                                )}
+                              </div>
                             </td>
 
                             {/* Total Auto-Split */}
@@ -846,9 +876,9 @@ const SubjectTeacherHome = () => {
                                 type="number"
                                 min={0}
                                 max={100}
-                                placeholder="0-100"
-                                disabled={isClassLocked || saving === s._id}
-                                value={totalVal}
+                                placeholder={isExcluded ? "N/A" : "0-100"}
+                                disabled={isClassLocked || isExcluded || saving === s._id}
+                                value={isExcluded ? "" : totalVal}
                                 onChange={(e) => handleChange(s._id, "total", e.target.value)}
                                 onKeyDown={(e) => handleKeyDown(e, rowIndex, "total", s._id)}
                                 className={`w-24 border rounded-lg px-2.5 py-1.5 text-emerald-950 font-bold text-center bg-white outline-none transition disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed ${
@@ -869,9 +899,9 @@ const SubjectTeacherHome = () => {
                                   type="number"
                                   min={0}
                                   max={40}
-                                  placeholder="0-40"
-                                  disabled={isClassLocked || saving === s._id}
-                                  value={entry.ca}
+                                  placeholder={isExcluded ? "N/A" : "0-40"}
+                                  disabled={isClassLocked || isExcluded || saving === s._id}
+                                  value={isExcluded ? "" : entry.ca}
                                   onChange={(e) => handleChange(s._id, "ca", e.target.value)}
                                   onKeyDown={(e) => handleKeyDown(e, rowIndex, "ca", s._id)}
                                   className={`w-20 border rounded-lg px-2.5 py-1.5 text-center outline-none transition disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed ${
@@ -896,9 +926,9 @@ const SubjectTeacherHome = () => {
                                   type="number"
                                   min={0}
                                   max={60}
-                                  placeholder="0-60"
-                                  disabled={isClassLocked || saving === s._id}
-                                  value={entry.exam}
+                                  placeholder={isExcluded ? "N/A" : "0-60"}
+                                  disabled={isClassLocked || isExcluded || saving === s._id}
+                                  value={isExcluded ? "" : entry.exam}
                                   onChange={(e) => handleChange(s._id, "exam", e.target.value)}
                                   onKeyDown={(e) => handleKeyDown(e, rowIndex, "exam", s._id)}
                                   className={`w-20 border rounded-lg px-2.5 py-1.5 text-center outline-none transition disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed ${
@@ -915,7 +945,11 @@ const SubjectTeacherHome = () => {
 
                             {/* Status */}
                             <td className="p-3.5 text-center">
-                              {isCaInvalid || isExamInvalid || isTotalInvalid ? (
+                              {isExcluded ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-md">
+                                  Excluded
+                                </span>
+                              ) : isCaInvalid || isExamInvalid || isTotalInvalid ? (
                                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 bg-red-100/70 px-2 py-0.5 rounded-md">
                                   <AlertTriangle className="w-3 h-3" /> Error
                                 </span>
@@ -940,11 +974,13 @@ const SubjectTeacherHome = () => {
                             <td className="p-3.5 text-right">
                               <button
                                 onClick={() => handleSave(s._id)}
-                                disabled={isClassLocked || saving === s._id || isCaInvalid || isExamInvalid || isTotalInvalid || isIncomplete}
+                                disabled={isClassLocked || isExcluded || saving === s._id || isCaInvalid || isExamInvalid || isTotalInvalid || isIncomplete}
                                 className="text-xs px-3.5 py-1.5 rounded-lg text-white font-medium disabled:opacity-40 shadow-xs transition disabled:cursor-not-allowed"
-                                style={{ backgroundColor: isClassLocked ? "#9CA3AF" : "#0B3D2E" }}
+                                style={{ backgroundColor: isClassLocked || isExcluded ? "#9CA3AF" : "#0B3D2E" }}
                               >
-                                {isClassLocked
+                                {isExcluded
+                                  ? "N/A"
+                                  : isClassLocked
                                   ? "Locked"
                                   : saving === s._id
                                   ? "Saving..."
@@ -965,6 +1001,9 @@ const SubjectTeacherHome = () => {
             {/* Mobile: Stacked cards */}
             <div className="sm:hidden flex flex-col gap-3">
               {filteredStudents.map((s, rowIndex) => {
+                const isExcluded = Boolean(
+                  selectedSubject && (s.excludedSubjects || []).map(String).includes(selectedSubject)
+                );
                 const entry = entries[s._id] || { ca: "", exam: "" };
                 const hasCa = entry.ca !== "";
                 const hasExam = entry.exam !== "";
@@ -974,14 +1013,19 @@ const SubjectTeacherHome = () => {
                   String(existingScores[s._id].exam) === entry.exam;
 
                 return (
-                  <div key={s._id} className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-4 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <p className="text-sm font-bold text-gray-800">
-                        <span className="text-gray-400 mr-1.5 font-mono">#{s.numberInClass || "-"}</span>
-                        {s.name}
+                  <div key={s._id} className={`bg-white rounded-2xl shadow-xs border border-gray-200/80 p-4 space-y-3 ${isExcluded ? "opacity-60" : ""}`}>
+                    <div className="flex justify-between items-center gap-2">
+                      <p className="text-sm font-bold text-gray-800 flex flex-wrap items-center gap-1.5">
+                        <span className="text-gray-400 font-mono">#{s.numberInClass || "-"}</span>
+                        <span>{s.name}</span>
+                        {s.seatNumber && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 rounded">
+                            {s.seatNumber}
+                          </span>
+                        )}
                       </p>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200">
-                        Total: {totalVal || "-"}
+                      <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-900 border border-emerald-200 shrink-0">
+                        {isExcluded ? "Not Offered" : `Total: ${totalVal || "-"}`}
                       </span>
                     </div>
 
@@ -997,10 +1041,10 @@ const SubjectTeacherHome = () => {
                           type="number"
                           min={0}
                           max={100}
-                          placeholder="e.g. 75"
+                          placeholder={isExcluded ? "N/A" : "e.g. 75"}
                           inputMode="numeric"
-                          disabled={isClassLocked || saving === s._id}
-                          value={totalVal}
+                          disabled={isClassLocked || isExcluded || saving === s._id}
+                          value={isExcluded ? "" : totalVal}
                           onChange={(e) => handleChange(s._id, "total", e.target.value)}
                           onKeyDown={(e) => handleKeyDown(e, rowIndex, "total", s._id)}
                           className="w-full border border-emerald-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none font-bold disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
@@ -1018,8 +1062,8 @@ const SubjectTeacherHome = () => {
                             min={0}
                             max={40}
                             inputMode="numeric"
-                            disabled={isClassLocked || saving === s._id}
-                            value={entry.ca}
+                            disabled={isClassLocked || isExcluded || saving === s._id}
+                            value={isExcluded ? "" : entry.ca}
                             onChange={(e) => handleChange(s._id, "ca", e.target.value)}
                             onKeyDown={(e) => handleKeyDown(e, rowIndex, "ca", s._id)}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
@@ -1035,8 +1079,8 @@ const SubjectTeacherHome = () => {
                             min={0}
                             max={60}
                             inputMode="numeric"
-                            disabled={isClassLocked || saving === s._id}
-                            value={entry.exam}
+                            disabled={isClassLocked || isExcluded || saving === s._id}
+                            value={isExcluded ? "" : entry.exam}
                             onChange={(e) => handleChange(s._id, "exam", e.target.value)}
                             onKeyDown={(e) => handleKeyDown(e, rowIndex, "exam", s._id)}
                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200"
@@ -1044,11 +1088,13 @@ const SubjectTeacherHome = () => {
                         </div>
                         <button
                           onClick={() => handleSave(s._id)}
-                          disabled={isClassLocked || saving === s._id}
+                          disabled={isClassLocked || isExcluded || saving === s._id}
                           className="px-4 py-2.5 rounded-lg text-white text-xs font-bold disabled:opacity-50 shrink-0 shadow-xs disabled:cursor-not-allowed"
-                          style={{ backgroundColor: isClassLocked ? "#9CA3AF" : "#0B3D2E" }}
+                          style={{ backgroundColor: isClassLocked || isExcluded ? "#9CA3AF" : "#0B3D2E" }}
                         >
-                          {isClassLocked
+                          {isExcluded
+                            ? "N/A"
+                            : isClassLocked
                             ? "Locked"
                             : saving === s._id
                             ? "..."

@@ -69,3 +69,48 @@ export const isElementaryClass = (name: string, category?: string): boolean => {
   if (category === "secondary") return false;
   return false;
 };
+
+export type GraduatingLevel = "elementary" | "junior_secondary" | "senior_secondary";
+
+export const detectGraduatingLevel = (name: string): GraduatingLevel | undefined => {
+  const n = normalizeArabic(name || "");
+  const raw = (name || "").toLowerCase();
+
+  if (
+    (/ثالث|3/.test(n) && n.includes("اعدادي")) ||
+    /\bjss\s*3\b/i.test(raw) ||
+    /3rd.*junior\s*secondary/i.test(raw)
+  ) {
+    return "junior_secondary";
+  }
+
+  if (
+    (/ثالث|3/.test(n) && n.includes("ثانوي")) ||
+    /\bsss\s*3\b/i.test(raw) ||
+    /3rd.*senior\s*secondary/i.test(raw)
+  ) {
+    return "senior_secondary";
+  }
+
+  if (
+    !n.includes("اعدادي") &&
+    !n.includes("ثانوي") &&
+    (n.includes("ابتدائ") || /\bgraduating\b.*\belementary\b/i.test(raw))
+  ) {
+    return "elementary";
+  }
+
+  return undefined;
+};
+
+export const isGraduatingClass = (name: string, explicitFlag?: boolean): boolean => {
+  if (explicitFlag === true) return true;
+  if (detectGraduatingLevel(name) !== undefined) return true;
+
+  const n = normalizeArabic(name || "");
+  const raw = (name || "").toLowerCase();
+  if (n.includes("شهاده") || raw.includes("graduating")) {
+    return true;
+  }
+  return false;
+};

@@ -3,14 +3,24 @@ import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../context/AuthContext";
 import * as XLSX from "xlsx";
-import { AlertTriangle, Trash2, CheckCircle, FileSpreadsheet, Plus } from "lucide-react";
+import { AlertTriangle, Trash2, CheckCircle, FileSpreadsheet, SlidersHorizontal, GraduationCap } from "lucide-react";
 import { BulkStudentUploader } from "../../components/admin/BulkStudentUploader";
 
 interface ClassItem {
   _id: string;
   name: string;
   arm?: string;
+  category?: "secondary" | "elementary";
+  isGraduating?: boolean;
+  sourceSchool?: string;
+  secondaryResultMode?: "current_only" | "combine_1st_and_3rd";
   branch: { _id: string; name: string };
+}
+
+interface SubjectItem {
+  _id: string;
+  nameEnglish: string;
+  nameArabic?: string;
 }
 
 interface Student {
@@ -18,6 +28,11 @@ interface Student {
   name: string;
   gender: "M" | "F";
   numberInClass?: number;
+  seatNumber?: string;
+  sourceSchool?: string;
+  admissionNumber?: string;
+  resultModeOverride?: "default" | "current_only" | "combine_1st_and_3rd";
+  excludedSubjects?: string[];
   enrolledTerms?: number[];
   joinedTerm?: 1 | 2 | 3;
 }
@@ -25,6 +40,7 @@ interface Student {
 const Students = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === "super_admin" || user?.role === "branch_admin";
+  const isSuperAdmin = user?.role === "super_admin";
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState("");
@@ -32,6 +48,8 @@ const Students = () => {
 
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"M" | "F">("M");
+  const [seatNumber, setSeatNumber] = useState("");
+  const [sourceSchool, setSourceSchool] = useState("");
   const [joinedTerm, setJoinedTerm] = useState<1 | 2 | 3>(1);
   const [enrolledTerms, setEnrolledTerms] = useState<number[]>([1, 2, 3]);
   const [loading, setLoading] = useState(false);
@@ -42,12 +60,11 @@ const Students = () => {
   const [uploadError, setUploadError] = useState("");
   const [uploadSummary, setUploadSummary] = useState("");
 
-  // which student row is currently being edited, and the draft values
-  // for that row — kept separate from the main `students` list so typing
-  // in the edit form doesn't affect the displayed list until saved
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editGender, setEditGender] = useState<"M" | "F">("M");
+  const [editSeatNumber, setEditSeatNumber] = useState("");
+  const [editSourceSchool, setEditSourceSchool] = useState("");
   const [editJoinedTerm, setEditJoinedTerm] = useState<1 | 2 | 3>(1);
   const [editEnrolledTerms, setEditEnrolledTerms] = useState<number[]>([1, 2, 3]);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -60,9 +77,21 @@ const Students = () => {
   const [togglingTermsStudentId, setTogglingTermsStudentId] = useState<string | null>(null);
   const [showBulkModal, setShowBulkModal] = useState(false);
 
+  // Graduating options modal state (Super Admin only)
+  const [classSubjects, setClassSubjects] = useState<SubjectItem[]>([]);
+  const [gradOptionsStudent, setGradOptionsStudent] = useState<Student | null>(null);
+  const [gradSeatNumber, setGradSeatNumber] = useState("");
+  const [gradSourceSchool, setGradSourceSchool] = useState("");
+  const [gradResultMode, setGradResultMode] = useState<"default" | "current_only" | "combine_1st_and_3rd">("default");
+  const [gradExcludedSubjects, setGradExcludedSubjects] = useState<string[]>([]);
+  const [savingGradOptions, setSavingGradOptions] = useState(false);
+
   useEffect(() => {
     api.get("/classes").then((res) => setClasses(res.data));
   }, []);
+
+  const selectedClassObj = classes.find((c) => c._id === selectedClass);
+  const isSelectedGraduating = Boolean(selectedClassObj?.isGraduating);
 
   const handleCleanupOrphaned = async () => {
     setCleaningOrphaned(true);
@@ -153,10 +182,17 @@ const Students = () => {
   useEffect(() => {
     if (!selectedClass) {
       setStudents([]);
+      setClassSubjects([]);
       return;
     }
     fetchStudents(selectedClass);
-  }, [selectedClass]);
+    if (isSuperAdmin) {
+      api
+        .get(`/subjects?class=${selectedClass}`)
+        .then((res) => setClassSubjects(res.data || []))
+        .catch(() => setClassSubjects([]));
+    }
+  }, [selectedClass, isSuperAdmin]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,16 +204,19 @@ const Students = () => {
     setSuccessMessage("");
     setLoading(true);
     try {
-      const selectedClassObj = classes.find((c) => c._id === selectedClass);
       await api.post("/students", {
         name,
         gender,
+        seatNumber: seatNumber.trim() || undefined,
+        sourceSchool: sourceSchool.trim() || undefined,
         joinedTerm,
         enrolledTerms,
         class: selectedClass,
         branch: selectedClassObj?.branch._id,
       });
       setName("");
+      setSeatNumber("");
+      setSourceSchool("");
       setJoinedTerm(1);
       setEnrolledTerms([1, 2, 3]);
       setSuccessMessage("Student added successfully.");
@@ -211,6 +250,8 @@ const Students = () => {
     setEditingId(student._id);
     setEditName(student.name);
     setEditGender(student.gender);
+    setEditSeatNumber(student.seatNumber || "");
+    setEditSourceSchool(student.sourceSchool || "");
     const existingTerms =
       student.enrolledTerms && student.enrolledTerms.length > 0
         ? student.enrolledTerms
@@ -227,6 +268,8 @@ const Students = () => {
     setEditingId(null);
     setEditName("");
     setEditGender("M");
+    setEditSeatNumber("");
+    setEditSourceSchool("");
     setEditJoinedTerm(1);
     setEditEnrolledTerms([1, 2, 3]);
   };
@@ -246,11 +289,11 @@ const Students = () => {
       await api.put(`/students/${id}`, {
         name: editName.trim(),
         gender: editGender,
+        seatNumber: editSeatNumber.trim(),
+        sourceSchool: editSourceSchool.trim(),
         joinedTerm: editJoinedTerm,
         enrolledTerms: editEnrolledTerms,
       });
-      // renumbering may have shifted positions (name/gender changed),
-      // so re-fetch the whole list rather than patching one row locally
       await fetchStudents(selectedClass);
       cancelEdit();
       setSuccessMessage("Student updated successfully.");
@@ -259,6 +302,36 @@ const Students = () => {
       setError(err.response?.data?.message || "Failed to update student");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const openGraduatingOptions = (student: Student) => {
+    setGradOptionsStudent(student);
+    setGradSeatNumber(student.seatNumber || "");
+    setGradSourceSchool(student.sourceSchool || selectedClassObj?.sourceSchool || "");
+    setGradResultMode(student.resultModeOverride || "default");
+    setGradExcludedSubjects((student.excludedSubjects || []).map((id) => String(id)));
+  };
+
+  const handleSaveGraduatingOptions = async () => {
+    if (!gradOptionsStudent) return;
+    setSavingGradOptions(true);
+    setError("");
+    try {
+      await api.put(`/students/${gradOptionsStudent._id}/graduating-options`, {
+        seatNumber: gradSeatNumber.trim(),
+        sourceSchool: gradSourceSchool.trim(),
+        resultModeOverride: gradResultMode,
+        excludedSubjects: gradExcludedSubjects,
+      });
+      await fetchStudents(selectedClass);
+      setGradOptionsStudent(null);
+      setSuccessMessage("Graduating student options updated.");
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to save graduating options");
+    } finally {
+      setSavingGradOptions(false);
     }
   };
 
@@ -281,11 +354,17 @@ const Students = () => {
 
       const parsedStudents = rows
         .map((row) => ({
-          name: String(row.name || row.Name || "").trim(),
+          name: String(row.name || row.Name || row["Student Full Name"] || "").trim(),
           gender:
-            (row.gender || row.Gender || "M").toString().toUpperCase() === "F"
+            (row.gender || row.Gender || "M").toString().toUpperCase().startsWith("F")
               ? "F"
               : "M",
+          seatNumber: String(
+            row.seatNumber || row["Seat Number"] || row["Seat No"] || row["رقم الجلوس"] || ""
+          ).trim() || undefined,
+          sourceSchool: String(
+            row.sourceSchool || row["Source School"] || row.School || ""
+          ).trim() || undefined,
         }))
         .filter((s) => s.name.length > 0);
 
@@ -456,6 +535,30 @@ const Students = () => {
                   <option value="F">F</option>
                 </select>
               </div>
+              <div className="w-40">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Seat No. (رقم الجلوس)
+                </label>
+                <input
+                  value={seatNumber}
+                  onChange={(e) => setSeatNumber(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm font-mono"
+                />
+              </div>
+              {isSelectedGraduating && (
+                <div className="w-48">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Source School
+                  </label>
+                  <input
+                    value={sourceSchool}
+                    onChange={(e) => setSourceSchool(e.target.value)}
+                    placeholder={selectedClassObj?.sourceSchool || "Optional"}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm"
+                  />
+                </div>
+              )}
               <div className="w-56">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Joined Term
@@ -489,7 +592,7 @@ const Students = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search students by name..."
+              placeholder="Search by student name or seat number..."
               className="w-full max-w-sm border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
             />
             <div className="text-xs text-gray-500 bg-sky-50 border border-sky-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
@@ -504,12 +607,27 @@ const Students = () => {
                 No students in this class yet.
               </p>
             )}
-            {students
-              .filter((s) =>
-                s.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-              )
-              .sort((a, b) => (a.numberInClass ?? 0) - (b.numberInClass ?? 0))
-              .map((s) => {
+            {(() => {
+              const q = searchQuery.trim().toLowerCase();
+              const matching = students
+                .filter(
+                  (s) =>
+                    !q ||
+                    s.name.toLowerCase().includes(q) ||
+                    (s.seatNumber && s.seatNumber.toLowerCase().includes(q)) ||
+                    (s.admissionNumber && s.admissionNumber.toLowerCase().includes(q))
+                )
+                .sort((a, b) => (a.numberInClass ?? 0) - (b.numberInClass ?? 0));
+
+              if (students.length > 0 && matching.length === 0) {
+                return (
+                  <p className="p-6 text-sm text-gray-400">
+                    No students match "{searchQuery}"
+                  </p>
+                );
+              }
+
+              return matching.map((s) => {
                 const sEnrolledTerms =
                   s.enrolledTerms && s.enrolledTerms.length > 0
                     ? s.enrolledTerms
@@ -518,151 +636,325 @@ const Students = () => {
                     : [1, 2, 3];
 
                 return (
-                <div key={s._id} className="p-4">
-                  {editingId === s._id ? (
-                    // inline edit mode — replaces the row's display with
-                    // editable inputs, rather than opening a separate modal
-                    <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                      <span className="text-gray-400 w-8 shrink-0">
-                        {s.numberInClass}.
-                      </span>
-                      <input
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-                      />
-                      <select
-                        value={editGender}
-                        onChange={(e) =>
-                          setEditGender(e.target.value as "M" | "F")
-                        }
-                        className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm shrink-0"
-                      >
-                        <option value="M">M</option>
-                        <option value="F">F</option>
-                      </select>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-xs text-gray-500 font-medium mr-1">Terms:</span>
-                        {[1, 2, 3].map((tNum) => {
-                          const isChecked = editEnrolledTerms.includes(tNum);
-                          return (
-                            <button
-                              key={tNum}
-                              type="button"
-                              onClick={() => {
-                                if (isChecked) {
-                                  if (editEnrolledTerms.length > 1) {
-                                    setEditEnrolledTerms(editEnrolledTerms.filter((t) => t !== tNum));
-                                  }
-                                } else {
-                                  setEditEnrolledTerms([...editEnrolledTerms, tNum].sort((a, b) => a - b));
-                                }
-                              }}
-                              className={`px-2 py-1 text-xs font-semibold rounded-md border transition ${
-                                isChecked
-                                  ? "bg-emerald-600 text-white border-emerald-600"
-                                  : "bg-gray-100 text-gray-400 border-gray-200 line-through"
-                              }`}
-                            >
-                              T{tNum}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          onClick={() => saveEdit(s._id)}
-                          disabled={savingEdit}
-                          className="text-sm px-3.5 py-1.5 rounded-lg text-white font-medium bg-sky-600 hover:bg-sky-700 disabled:opacity-50 transition"
-                        >
-                          {savingEdit ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <p className="font-medium text-gray-800">
-                          {s.numberInClass && (
-                            <span className="text-gray-400 mr-2">
-                              {s.numberInClass}.
-                            </span>
+                  <div key={s._id} className="p-4">
+                    {editingId === s._id ? (
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                          <span className="text-gray-400 w-8 shrink-0">
+                            {s.numberInClass}.
+                          </span>
+                          <input
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            className="flex-1 min-w-[140px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                          />
+                          <input
+                            value={editSeatNumber}
+                            onChange={(e) => setEditSeatNumber(e.target.value)}
+                            placeholder="Seat No."
+                            className="w-32 border border-gray-300 rounded-lg px-3 py-1.5 text-sm font-mono"
+                          />
+                          {isSelectedGraduating && (
+                            <input
+                              value={editSourceSchool}
+                              onChange={(e) => setEditSourceSchool(e.target.value)}
+                              placeholder="Source School"
+                              className="w-40 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                            />
                           )}
-                          {s.name}{" "}
-                          <span className="text-sm text-gray-400">
-                            ({s.gender})
-                          </span>
-                        </p>
-
-                        {/* Interactive Term Presence Badges */}
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-                            Present:
-                          </span>
-                          {[1, 2, 3].map((tNum) => {
-                            const isPresent = sEnrolledTerms.includes(tNum);
-                            return (
-                              <button
-                                key={tNum}
-                                type="button"
-                                onClick={() => handleToggleTermPresence(s, tNum)}
-                                disabled={togglingTermsStudentId === s._id}
-                                title={`Term ${tNum}: Click to ${
-                                  isPresent ? "exclude" : "enroll"
-                                } student. When excluded, non-enrolled term scores are not counted in cumulative total.`}
-                                className={`px-2 py-0.5 text-xs font-bold rounded-md border transition cursor-pointer ${
-                                  isPresent
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
-                                    : "bg-gray-100 text-gray-400 border-gray-200 line-through opacity-60 hover:opacity-90"
-                                }`}
-                              >
-                                T{tNum}
-                              </button>
-                            );
-                          })}
+                          <select
+                            value={editGender}
+                            onChange={(e) =>
+                              setEditGender(e.target.value as "M" | "F")
+                            }
+                            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm shrink-0"
+                          >
+                            <option value="M">M</option>
+                            <option value="F">F</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 pl-8">
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="text-xs text-gray-500 font-medium mr-1">Terms:</span>
+                            {[1, 2, 3].map((tNum) => {
+                              const isChecked = editEnrolledTerms.includes(tNum);
+                              return (
+                                <button
+                                  key={tNum}
+                                  type="button"
+                                  onClick={() => {
+                                    if (isChecked) {
+                                      if (editEnrolledTerms.length > 1) {
+                                        setEditEnrolledTerms(editEnrolledTerms.filter((t) => t !== tNum));
+                                      }
+                                    } else {
+                                      setEditEnrolledTerms([...editEnrolledTerms, tNum].sort((a, b) => a - b));
+                                    }
+                                  }}
+                                  className={`px-2 py-1 text-xs font-semibold rounded-md border transition ${
+                                    isChecked
+                                      ? "bg-emerald-600 text-white border-emerald-600"
+                                      : "bg-gray-100 text-gray-400 border-gray-200 line-through"
+                                  }`}
+                                >
+                                  T{tNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => saveEdit(s._id)}
+                              disabled={savingEdit}
+                              className="text-sm px-3.5 py-1.5 rounded-lg text-white font-medium bg-sky-600 hover:bg-sky-700 disabled:opacity-50 transition"
+                            >
+                              {savingEdit ? "Saving..." : "Save"}
+                            </button>
+                            <button
+                              onClick={cancelEdit}
+                              className="text-sm px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 transition"
+                            >
+                              Cancel
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    ) : (
+                      <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-3">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <p className="font-medium text-gray-800">
+                            {s.numberInClass && (
+                              <span className="text-gray-400 mr-2">
+                                {s.numberInClass}.
+                              </span>
+                            )}
+                            {s.name}{" "}
+                            <span className="text-sm text-gray-400">
+                              ({s.gender})
+                            </span>
+                          </p>
 
-                      <div className="flex items-center gap-3 shrink-0">
-                        <button
-                          onClick={() => startEdit(s)}
-                          className="text-sm font-medium text-sky-600 hover:text-sky-800 hover:underline"
-                        >
-                          Edit
-                        </button>
-                        {isAdmin && (
+                          {s.seatNumber && (
+                            <span className="px-2 py-0.5 text-xs font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-md">
+                              Seat: {s.seatNumber}
+                            </span>
+                          )}
+
+                          {s.sourceSchool && s.sourceSchool !== selectedClassObj?.sourceSchool && (
+                            <span className="px-2 py-0.5 text-[11px] bg-amber-50 text-amber-800 border border-amber-200 rounded-md">
+                              {s.sourceSchool}
+                            </span>
+                          )}
+
+                          {s.resultModeOverride === "combine_1st_and_3rd" && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold bg-purple-50 text-purple-800 border border-purple-200 rounded-md">
+                              1st+3rd
+                            </span>
+                          )}
+
+                          {s.excludedSubjects && s.excludedSubjects.length > 0 && (
+                            <span className="px-2 py-0.5 text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 rounded-md">
+                              {s.excludedSubjects.length} subj excluded
+                            </span>
+                          )}
+
+                          {/* Interactive Term Presence Badges */}
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                              Present:
+                            </span>
+                            {[1, 2, 3].map((tNum) => {
+                              const isPresent = sEnrolledTerms.includes(tNum);
+                              return (
+                                <button
+                                  key={tNum}
+                                  type="button"
+                                  onClick={() => handleToggleTermPresence(s, tNum)}
+                                  disabled={togglingTermsStudentId === s._id}
+                                  title={`Term ${tNum}: Click to ${
+                                    isPresent ? "exclude" : "enroll"
+                                  } student. When excluded, non-enrolled term scores are not counted in cumulative total.`}
+                                  className={`px-2 py-0.5 text-xs font-bold rounded-md border transition cursor-pointer ${
+                                    isPresent
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-300 hover:bg-emerald-100"
+                                      : "bg-gray-100 text-gray-400 border-gray-200 line-through opacity-60 hover:opacity-90"
+                                  }`}
+                                >
+                                  T{tNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 shrink-0">
+                          {isSuperAdmin && isSelectedGraduating && (
+                            <button
+                              type="button"
+                              onClick={() => openGraduatingOptions(s)}
+                              className="text-xs font-semibold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg flex items-center gap-1 transition"
+                            >
+                              <SlidersHorizontal className="w-3.5 h-3.5" />
+                              Options
+                            </button>
+                          )}
                           <button
-                            onClick={() => setDeletingStudent(s)}
-                            className="text-sm text-red-600 hover:text-red-800 hover:underline flex items-center gap-1"
+                            onClick={() => startEdit(s)}
+                            className="text-sm font-medium text-sky-600 hover:text-sky-800 hover:underline"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Delete
+                            Edit
                           </button>
-                        )}
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeletingStudent(s)}
+                              className="text-sm text-red-600 hover:text-red-800 hover:underline flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              Delete
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {students.length > 0 &&
-                    searchQuery.trim() &&
-                    students.filter((s) =>
-                      s.name
-                        .toLowerCase()
-                        .includes(searchQuery.trim().toLowerCase()),
-                    ).length === 0 && (
-                      <p className="p-6 text-sm text-gray-400">
-                        No students match "{searchQuery}"
-                      </p>
                     )}
-                </div>
-              );
-            })}
+                  </div>
+                );
+              });
+            })()}
           </div>
+
+          {/* Graduating Student Options Modal (Super Admin Only) */}
+          {gradOptionsStudent && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 max-h-[90vh] overflow-y-auto space-y-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-gray-900">
+                      Graduating Options: {gradOptionsStudent.name}
+                    </h3>
+                    <p className="text-xs text-gray-500">
+                      Set seat number, scoring rule override, or subjects not offered by this student's school.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Seat Number (رقم الجلوس)
+                    </label>
+                    <input
+                      value={gradSeatNumber}
+                      onChange={(e) => setGradSeatNumber(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Source School
+                    </label>
+                    <input
+                      value={gradSourceSchool}
+                      onChange={(e) => setGradSourceSchool(e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+
+                {selectedClassObj?.category !== "elementary" && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Secondary Result Mode Override
+                    </label>
+                    <select
+                      value={gradResultMode}
+                      onChange={(e) =>
+                        setGradResultMode(
+                          e.target.value as "default" | "current_only" | "combine_1st_and_3rd"
+                        )
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+                    >
+                      <option value="default">
+                        Default (Class Setting:{" "}
+                        {selectedClassObj?.secondaryResultMode === "combine_1st_and_3rd"
+                          ? "Combine 1st + 3rd Terms"
+                          : "Current Exam Only"}
+                        )
+                      </option>
+                      <option value="current_only">Current Exam Only</option>
+                      <option value="combine_1st_and_3rd">
+                        Combine 1st + 3rd Terms (Skipped 2nd Term)
+                      </option>
+                    </select>
+                  </div>
+                )}
+
+                {classSubjects.length > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                      Excluded Subjects (Check subjects NOT offered by this student's school)
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2.5 border border-gray-200 rounded-xl bg-gray-50/70">
+                      {classSubjects.map((subj) => {
+                        const isExcl = gradExcludedSubjects.includes(subj._id);
+                        return (
+                          <label
+                            key={subj._id}
+                            className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition ${
+                              isExcl
+                                ? "bg-rose-50 border-rose-300 text-rose-900 font-semibold"
+                                : "bg-white border-gray-200 text-gray-700"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isExcl}
+                              onChange={() =>
+                                setGradExcludedSubjects((prev) =>
+                                  isExcl
+                                    ? prev.filter((id) => id !== subj._id)
+                                    : [...prev, subj._id]
+                                )
+                              }
+                              className="rounded text-rose-600"
+                            />
+                            <span className="truncate flex-1">{subj.nameEnglish}</span>
+                            {subj.nameArabic && (
+                              <span style={{ fontFamily: "Amiri, serif" }} dir="rtl">
+                                {subj.nameArabic}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
+                  <button
+                    type="button"
+                    onClick={() => setGradOptionsStudent(null)}
+                    disabled={savingGradOptions}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveGraduatingOptions}
+                    disabled={savingGradOptions}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition disabled:opacity-50"
+                  >
+                    {savingGradOptions ? "Saving..." : "Save Options"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Admin Delete Confirmation Modal for Student */}
           {deletingStudent && (

@@ -64,6 +64,8 @@ export interface ReportCardData {
     name: string;
     gender: string;
     numberInClass?: number;
+    seatNumber?: string | null;
+    sourceSchool?: string | null;
     class: string;
     arm: string | null;
   };
@@ -98,8 +100,21 @@ export interface ReportCardData {
   templateSettings?: ReportCardTemplateSettings | null;
   isElementary?: boolean;
   classCategory?: "elementary" | "secondary";
+  isGraduating?: boolean;
+  graduatingLevel?: string | null;
+  secondaryResultMode?: "cascade" | "current_only" | "combine_1st_and_3rd";
   affectiveScores?: Record<string, number>;
 }
+
+const escHtml = (val: unknown): string => {
+  if (val === null || val === undefined) return "";
+  return String(val)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
 
 // CSS values here deliberately mirror the Tailwind classes used in
 // client/src/components/ReportCardView.tsx (text-2xl=24px, text-xs=12px,
@@ -1350,17 +1365,26 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
             <tbody>
               <tr class="border-b">
                 <td class="info-td-label" style="width: 20%;">Name:</td>
-                <td class="info-td-val name-val" style="width: 60%;"><strong>${student.name}</strong></td>
+                <td class="info-td-val name-val" style="width: 60%;"><strong>${escHtml(student.name)}</strong></td>
                 <td class="info-td-ar" style="width: 20%;">:الإسم</td>
               </tr>
-              <tr>
+              <tr class="${student.seatNumber ? "border-b" : ""}">
                 <td class="info-td-label">Class:</td>
                 <td class="info-td-val class-val">
-                  <strong style="text-transform: uppercase;">${student.class}</strong>
-                  ${student.arm ? `<strong> (${student.arm})</strong>` : ""}
+                  <strong style="text-transform: uppercase;">${escHtml(student.class)}</strong>
+                  ${student.arm ? `<strong> (${escHtml(student.arm)})</strong>` : ""}
                 </td>
                 <td class="info-td-ar">:الصف</td>
               </tr>
+              ${
+                student.seatNumber
+                  ? `<tr>
+                      <td class="info-td-label">Seat No:</td>
+                      <td class="info-td-val"><strong>${escHtml(student.seatNumber)}</strong></td>
+                      <td class="info-td-ar">:رقم الجلوس</td>
+                    </tr>`
+                  : ""
+              }
             </tbody>
           </table>
 
@@ -1722,7 +1746,11 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
   const primaryColor = templateSettings?.primaryColor || "#16a34a";
   const headerColor = templateSettings?.headerColor || "#1e3a8a";
 
-  const showCascadeColumns = term.termNumber === 2 || term.termNumber === 3;
+  const resultMode = data.secondaryResultMode || "cascade";
+  const showCascadeColumns =
+    resultMode === "current_only"
+      ? false
+      : term.termNumber === 2 || term.termNumber === 3;
 
   // Density tier: tighten spacing as the subject count grows so the card
   // always stays on a single A4 page. <= 12 subjects renders exactly as before.
@@ -1742,7 +1770,7 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
     .map(
       (s) => `
       <tr>
-      <td class="subject-name">${s.nameEnglish} ${s.nameArabic ? `<span class="ar">${s.nameArabic}</span>` : ""}</td>
+      <td class="subject-name">${escHtml(s.nameEnglish)} ${s.nameArabic ? `<span class="ar">${escHtml(s.nameArabic)}</span>` : ""}</td>
       <td class="score">${s.ca ?? "-"}</td>
       <td class="score">${s.exam ?? "-"}</td>
       <td class="score">${s.currentTermScore ?? "-"}</td>
@@ -1753,11 +1781,13 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
     )
     .join("");
 
-  // Only show terms up to the one being printed, so a 2nd term card never
-  // includes 3rd term data in its term list or cumulative average.
-  const visibleTermAverages = (termAverages || []).filter(
-    (t) => t.termNumber <= term.termNumber
-  );
+  // Only show applicable terms up to the one being printed
+  const visibleTermAverages = (termAverages || []).filter((t) => {
+    if (t.termNumber > term.termNumber) return false;
+    if (resultMode === "current_only") return t.termNumber === term.termNumber;
+    if (resultMode === "combine_1st_and_3rd") return t.termNumber !== 2;
+    return true;
+  });
   const validAvgs = visibleTermAverages
     .map((t) => t.average)
     .filter((v): v is number => v !== null && v !== undefined);
@@ -1849,27 +1879,27 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
         </div>
         <div class="student-info">
           <div class="student-info-row">
-            <div class="value arabic">${student.name}</div>
+            <div class="value arabic">${escHtml(student.name)}</div>
             <div class="label">الاسم<br/>NAME</div>
           </div>
+          ${
+            student.seatNumber
+              ? `<div class="student-info-row">
+                  <div class="value">${escHtml(student.seatNumber)}</div>
+                  <div class="label">رقم الجلوس<br/>SEAT NO</div>
+                </div>`
+              : ""
+          }
           <div class="student-info-row">
-            <div class="value arabic">${student.class}</div>
+            <div class="value arabic">${escHtml(student.class)}${student.arm ? ` — ${escHtml(student.arm)}` : ""}</div>
             <div class="label">الصف<br/>CLASS</div>
           </div>
           <div class="student-info-row">
             <div class="value">${totalStudentsInClass ?? "-"}</div>
             <div class="label">عدد الطلاب<br/>NO IN CLASS</div>
           </div>
-          ${
-            student.arm
-              ? `<div class="student-info-row">
-                  <div class="value">${student.arm}</div>
-                  <div class="label">الشعبة<br/>DIVISION</div>
-                </div>`
-              : ""
-          }
           <div class="student-info-row">
-            <div class="value">${student.gender}</div>
+            <div class="value">${escHtml(student.gender)}</div>
             <div class="label">الجنس<br/>GENDER</div>
           </div>
         </div>
@@ -1883,13 +1913,16 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
             <th>EXAM :متح<br/>60</th>
             <th>TOTAL : محص<br/>100</th>
             ${
-              term.termNumber === 2
+              showCascadeColumns && term.termNumber === 2
                 ? `<th>محصلة الفترة الأولى<br/>1st term total</th>
                    <th>محصلة الفترة الأولى والثانية<br/>1st and 2nd term total</th>`
                 : ""
             }
             ${
-              term.termNumber === 3
+              showCascadeColumns && term.termNumber === 3 && resultMode === "combine_1st_and_3rd"
+                ? `<th>محصلة الفترة الأولى<br/>1st term total</th>
+                   <th>محصلة الفترة الأولى والثالثة<br/>1st and 3rd term total</th>`
+                : showCascadeColumns && term.termNumber === 3
                 ? `<th>محصلة الفترة الثانية<br/>2nd term total</th>
                    <th>محصلة الفترة الثانية والثالثة<br/>2nd and 3rd term total</th>`
                 : ""
@@ -1919,7 +1952,7 @@ const buildSecondarySheetHtml = (data: ReportCardData): string => {
             <tbody>
               ${termAverageRows}
               <tr class="cumulative-row">
-                <td class="cum-label">CUMULATIVE AVERAGE</td>
+                <td class="cum-label">${resultMode === "current_only" ? "TERM AVERAGE" : "CUMULATIVE AVERAGE"}</td>
                 <td class="cum-val">${safeCumulative ?? "-"}</td>
               </tr>
             </tbody>

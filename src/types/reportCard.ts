@@ -62,10 +62,15 @@ export interface ReportCardAttendance {
 export interface ReportCardData {
   isElementary?: boolean;
   classCategory?: "elementary" | "secondary";
+  isGraduating?: boolean;
+  graduatingLevel?: string | null;
+  secondaryResultMode?: "cascade" | "current_only" | "combine_1st_and_3rd";
   student: {
     name: string;
     gender: string;
     numberInClass?: number;
+    seatNumber?: string | null;
+    sourceSchool?: string | null;
     class: string;
     arm: string | null;
   };

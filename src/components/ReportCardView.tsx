@@ -48,6 +48,16 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
     remarkArabic,
   } = data;
 
+  const secondaryResultMode = data.secondaryResultMode || "cascade";
+  const showCascadeCols = secondaryResultMode !== "current_only";
+  const visibleTermAverages =
+    secondaryResultMode === "current_only"
+      ? termAverages.filter((t) => t.termNumber === term.termNumber)
+      : secondaryResultMode === "combine_1st_and_3rd"
+      ? termAverages.filter((t) => t.termNumber !== 2)
+      : termAverages;
+  const isCompactSubjects = subjects.length >= 14;
+
   const fallbackRemark =
     overallPercentage >= 85
       ? "Excellent"
@@ -257,6 +267,18 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
               </div>
             </div>
           )}
+          {student.seatNumber && (
+            <div className="flex border-b border-black h-9">
+              <div className="flex-2 flex items-center justify-center font-bold text-sm font-mono border-r border-black">
+                {student.seatNumber}
+              </div>
+              <div className="flex-1 flex items-center justify-center text-center text-[10px] font-bold leading-tight">
+                رقم الجلوس
+                <br />
+                SEAT NO
+              </div>
+            </div>
+          )}
           <div className="flex h-9">
             <div className="flex-2 flex items-center justify-center font-bold text-sm border-r border-black">
               {student.gender}
@@ -271,7 +293,7 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
       </div>
 
       {/* subject table */}
-      <table className="w-full text-[10px] border-collapse mb-2">
+      <table className={`w-full ${isCompactSubjects ? "text-[9px]" : "text-[10px]"} border-collapse mb-2`}>
         <thead>
           <tr style={{ backgroundColor: "#fafafa" }}>
             <th className="border border-black p-1 text-left">
@@ -293,16 +315,16 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
               100
             </th>
 
-            {/* term 2 only: shows term 1's raw total */}
-            {term.termNumber === 2 && (
+            {/* term 2 only (cascade mode): shows term 1's raw total */}
+            {showCascadeCols && term.termNumber === 2 && (
               <th className="border border-black p-1">
                 محصلة الفترة الأولى
                 <br />
                 1st term total
               </th>
             )}
-            {/* term 2 only: cascade through term 1+2 */}
-            {term.termNumber === 2 && (
+            {/* term 2 only (cascade mode): cascade through term 1+2 */}
+            {showCascadeCols && term.termNumber === 2 && (
               <th className="border border-black p-1">
                 محصلة الفترة الأولى والثانية
                 <br />
@@ -310,20 +332,27 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
               </th>
             )}
 
-            {/* term 3 only: shows the cascade value through term 1+2 (what was term 2's final average) */}
-            {term.termNumber === 3 && (
+            {/* term 3 only (cascade or combine_1st_and_3rd) */}
+            {showCascadeCols && term.termNumber === 3 && (
               <th className="border border-black p-1">
-                محصلة الفترة الثانية
+                {secondaryResultMode === "combine_1st_and_3rd"
+                  ? "محصلة الفترة الأولى"
+                  : "محصلة الفترة الثانية"}
                 <br />
-                2nd term total
+                {secondaryResultMode === "combine_1st_and_3rd"
+                  ? "1st term total"
+                  : "2nd term total"}
               </th>
             )}
-            {/* term 3 only: cascade through term 1+2+3 */}
-            {term.termNumber === 3 && (
+            {showCascadeCols && term.termNumber === 3 && (
               <th className="border border-black p-1">
-                محصلة الفترة الثانية والثالثة
+                {secondaryResultMode === "combine_1st_and_3rd"
+                  ? "محصلة الفترة الأولى والثالثة"
+                  : "محصلة الفترة الثانية والثالثة"}
                 <br />
-                2nd and 3rd term total
+                {secondaryResultMode === "combine_1st_and_3rd"
+                  ? "1st and 3rd term total"
+                  : "2nd and 3rd term total"}
               </th>
             )}
 
@@ -337,7 +366,7 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
         <tbody>
           {subjects.map((s) => (
             <tr key={s.subject}>
-              <td className="border border-black p-1 font-bold text-left">
+              <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} font-bold text-left`}>
                 {s.nameEnglish}{" "}
                 {s.nameArabic && (
                   <span
@@ -348,40 +377,39 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
                   </span>
                 )}
               </td>
-              <td className="border border-black p-1 text-center">
+              <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center`}>
                 {s.ca ?? "-"}
               </td>
-              <td className="border border-black p-1 text-center">
+              <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center`}>
                 {s.exam ?? "-"}
               </td>
-              <td className="border border-black p-1 text-center font-bold">
+              <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center font-bold`}>
                 {s.currentTermScore ?? "-"}
               </td>
 
-              {term.termNumber === 2 && (
-                <td className="border border-black p-1 text-center">
+              {showCascadeCols && term.termNumber === 2 && (
+                <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center`}>
                   {s.priorPeriodValue ?? "-"}
                 </td>
               )}
-              {term.termNumber === 2 && (
-                <td className="border border-black p-1 text-center font-bold">
-                  {s.combinedTotal ?? "-"}{" "}
-                  {/* was s.cumulativeAverage — this is now the SUM */}
+              {showCascadeCols && term.termNumber === 2 && (
+                <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center font-bold`}>
+                  {s.combinedTotal ?? "-"}
                 </td>
               )}
 
-              {term.termNumber === 3 && (
-                <td className="border border-black p-1 text-center">
+              {showCascadeCols && term.termNumber === 3 && (
+                <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center`}>
                   {s.priorPeriodValue ?? "-"}
                 </td>
               )}
-              {term.termNumber === 3 && (
-                <td className="border border-black p-1 text-center font-bold">
-                  {s.combinedTotal ?? "-"} {/* same fix */}
+              {showCascadeCols && term.termNumber === 3 && (
+                <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center font-bold`}>
+                  {s.combinedTotal ?? "-"}
                 </td>
               )}
 
-              <td className="border border-black p-1 text-center font-bold">
+              <td className={`border border-black ${isCompactSubjects ? "px-1 py-0.5" : "p-1"} text-center font-bold`}>
                 {s.cumulativeAverage ?? "-"}
               </td>
             </tr>
@@ -392,19 +420,17 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
             </td>
             <td className="border border-black p-1"></td>
             <td className="border border-black p-1"></td>
-            <td className="border border-black p-1 text-center">
-              
-            </td>
-            {term.termNumber === 2 && (
+            <td className="border border-black p-1 text-center"></td>
+            {showCascadeCols && term.termNumber === 2 && (
               <td className="border border-black p-1"></td>
             )}
-            {term.termNumber === 2 && (
+            {showCascadeCols && term.termNumber === 2 && (
               <td className="border border-black p-1"></td>
             )}
-            {term.termNumber === 3 && (
+            {showCascadeCols && term.termNumber === 3 && (
               <td className="border border-black p-1"></td>
             )}
-            {term.termNumber === 3 && (
+            {showCascadeCols && term.termNumber === 3 && (
               <td className="border border-black p-1"></td>
             )}
             <td className="border border-black p-1 text-center">{overallTotal}</td>
@@ -448,7 +474,7 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
         <div className="flex-1 border-r border-black flex flex-col justify-between">
           <table className="w-full text-[10px] border-collapse h-full">
             <tbody>
-              {termAverages.map((t) => (
+              {visibleTermAverages.map((t) => (
                 <tr key={t.termNumber} className="border-b border-black">
                   <td className="px-2 py-1 text-left whitespace-nowrap align-middle">
                     <span className="font-semibold text-gray-900">{ordinalEn[t.termNumber - 1]}</span>
@@ -468,7 +494,7 @@ const ReportCardView = ({ data, onUpdateSkill }: ReportCardViewProps) => {
               ))}
               <tr className="bg-gray-50 font-bold border-t border-black">
                 <td className="px-2 py-1.5 text-left font-bold text-gray-900 text-[10px]">
-                  CUMULATIVE AVERAGE
+                  {secondaryResultMode === "current_only" ? "TERM AVERAGE" : "CUMULATIVE AVERAGE"}
                 </td>
                 <td className="px-2 py-1.5 text-right font-bold text-gray-900 text-[11px] whitespace-nowrap">
                   {data.cumulativeAverage ?? overallPercentage}

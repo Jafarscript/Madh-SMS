@@ -15,7 +15,11 @@ import AttendanceSetting from "../models/AttendanceSetting";
 import ReportCardSetting from "../models/ReportCardSetting";
 import User from "../models/User";
 import { isElementaryClass, ensureElementarySubjectsForClass } from "./classController";
-import { ELEMENTARY_FIXED_SUBJECTS } from "../constants/elementarySubjects";
+import {
+  isClassGraduatingDoc,
+  isSuperAdmin,
+  getEffectiveSecondaryResultMode,
+} from "../utils/graduatingAccess";
 
 export interface ReportCardSharedContext {
   positionMap?: Map<string, number>;
@@ -31,9 +35,6 @@ export interface ReportCardSharedContext {
   templateSetting?: any;
 }
 
-// Returns the full report card data object, or null if the student/term
-// can't be found. No `req`/`res` here on purpose — this is a plain function
-// so both getReportCard (JSON) and the PDF controllers can reuse it.
 export const buildReportCardData = async (
   studentId: string,
   termId: string,
@@ -50,17 +51,12 @@ export const buildReportCardData = async (
   const currentTerm = context?.currentTerm || (await Term.findById(termId));
   if (!currentTerm) return null;
 
-  // every term in the same session up to and including the current one,
-  // in chronological order — this order matters now, since the cascade
-  // must fold term 1 → term 2 → term 3, not just average them all at once
   const priorTerms =
     context?.priorTerms ||
     (await Term.find({
       session: currentTerm.session,
       termNumber: { $lte: currentTerm.termNumber },
     }).sort({ termNumber: 1 }));
-
-  const priorTermIds = priorTerms.map((t: any) => t._id);
 
   let classDoc = student.class as any;
   if (!classDoc || !classDoc.name) {
@@ -81,12 +77,19 @@ export const buildReportCardData = async (
     rawCategory === "elementary" ||
     isElementaryClass(className, rawCategory);
   const classCategory: "secondary" | "elementary" = isElementary ? "elementary" : "secondary";
+  const isGraduating = isClassGraduatingDoc(classDoc);
+  const secondaryResultMode = getEffectiveSecondaryResultMode(
+    classDoc,
+    student,
+    isElementary,
+    isGraduating
+  );
 
   if (isElementary && classId && !context?.subjects) {
     await ensureElementarySubjectsForClass(classId.toString());
   }
 
-  const subjects =
+  const allClassSubjects =
     context?.subjects ||
     (await Subject.find({
       class: classId,
@@ -95,16 +98,22 @@ export const buildReportCardData = async (
       nameEnglish: 1,
     }));
 
+  // Filter out subjects excluded for this student (e.g. external school doesn't offer them)
+  const excludedSet = new Set(
+    (student.excludedSubjects || []).map((id: any) => id.toString())
+  );
+  const subjects =
+    excludedSet.size > 0
+      ? allClassSubjects.filter((s: any) => !excludedSet.has(s._id.toString()))
+      : allClassSubjects;
+
   const scoresBySubject = await Score.find({
     student: studentId,
     subject: { $in: subjects.map((s) => s._id) },
-    term: { $in: priorTermIds },
+    term: { $in: priorTerms.map((t: any) => t._id) },
   });
 
-  // group raw totals by subject, keyed by term, so we can look each
-  // term up in chronological order below (priorTerms is already sorted
-  // ascending) rather than however scoresBySubject happens to return
-  const scoresBySubjectMap = new Map<string, Map<string, number>>(); // subjectId -> termId -> total
+  const scoresBySubjectMap = new Map<string, Map<string, number>>();
   scoresBySubject.forEach((sc) => {
     const subjectKey = sc.subject.toString();
     if (!scoresBySubjectMap.has(subjectKey))
@@ -155,12 +164,6 @@ export const buildReportCardData = async (
       }
     }
 
-    // Default standard scale (التقدير):
-    // 85 – 100%: A1 — Excellent / ممتاز
-    // 75 – 84.9%: B2 — Very Good / جيد جدا
-    // 60 – 74.9%: C4 — Good / جيد
-    // 50 – 59.9%: D7 — Pass / مقبول
-    // 0 – 49.9%: F9 — Fail / راسب
     if (scorePercentage >= 85) return { grade: "A1", remark: "Excellent", remarkArabic: "ممتاز" };
     if (scorePercentage >= 75) return { grade: "B2", remark: "V.Good", remarkArabic: "جيد جدا" };
     if (scorePercentage >= 60) return { grade: "C4", remark: "Good", remarkArabic: "جيد" };
@@ -177,24 +180,25 @@ export const buildReportCardData = async (
 
   const isEnrolledInCurrentTerm = studentEnrolledTerms.includes(currentTerm.termNumber);
 
-  // Applicable prior terms for this student (only terms where student was actually enrolled/present):
-  const applicablePriorTerms = priorTerms.filter((t) =>
+  // Filter prior terms according to enrollment AND graduating secondary rule
+  let applicablePriorTerms = priorTerms.filter((t) =>
     studentEnrolledTerms.includes(t.termNumber)
   );
+  if (secondaryResultMode === "current_only") {
+    applicablePriorTerms = applicablePriorTerms.filter(
+      (t) => t.termNumber === currentTerm.termNumber
+    );
+  } else if (secondaryResultMode === "combine_1st_and_3rd") {
+    applicablePriorTerms = applicablePriorTerms.filter((t) => t.termNumber !== 2);
+  }
 
   const subjectResults = subjects.map((subject) => {
     const subjectKey = subject._id.toString();
     const termScoreMap = scoresBySubjectMap.get(subjectKey) || new Map();
 
-    // pull this subject's raw totals in chronological order, based ONLY on
-    // terms where the student was enrolled — this ensures prior terms when the
-    // student wasn't around are not aggregated or counted as 0!
     const rawScoresAscending = applicablePriorTerms
       .map((t) => termScoreMap.get(t._id.toString()))
       .filter((v): v is number => v !== undefined);
-
-    const { priorPeriodValue, finalValue: cumulativeAverage } =
-      foldCascade(rawScoresAscending);
 
     const currentTermScore = isEnrolledInCurrentTerm ? (termScoreMap.get(termId) ?? null) : null;
     const currentTermScoreDoc = isEnrolledInCurrentTerm
@@ -203,16 +207,31 @@ export const buildReportCardData = async (
             sc.subject.toString() === subjectKey && sc.term.toString() === termId,
         )
       : null;
-    const combinedTotal =
-      priorPeriodValue !== null && currentTermScore !== null
-        ? priorPeriodValue + currentTermScore
-        : null;
+
+    let priorPeriodValue: number | null = null;
+    let combinedTotal: number | null = null;
+    let cumulativeAverage: number | null = null;
+
+    if (secondaryResultMode === "current_only") {
+      cumulativeAverage = currentTermScore;
+    } else {
+      const folded = foldCascade(rawScoresAscending);
+      priorPeriodValue = folded.priorPeriodValue;
+      cumulativeAverage = folded.finalValue;
+      combinedTotal =
+        priorPeriodValue !== null && currentTermScore !== null
+          ? priorPeriodValue + currentTermScore
+          : null;
+    }
 
     let grade = null;
     let remark = null;
     let remarkArabic = null;
 
-    const scoreForGrading = isElementary ? currentTermScore : cumulativeAverage;
+    const scoreForGrading = isElementary || secondaryResultMode === "current_only"
+      ? currentTermScore
+      : cumulativeAverage;
+
     if (scoreForGrading !== null && scoreForGrading !== undefined) {
       if (isElementary) {
         if (scoreForGrading >= 85) {
@@ -251,7 +270,6 @@ export const buildReportCardData = async (
       ca: currentTermScoreDoc?.ca ?? null,
       exam: currentTermScoreDoc?.exam ?? null,
       currentTermScore,
-      // only present when there was a valid prior enrolled term cascade
       priorPeriodValue:
         priorPeriodValue !== null
           ? Math.round(priorPeriodValue * 100) / 100
@@ -268,12 +286,12 @@ export const buildReportCardData = async (
   });
 
   const totalSubjectsCount = subjects.length;
-const overallTotal = subjectResults.reduce(
-  (sum, s) => sum + (s.cumulativeAverage ?? 0),
-  0
-);
-const overallPercentage =
-  totalSubjectsCount > 0 ? overallTotal / totalSubjectsCount : 0;
+  const overallTotal = subjectResults.reduce(
+    (sum, s) => sum + (s.cumulativeAverage ?? 0),
+    0
+  );
+  const overallPercentage =
+    totalSubjectsCount > 0 ? overallTotal / totalSubjectsCount : 0;
 
   const classIdStr = classId ? classId.toString() : "";
   const position = context?.positionMap
@@ -314,7 +332,15 @@ const overallPercentage =
       session: currentTerm.session,
     }).sort({ termNumber: 1 }));
 
-  const termAverages = [1, 2, 3].map((termNum) => {
+  // Build termAverages according to graduating secondary mode
+  const termNumbersToCompute =
+    secondaryResultMode === "current_only"
+      ? [currentTerm.termNumber]
+      : secondaryResultMode === "combine_1st_and_3rd"
+        ? [1, 3].filter((t) => t <= currentTerm.termNumber)
+        : [1, 2, 3];
+
+  const termAverages = termNumbersToCompute.map((termNum) => {
     const isEnrolled = studentEnrolledTerms.includes(termNum);
     const termDoc = allTermsInSession.find((t: any) => t.termNumber === termNum);
 
@@ -354,9 +380,11 @@ const overallPercentage =
     .map((t) => t.average as number);
 
   const overallTermAverage =
-    validTermAverages.length > 0
-      ? Math.round((validTermAverages.reduce((sum, v) => sum + v, 0) / validTermAverages.length) * 100) / 100
-      : (isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0);
+    secondaryResultMode === "current_only"
+      ? (isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0)
+      : validTermAverages.length > 0
+        ? Math.round((validTermAverages.reduce((sum, v) => sum + v, 0) / validTermAverages.length) * 100) / 100
+        : (isEnrolledInCurrentTerm ? Math.round(overallPercentage * 100) / 100 : 0);
 
   const classBranchId = (student.class as any)?.branch;
   const attSettingClass =
@@ -423,7 +451,6 @@ const overallPercentage =
       ? attDoc.timesAbsent
       : null;
 
-  // For elementary, per-term calculations:
   let elementaryOverallTotal = 0;
   let elementarySubjectCount = 0;
   if (isElementary && isEnrolledInCurrentTerm) {
@@ -461,11 +488,16 @@ const overallPercentage =
   return {
     isElementary,
     classCategory,
+    isGraduating,
+    graduatingLevel: classDoc?.graduatingLevel || null,
+    secondaryResultMode,
     student: {
       id: student._id,
       name: student.name,
       gender: student.gender,
       numberInClass: student.numberInClass,
+      seatNumber: student.seatNumber || null,
+      sourceSchool: student.sourceSchool || classDoc?.sourceSchool || null,
       class: className || (student.class as any)?.name || "",
       arm: classDoc?.arm || (student.class as any)?.arm || null,
       enrolledTerms: studentEnrolledTerms,
@@ -503,7 +535,7 @@ const overallPercentage =
       presentDays: timesPresent,
       absentDays: timesAbsent,
     },
-    classTeacherComment,   // { id, en, ar } | null
+    classTeacherComment,
     principalComment,
     templateSettings: templateSetting
       ? {
@@ -550,6 +582,15 @@ export const getReportCard = async (req: AuthRequest, res: Response) => {
 
     const studentDoc = await Student.findById(student).select("class branch");
     if (!studentDoc) return res.status(404).json({ message: "Student not found" });
+
+    if (studentDoc.class) {
+      const cls = await ClassModel.findById(studentDoc.class);
+      if (isClassGraduatingDoc(cls) && !isSuperAdmin(req)) {
+        return res.status(403).json({
+          message: "Forbidden: Graduating class report cards are restricted to Super Admin.",
+        });
+      }
+    }
 
     if (req.user?.role === "branch_admin" && req.user.branch) {
       if (studentDoc.branch && studentDoc.branch.toString() !== req.user.branch.toString()) {

@@ -1,7 +1,7 @@
 import { Response } from "express";
+import mongoose from "mongoose";
 import Student from "../models/Student";
 import Class from "../models/Class";
-import Branch from "../models/Branch";
 import Subject from "../models/Subject";
 import { AuthRequest } from "../middleware/auth";
 import Score from "../models/Score";
@@ -9,26 +9,20 @@ import Attendance from "../models/Attendance";
 import ReportCardRemark from "../models/ReportCardRemark";
 import User from "../models/User";
 import Term from "../models/Term";
+import {
+  isClassGraduatingDoc,
+  isSuperAdmin,
+  getAllGraduatingClassIds,
+} from "../utils/graduatingAccess";
 
-// Re-sorts every student in a class alphabetically (Arabic-aware collation,
-// since names are typically in Arabic script) and reassigns numberInClass
-// 1..N based on that order. Called after any add/delete so numbers never
-// have gaps or duplicates, and always reflect alphabetical order — this
-// solves both problems (renumbering on delete, and alphabetical sorting)
-// with one mechanism instead of two separate fixes.
 const renumberClass = async (classId: string) => {
   const students = await Student.find({ class: classId, status: "active" });
 
-  // 'ar' locale collation sorts Arabic script correctly (by actual letter
-  // order, not raw character codes); it also handles Latin names
-  // reasonably if a class ever has mixed-script names.
   const collator = new Intl.Collator("ar");
   const sorted = [...students].sort((a, b) => {
-    // males first, then females — gender takes priority over name
     if (a.gender !== b.gender) {
       return a.gender === "M" ? -1 : 1;
     }
-    // within the same gender, alphabetical by name
     return collator.compare(a.name, b.name);
   });
 
@@ -41,10 +35,28 @@ const renumberClass = async (classId: string) => {
 
 export const createStudent = async (req: AuthRequest, res: Response) => {
   try {
-    let { name, gender, class: classId, branch, admissionNumber, parentPhone, parentEmail } = req.body;
+    let {
+      name,
+      gender,
+      class: classId,
+      branch,
+      admissionNumber,
+      seatNumber,
+      sourceSchool,
+      resultModeOverride,
+      excludedSubjects,
+      parentPhone,
+      parentEmail,
+    } = req.body;
 
     const classDoc = await Class.findById(classId);
     if (!classDoc) return res.status(404).json({ message: "Class not found" });
+
+    if (isClassGraduatingDoc(classDoc) && !isSuperAdmin(req)) {
+      return res.status(403).json({
+        message: "Forbidden: Only Super Admin can add students to graduating classes.",
+      });
+    }
 
     if (req.user?.role === "branch_admin" && req.user.branch) {
       if (classDoc.branch && classDoc.branch.toString() !== req.user.branch.toString()) {
@@ -60,10 +72,16 @@ export const createStudent = async (req: AuthRequest, res: Response) => {
       branch = classDoc.branch;
     }
 
+    const cleanSeat = typeof seatNumber === "string" && seatNumber.trim() ? seatNumber.trim() : undefined;
     const countInClass = await Student.countDocuments({ class: classId });
     const admNum =
       admissionNumber?.trim() ||
+      cleanSeat ||
       `IAIS/${new Date().getFullYear()}/${String(countInClass + 1).padStart(3, "0")}`;
+
+    const validExcluded = Array.isArray(excludedSubjects)
+      ? excludedSubjects.filter((id: any) => mongoose.Types.ObjectId.isValid(String(id)))
+      : [];
 
     const student = await Student.create({
       name: name.trim(),
@@ -72,6 +90,16 @@ export const createStudent = async (req: AuthRequest, res: Response) => {
       branch: branch || classDoc.branch,
       admissionNumber: admNum,
       studentCode: admNum,
+      seatNumber: cleanSeat,
+      sourceSchool:
+        typeof sourceSchool === "string" && sourceSchool.trim()
+          ? sourceSchool.trim()
+          : classDoc.sourceSchool || undefined,
+      resultModeOverride:
+        resultModeOverride && ["default", "current_only", "combine_1st_and_3rd"].includes(resultModeOverride)
+          ? resultModeOverride
+          : "default",
+      excludedSubjects: validExcluded,
       parentPhone: parentPhone?.trim(),
       parentEmail: parentEmail?.trim()?.toLowerCase(),
       numberInClass: 0,
@@ -87,7 +115,10 @@ export const createStudent = async (req: AuthRequest, res: Response) => {
 
     await renumberClass(classId);
 
-    const updated = await Student.findById(student?._id).populate("class", "name arm");
+    const updated = await Student.findById(student?._id).populate(
+      "class",
+      "name arm isGraduating category sourceSchool secondaryResultMode graduatingLevel"
+    );
     res.status(201).json(updated);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
@@ -95,7 +126,6 @@ export const createStudent = async (req: AuthRequest, res: Response) => {
 };
 
 // POST /api/students/bulk
-// Multi-class or single-class bulk student importer from CSV/Excel data
 export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
   try {
     const { class: defaultClassId, branch: defaultBranchId, students } = req.body;
@@ -104,15 +134,30 @@ export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "students array is required" });
     }
 
+    const userIsSuperAdmin = isSuperAdmin(req);
+
     // Pre-fetch classes and branches for name matching
     const allClasses = await Class.find().populate("branch");
+    const classMapById = new Map<string, any>();
     const classMapByName: Record<string, any> = {};
     allClasses.forEach((c) => {
+      classMapById.set(c._id.toString(), c);
       const armSuffix = c.arm ? ` ${c.arm}` : "";
       const fullName = `${c.name}${armSuffix}`.toLowerCase().trim();
       classMapByName[fullName] = c;
-      classMapByName[c.name.toLowerCase().trim()] = c;
+      if (!classMapByName[c.name.toLowerCase().trim()]) {
+        classMapByName[c.name.toLowerCase().trim()] = c;
+      }
     });
+
+    if (defaultClassId) {
+      const defCls = classMapById.get(defaultClassId.toString());
+      if (defCls && isClassGraduatingDoc(defCls) && !userIsSuperAdmin) {
+        return res.status(403).json({
+          message: "Forbidden: Only Super Admin can bulk upload into graduating classes.",
+        });
+      }
+    }
 
     const affectedClassIds = new Set<string>();
     const toInsert = [];
@@ -123,9 +168,26 @@ export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
       const rowNum = i + 1;
       const rawName = String(s.name || s.Name || s.fullName || "").trim();
       const rawGender = String(s.gender || s.Gender || "M").trim().toUpperCase();
-      const gender: "M" | "F" = rawGender === "F" || rawGender === "FEMALE" ? "F" : "M";
+      const gender: "M" | "F" =
+        rawGender === "F" || rawGender === "FEMALE" || rawGender === "أنثى" ? "F" : "M";
       const rawClass = String(s.class || s.Class || s.className || "").trim().toLowerCase();
-      const admissionNum = String(s.admissionNumber || s.AdmissionNumber || s.admNo || s.studentId || "").trim();
+      const seatNumber = String(
+        s.seatNumber ||
+          s.SeatNumber ||
+          s.seatNo ||
+          s.SeatNo ||
+          s.sitNumber ||
+          s.SitNumber ||
+          s["Seat Number"] ||
+          s["رقم الجلوس"] ||
+          ""
+      ).trim();
+      const sourceSchool = String(
+        s.sourceSchool || s.SourceSchool || s.school || s.School || s["Source School"] || ""
+      ).trim();
+      const admissionNum = String(
+        s.admissionNumber || s.AdmissionNumber || s.admNo || s.studentId || seatNumber || ""
+      ).trim();
       const parentPhone = String(s.parentPhone || s.ParentPhone || s.phone || "").trim();
       const parentEmail = String(s.parentEmail || s.ParentEmail || s.email || "").trim().toLowerCase();
 
@@ -137,9 +199,11 @@ export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
       // Determine target class
       let targetClassId = defaultClassId;
       let targetBranchId = defaultBranchId;
+      let matchedClassDoc = defaultClassId ? classMapById.get(defaultClassId.toString()) : null;
 
       if (rawClass && classMapByName[rawClass]) {
         const matched = classMapByName[rawClass];
+        matchedClassDoc = matched;
         targetClassId = matched._id.toString();
         targetBranchId = matched.branch?._id || matched.branch || defaultBranchId;
       }
@@ -149,6 +213,15 @@ export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
           row: rowNum,
           name: rawName,
           error: `No valid class assigned or matched for class '${rawClass || "None"}'`,
+        });
+        continue;
+      }
+
+      if (matchedClassDoc && isClassGraduatingDoc(matchedClassDoc) && !userIsSuperAdmin) {
+        importErrors.push({
+          row: rowNum,
+          name: rawName,
+          error: "Only Super Admin can import into graduating classes",
         });
         continue;
       }
@@ -163,9 +236,11 @@ export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
         name: rawName,
         gender,
         class: targetClassId,
-        branch: targetBranchId,
+        branch: targetBranchId || matchedClassDoc?.branch?._id || matchedClassDoc?.branch,
         admissionNumber: generatedAdm,
         studentCode: generatedAdm,
+        seatNumber: seatNumber || undefined,
+        sourceSchool: sourceSchool || matchedClassDoc?.sourceSchool || undefined,
         parentPhone: parentPhone || undefined,
         parentEmail: parentEmail || undefined,
         numberInClass: 0,
@@ -182,16 +257,15 @@ export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
 
     const created = await Student.insertMany(toInsert);
 
-    // Renumber all affected classes
     for (const cid of Array.from(affectedClassIds)) {
       await renumberClass(cid);
     }
 
     let returnedStudents: any[] = [];
     if (defaultClassId) {
-      returnedStudents = await Student.find({ class: defaultClassId, status: "active" }).sort({
-        numberInClass: 1,
-      });
+      returnedStudents = await Student.find({ class: defaultClassId, status: "active" })
+        .populate("class", "name arm isGraduating category sourceSchool secondaryResultMode graduatingLevel")
+        .sort({ numberInClass: 1 });
     }
 
     res.status(201).json({
@@ -209,6 +283,14 @@ export const bulkCreateStudents = async (req: AuthRequest, res: Response) => {
 export const getStudents = async (req: AuthRequest, res: Response) => {
   try {
     const filter: Record<string, any> = {};
+    const userIsSuperAdmin = isSuperAdmin(req);
+    const gradClassIds = userIsSuperAdmin ? [] : await getAllGraduatingClassIds();
+
+    if (req.query.class && !userIsSuperAdmin && gradClassIds.includes(req.query.class as string)) {
+      return res.status(403).json({
+        message: "Forbidden: Graduating classes are restricted to Super Admin.",
+      });
+    }
 
     if (req.user?.role === "branch_admin" && req.user.branch) {
       filter.branch = req.user.branch;
@@ -218,10 +300,14 @@ export const getStudents = async (req: AuthRequest, res: Response) => {
           return res.status(403).json({ message: "Forbidden: Class not in your branch" });
         }
         filter.class = req.query.class as string;
+      } else if (gradClassIds.length > 0) {
+        filter.class = { $nin: gradClassIds };
       }
     } else if (req.user?.role === "class_teacher") {
       const teacher = await User.findById(req.user.id);
-      const assignedClassIds = (teacher?.classes || []).map((c) => c.toString());
+      const assignedClassIds = (teacher?.classes || [])
+        .map((c) => c.toString())
+        .filter((cid) => !gradClassIds.includes(cid));
       if (req.query.class) {
         if (!assignedClassIds.includes(req.query.class as string)) {
           return res.status(403).json({ message: "Forbidden: You are not assigned to this class" });
@@ -239,7 +325,9 @@ export const getStudents = async (req: AuthRequest, res: Response) => {
         const subjs = await Subject.find({ _id: { $in: teacherSubjectIds } }).select("class");
         subjectClassIds = subjs.filter((s) => s.class).map((s) => s.class.toString());
       }
-      const allowedClassIds = Array.from(new Set([...assignedClassIds, ...subjectClassIds]));
+      const allowedClassIds = Array.from(new Set([...assignedClassIds, ...subjectClassIds])).filter(
+        (cid) => !gradClassIds.includes(cid)
+      );
       if (req.query.class) {
         if (!allowedClassIds.includes(req.query.class as string)) {
           return res.status(403).json({ message: "Forbidden: You are not assigned to this class or its subjects" });
@@ -249,13 +337,17 @@ export const getStudents = async (req: AuthRequest, res: Response) => {
         filter.class = { $in: allowedClassIds };
       }
     } else {
-      if (req.query.class) filter.class = req.query.class as string;
+      if (req.query.class) {
+        filter.class = req.query.class as string;
+      } else if (!userIsSuperAdmin && gradClassIds.length > 0) {
+        filter.class = { $nin: gradClassIds };
+      }
       if (req.query.branch) filter.branch = req.query.branch as string;
     }
 
     const students = await Student.find(filter)
-      .populate("class", "name arm")
-      .sort({ numberInClass: 1 });
+      .populate("class", "name arm isGraduating category sourceSchool secondaryResultMode graduatingLevel")
+      .sort({ numberInClass: 1, name: 1 });
     res.status(200).json(students);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
@@ -267,14 +359,27 @@ export const updateStudent = async (req: AuthRequest, res: Response) => {
     const existing = await Student.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: "Student not found" });
 
+    const existingClassDoc = await Class.findById(existing.class);
+    const destClassDoc =
+      req.body.class && req.body.class.toString() !== existing.class.toString()
+        ? await Class.findById(req.body.class)
+        : existingClassDoc;
+
+    if (
+      (isClassGraduatingDoc(existingClassDoc) || isClassGraduatingDoc(destClassDoc)) &&
+      !isSuperAdmin(req)
+    ) {
+      return res.status(403).json({
+        message: "Forbidden: Only Super Admin can edit graduating class students.",
+      });
+    }
+
     if (req.user?.role === "branch_admin" && req.user.branch) {
       if (existing.branch && existing.branch.toString() !== req.user.branch.toString()) {
         return res.status(403).json({ message: "Forbidden: Student not in your branch" });
       }
-      // If moving class, target class must also belong to branch
       if (req.body.class && req.body.class !== existing.class.toString()) {
-        const targetClass = await Class.findById(req.body.class);
-        if (!targetClass || targetClass.branch?.toString() !== req.user.branch.toString()) {
+        if (!destClassDoc || destClassDoc.branch?.toString() !== req.user.branch.toString()) {
           return res.status(403).json({ message: "Forbidden: Destination class is not in your branch" });
         }
       }
@@ -293,15 +398,122 @@ export const updateStudent = async (req: AuthRequest, res: Response) => {
       req.body.joinedTerm = Math.min(...req.body.enrolledTerms);
     }
 
-    const updated = await Student.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const allowedUpdates: Record<string, any> = {};
+    const unsetUpdates: Record<string, number> = {};
+
+    const directFields = [
+      "name",
+      "gender",
+      "class",
+      "branch",
+      "admissionNumber",
+      "studentCode",
+      "parentPhone",
+      "parentEmail",
+      "status",
+      "graduationSession",
+      "enrolledTerms",
+      "joinedTerm",
+    ];
+    for (const f of directFields) {
+      if (req.body[f] !== undefined) allowedUpdates[f] = req.body[f];
+    }
+
+    if (req.body.seatNumber !== undefined) {
+      const cleanSeat = String(req.body.seatNumber || "").trim();
+      if (cleanSeat) allowedUpdates.seatNumber = cleanSeat;
+      else unsetUpdates.seatNumber = 1;
+    }
+
+    if (req.body.sourceSchool !== undefined) {
+      const cleanSchool = String(req.body.sourceSchool || "").trim();
+      if (cleanSchool) allowedUpdates.sourceSchool = cleanSchool;
+      else unsetUpdates.sourceSchool = 1;
+    }
+
+    if (
+      req.body.resultModeOverride !== undefined &&
+      ["default", "current_only", "combine_1st_and_3rd"].includes(req.body.resultModeOverride)
+    ) {
+      allowedUpdates.resultModeOverride = req.body.resultModeOverride;
+    }
+
+    if (req.body.excludedSubjects !== undefined && Array.isArray(req.body.excludedSubjects)) {
+      const targetClassId = req.body.class || existing.class;
+      const validClassSubjs = await Subject.find({ class: targetClassId }).select("_id");
+      const validSet = new Set(validClassSubjs.map((s) => s._id.toString()));
+      allowedUpdates.excludedSubjects = req.body.excludedSubjects
+        .map((id: any) => String(id))
+        .filter((id: string) => validSet.has(id));
+    }
+
+    const updateQuery: Record<string, any> = { $set: allowedUpdates };
+    if (Object.keys(unsetUpdates).length > 0) {
+      updateQuery.$unset = unsetUpdates;
+    }
+
+    const updated = await Student.findByIdAndUpdate(req.params.id, updateQuery, { new: true });
     if (!updated) return res.status(404).json({ message: "Student not found" });
 
-    // if the name changed, their alphabetical position may have changed
-    // too — renumber so the class stays correctly ordered
     await renumberClass(updated.class.toString());
+    if (existing.class.toString() !== updated.class.toString()) {
+      await renumberClass(existing.class.toString());
+    }
 
-    const refreshed = await Student.findById(updated._id);
+    const refreshed = await Student.findById(updated._id).populate(
+      "class",
+      "name arm isGraduating category sourceSchool secondaryResultMode graduatingLevel"
+    );
     res.status(200).json(refreshed);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: (err as Error).message });
+  }
+};
+
+// PUT /api/students/:id/graduating-options (super_admin only)
+export const updateStudentGraduatingOptions = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!isSuperAdmin(req)) {
+      return res.status(403).json({ message: "Forbidden: Super Admin access required." });
+    }
+
+    const student = await Student.findById(req.params.id);
+    if (!student) return res.status(404).json({ message: "Student not found" });
+
+    const { seatNumber, sourceSchool, resultModeOverride, excludedSubjects } = req.body || {};
+
+    if (seatNumber !== undefined) {
+      const cleanSeat = String(seatNumber || "").trim();
+      student.seatNumber = cleanSeat || undefined;
+    }
+    if (sourceSchool !== undefined) {
+      const cleanSchool = String(sourceSchool || "").trim();
+      student.sourceSchool = cleanSchool || undefined;
+    }
+    if (
+      resultModeOverride !== undefined &&
+      ["default", "current_only", "combine_1st_and_3rd"].includes(resultModeOverride)
+    ) {
+      student.resultModeOverride = resultModeOverride;
+    }
+    if (excludedSubjects !== undefined) {
+      if (!Array.isArray(excludedSubjects)) {
+        return res.status(400).json({ message: "excludedSubjects must be an array" });
+      }
+      const classSubjects = await Subject.find({ class: student.class }).select("_id");
+      const validIds = new Set(classSubjects.map((s) => s._id.toString()));
+      student.excludedSubjects = excludedSubjects
+        .map((id: any) => String(id))
+        .filter((id: string) => validIds.has(id)) as any;
+    }
+
+    await student.save();
+
+    const populated = await Student.findById(student._id).populate(
+      "class",
+      "name arm isGraduating category sourceSchool secondaryResultMode graduatingLevel"
+    );
+    res.status(200).json(populated);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
   }
@@ -320,6 +532,13 @@ export const deleteStudent = async (req: AuthRequest, res: Response) => {
     const student = await Student.findById(studentId);
     if (!student) return res.status(404).json({ message: "Student not found" });
 
+    const classDoc = await Class.findById(student.class);
+    if (isClassGraduatingDoc(classDoc) && !isSuperAdmin(req)) {
+      return res
+        .status(403)
+        .json({ message: "Forbidden: Only Super Admin can delete graduating class students." });
+    }
+
     if (userRole === "branch_admin" && req.user?.branch) {
       if (
         student.branch &&
@@ -333,7 +552,6 @@ export const deleteStudent = async (req: AuthRequest, res: Response) => {
 
     await Student.findByIdAndDelete(studentId);
 
-    // clean up scores, attendance, remarks, and parent links
     await Score.deleteMany({ student: studentId });
     await Attendance.deleteMany({ student: studentId });
     await ReportCardRemark.deleteMany({ student: studentId });
@@ -370,6 +588,24 @@ export const promoteStudents = async (req: AuthRequest, res: Response) => {
 
     if (!action || !["promote", "graduate", "retain", "transfer"].includes(action)) {
       return res.status(400).json({ message: "Valid action is required (promote, graduate, retain, transfer)" });
+    }
+
+    if (!isSuperAdmin(req)) {
+      const gradIds = await getAllGraduatingClassIds();
+      if (
+        (sourceClassId && gradIds.includes(sourceClassId.toString())) ||
+        (targetClassId && gradIds.includes(targetClassId.toString()))
+      ) {
+        return res.status(403).json({
+          message: "Forbidden: Only Super Admin can manage graduating class students.",
+        });
+      }
+      const inGrad = await Student.exists({ _id: { $in: studentIds }, class: { $in: gradIds } });
+      if (inGrad) {
+        return res.status(403).json({
+          message: "Forbidden: Only Super Admin can promote or graduate graduating class students.",
+        });
+      }
     }
 
     if (action === "promote" || action === "transfer") {
@@ -432,12 +668,18 @@ export const promoteStudents = async (req: AuthRequest, res: Response) => {
 };
 
 // PUT /api/students/:id/enrolled-terms
-// Allows setting which terms a student attended (e.g. joined in Term 2 -> [2, 3])
 export const updateStudentEnrolledTerms = async (req: AuthRequest, res: Response) => {
   try {
     const { enrolledTerms, joinedTerm } = req.body;
     const student = await Student.findById(req.params.id);
     if (!student) return res.status(404).json({ message: "Student not found" });
+
+    const classDoc = await Class.findById(student.class);
+    if (isClassGraduatingDoc(classDoc) && !isSuperAdmin(req)) {
+      return res.status(403).json({
+        message: "Forbidden: Only Super Admin can manage graduating class students.",
+      });
+    }
 
     let finalEnrolled: number[] | undefined = enrolledTerms;
     let finalJoined: 1 | 2 | 3 | undefined = joinedTerm ? (Number(joinedTerm) as 1 | 2 | 3) : undefined;
@@ -470,17 +712,26 @@ export const updateStudentEnrolledTerms = async (req: AuthRequest, res: Response
 };
 
 // POST /api/students/auto-detect-enrolled-terms
-// Inspects existing score records for students across terms:
-// If a student has no scores in Term 1, but has scores in Term 2 -> joinedTerm 2, enrolledTerms [2, 3]
-// If a student has no scores in Term 1 & 2, but has scores in Term 3 -> joinedTerm 3, enrolledTerms [3]
 export const autoDetectEnrolledTerms = async (req: AuthRequest, res: Response) => {
   try {
     const { classId } = req.body;
+    if (classId && !isSuperAdmin(req)) {
+      const cls = await Class.findById(classId);
+      if (isClassGraduatingDoc(cls)) {
+        return res.status(403).json({
+          message: "Forbidden: Only Super Admin can manage graduating class students.",
+        });
+      }
+    }
+
     const studentFilter: Record<string, any> = {
       status: { $nin: ["graduated", "transferred", "archived"] },
     };
     if (classId) {
       studentFilter.class = classId;
+    } else if (!isSuperAdmin(req)) {
+      const gradIds = await getAllGraduatingClassIds();
+      if (gradIds.length > 0) studentFilter.class = { $nin: gradIds };
     }
 
     const students = await Student.find(studentFilter);
@@ -510,7 +761,6 @@ export const autoDetectEnrolledTerms = async (req: AuthRequest, res: Response) =
         detectedJoined = 3;
         detectedEnrolled = [3];
       } else {
-        // No scores at all yet in any term: keep current or default to joinedTerm if specified
         continue;
       }
 

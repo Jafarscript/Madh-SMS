@@ -10,6 +10,7 @@ import {
   promoteStudents,
   updateStudentEnrolledTerms,
   autoDetectEnrolledTerms,
+  updateStudentGraduatingOptions,
 } from "../controllers/studentController";
 
 const router = Router();
@@ -20,6 +21,7 @@ router.post("/auto-detect-enrolled-terms", protect, authorize("super_admin", "br
 router.post("/", protect, authorize("super_admin", "branch_admin", "class_teacher"), createStudent);
 router.post("/bulk", protect, authorize("super_admin", "branch_admin", "class_teacher"), bulkCreateStudents);
 router.get("/", protect, getStudents); // any logged-in role can view (filtered)
+router.put("/:id/graduating-options", protect, authorize("super_admin"), updateStudentGraduatingOptions);
 router.put("/:id/enrolled-terms", protect, authorize("super_admin", "branch_admin", "class_teacher"), updateStudentEnrolledTerms);
 router.put("/:id", protect, authorize("super_admin", "branch_admin", "class_teacher"), updateStudent);
 router.delete("/:id", protect, authorize("super_admin", "branch_admin"), deleteStudent);

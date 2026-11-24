@@ -8,6 +8,11 @@ import ReportCardRemark from "../models/ReportCardRemark";
 import User from "../models/User";
 import Term from "../models/Term";
 import { AuthRequest } from "../middleware/auth";
+import {
+  isClassGraduatingDoc,
+  isSuperAdmin,
+  getAllGraduatingClassIds,
+} from "../utils/graduatingAccess";
 
 const canManageClass = async (req: AuthRequest, classId: string) => {
   if (req.user?.role === "super_admin") return true;
@@ -17,6 +22,7 @@ const canManageClass = async (req: AuthRequest, classId: string) => {
     Class.findById(classId),
   ]);
   if (!user || !classDoc) return false;
+  if (isClassGraduatingDoc(classDoc)) return false;
 
   return (
     req.user?.role === "branch_admin" &&
@@ -33,7 +39,15 @@ export const getResultPublication = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "term is required" });
     }
 
+    const userIsSuperAdmin = isSuperAdmin(req);
+    const gradClassIds = userIsSuperAdmin ? [] : await getAllGraduatingClassIds();
+
     if (classId) {
+      if (!userIsSuperAdmin && gradClassIds.includes(classId.toString())) {
+        return res.status(403).json({
+          message: "Forbidden: Graduating classes are restricted to Super Admin.",
+        });
+      }
       const publication = await ResultPublication.findOne({
         class: classId as any,
         term: term as any,
@@ -52,14 +66,25 @@ export const getResultPublication = async (req: AuthRequest, res: Response) => {
       const user = await User.findById(req.user.id);
       if (user?.branch) {
         const branchClasses = await Class.find({ branch: user.branch }).select("_id");
-        classFilter = { _id: { $in: branchClasses.map((c) => c._id) } };
+        classFilter = {
+          _id: {
+            $in: branchClasses
+              .map((c) => c._id.toString())
+              .filter((id) => !gradClassIds.includes(id)),
+          },
+        };
       }
     } else if (req.user?.role === "class_teacher") {
       const teacher = await User.findById(req.user.id);
-      classFilter = { _id: { $in: teacher?.classes || [] } };
+      const allowed = (teacher?.classes || [])
+        .map((c) => c.toString())
+        .filter((id) => !gradClassIds.includes(id));
+      classFilter = { _id: { $in: allowed } };
+    } else if (!userIsSuperAdmin && gradClassIds.length > 0) {
+      classFilter = { _id: { $nin: gradClassIds } };
     }
 
-    const classes = await Class.find(classFilter).select("_id name arm branch");
+    const classes = await Class.find(classFilter).select("_id name arm branch isGraduating");
     const classIds = classes.map((c) => c._id);
 
     const publications = await ResultPublication.find({
@@ -97,14 +122,23 @@ export const getResultOverview = async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ message: "term is required" });
     }
 
+    const userIsSuperAdmin = isSuperAdmin(req);
+    const gradClassIds = userIsSuperAdmin ? [] : await getAllGraduatingClassIds();
+
     let classFilter: any = {};
     if (req.user?.role === "branch_admin") {
       const user = await User.findById(req.user.id);
       if (user?.branch) {
         classFilter.branch = user.branch;
       }
-    } else if (branch) {
-      classFilter.branch = branch;
+      if (gradClassIds.length > 0) {
+        classFilter._id = { $nin: gradClassIds };
+      }
+    } else {
+      if (branch) classFilter.branch = branch;
+      if (!userIsSuperAdmin && gradClassIds.length > 0) {
+        classFilter._id = { $nin: gradClassIds };
+      }
     }
 
     const classes = await Class.find(classFilter)
@@ -122,7 +156,9 @@ export const getResultOverview = async (req: AuthRequest, res: Response) => {
         ResultPublication.find({ class: { $in: classIds }, term: term as any })
           .populate("publishedBy", "name email")
           .populate("lockedBy", "name email"),
-        Student.find({ class: { $in: classIds } }).select("_id name numberInClass class enrolledTerms joinedTerm status"),
+        Student.find({ class: { $in: classIds } }).select(
+          "_id name numberInClass class enrolledTerms joinedTerm status excludedSubjects"
+        ),
         Subject.find({ class: { $in: classIds } }).select("_id nameEnglish class"),
         Score.find({ term: term as any }).select("student subject ca exam total"),
         ReportCardRemark.find({ term: term as any }).select(
@@ -161,8 +197,7 @@ export const getResultOverview = async (req: AuthRequest, res: Response) => {
 
       const totalStudents = studentsInClass.length;
       const totalSubjects = subjectsInClass.length;
-      const expectedScores = totalStudents * totalSubjects;
-
+      let expectedScores = 0;
       let enteredScores = 0;
       let studentsWithMissingScores = 0;
       let classTeacherRemarksCount = 0;
@@ -170,14 +205,22 @@ export const getResultOverview = async (req: AuthRequest, res: Response) => {
 
       studentsInClass.forEach((st) => {
         const sid = st._id.toString();
+        const excludedSet = new Set(
+          (st.excludedSubjects || []).map((id: any) => id.toString())
+        );
+        const activeSubjsForStudent = subjectsInClass.filter(
+          (sb) => !excludedSet.has(sb._id.toString())
+        );
+        expectedScores += activeSubjsForStudent.length;
+
         let studentScoresCount = 0;
-        subjectsInClass.forEach((sb) => {
+        activeSubjsForStudent.forEach((sb) => {
           if (scoresByStudent.has(`${sid}-${sb._id.toString()}`)) {
             studentScoresCount++;
           }
         });
         enteredScores += studentScoresCount;
-        if (studentScoresCount < totalSubjects) {
+        if (studentScoresCount < activeSubjsForStudent.length) {
           studentsWithMissingScores++;
         }
 
@@ -210,6 +253,8 @@ export const getResultOverview = async (req: AuthRequest, res: Response) => {
         classId: cls._id,
         className: cls.name,
         arm: cls.arm,
+        isGraduating: isClassGraduatingDoc(cls),
+        sourceSchool: cls.sourceSchool,
         branch: cls.branch,
         branchName: (cls.branch as any)?.name || "",
         totalStudents,
@@ -294,6 +339,12 @@ export const getClassAuditDetails = async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ message: "Class not found" });
     }
 
+    if (isClassGraduatingDoc(classDoc) && !isSuperAdmin(req)) {
+      return res.status(403).json({
+        message: "Forbidden: Graduating class audits are restricted to Super Admin.",
+      });
+    }
+
     const termDoc = await Term.findById(term);
     const termNum = termDoc?.termNumber || 1;
 
@@ -320,7 +371,11 @@ export const getClassAuditDetails = async (req: AuthRequest, res: Response) => {
 
     const studentAudits = activeStudents.map((st) => {
       const sid = st._id.toString();
-      const missingSubjects = subjects.filter(
+      const excludedSet = new Set(
+        (st.excludedSubjects || []).map((id: any) => id.toString())
+      );
+      const offeredSubjects = subjects.filter((sb) => !excludedSet.has(sb._id.toString()));
+      const missingSubjects = offeredSubjects.filter(
         (sb) => !scoreMap.has(`${sid}-${sb._id.toString()}`)
       );
       const remark = remarkMap.get(sid);
@@ -334,6 +389,7 @@ export const getClassAuditDetails = async (req: AuthRequest, res: Response) => {
       return {
         studentId: st._id,
         name: st.name,
+        seatNumber: st.seatNumber,
         numberInClass: st.numberInClass,
         missingSubjects: missingSubjects.map((s) => ({
           _id: s._id,

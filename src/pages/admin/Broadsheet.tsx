@@ -23,6 +23,10 @@ interface ClassItem {
   _id: string;
   name: string;
   arm?: string;
+  isGraduating?: boolean;
+  category?: "secondary" | "elementary";
+  sourceSchool?: string;
+  secondaryResultMode?: "current_only" | "combine_1st_and_3rd";
   branch?: { _id: string; name: string } | string;
 }
 
@@ -46,6 +50,7 @@ interface SubjectScore {
   score: number | null;
   ca?: number | null;
   exam?: number | null;
+  isExcluded?: boolean;
   termScores?: { termNumber: number; termId: string; score: number | null }[];
 }
 
@@ -69,6 +74,9 @@ interface Row {
   name: string;
   gender?: string;
   numberInClass?: number;
+  seatNumber?: string | null;
+  sourceSchool?: string | null;
+  effectiveResultMode?: "cascade" | "current_only" | "combine_1st_and_3rd";
   subjectScores: SubjectScore[];
   total: number;
   average: number;
@@ -106,6 +114,7 @@ interface BroadsheetSummary {
 
 type SortKey =
   | "numberInClass"
+  | "seatNumber"
   | "name"
   | "total"
   | "overallPercentage"
@@ -129,6 +138,12 @@ const Broadsheet = () => {
   const [sessionTerms, setSessionTerms] = useState<Term[]>([]);
   const [currentTermObj, setCurrentTermObj] = useState<Term | null>(null);
   const [summary, setSummary] = useState<BroadsheetSummary | null>(null);
+  const [classMeta, setClassMeta] = useState<{
+    isGraduating?: boolean;
+    isElementary?: boolean;
+    sourceSchool?: string | null;
+    secondaryResultMode?: string;
+  } | null>(null);
 
   const [sortKey, setSortKey] = useState<SortKey>("numberInClass");
   const [sortAsc, setSortAsc] = useState(true);
@@ -161,6 +176,7 @@ const Broadsheet = () => {
       setRows([]);
       setSessionTerms([]);
       setSummary(null);
+      setClassMeta(null);
       return;
     }
     setLoading(true);
@@ -173,6 +189,7 @@ const Broadsheet = () => {
         setSessionTerms(res.data.sessionTerms || []);
         setCurrentTermObj(res.data.currentTerm || null);
         setSummary(res.data.summary || null);
+        setClassMeta(res.data.classMeta || null);
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
@@ -187,14 +204,21 @@ const Broadsheet = () => {
     }
   };
 
-  const filteredRows = rows.filter((r) =>
-    r.name.toLowerCase().includes(searchQuery.trim().toLowerCase())
-  );
+  const filteredRows = rows.filter((r) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      r.name.toLowerCase().includes(q) ||
+      (r.seatNumber && r.seatNumber.toLowerCase().includes(q))
+    );
+  });
 
   const sortedRows = [...filteredRows].sort((a, b) => {
     let cmp = 0;
     if (sortKey === "numberInClass")
       cmp = (a.numberInClass ?? 0) - (b.numberInClass ?? 0);
+    if (sortKey === "seatNumber")
+      cmp = (a.seatNumber || "").localeCompare(b.seatNumber || "", undefined, { numeric: true });
     if (sortKey === "name") cmp = a.name.localeCompare(b.name);
     if (sortKey === "total") cmp = a.total - b.total;
     if (sortKey === "overallPercentage") cmp = a.overallPercentage - b.overallPercentage;
@@ -236,6 +260,7 @@ const Broadsheet = () => {
     // Headers with Arabic subject names only, separated English & Arabic remark columns
     const headers = [
       "No. (الرقم)",
+      "Seat No. (رقم الجلوس)",
       "Student Name (اسم الطالب)",
       ...subjects.map((s) => s.nameArabic || s.nameEnglish),
       "Total (المجموع)",
@@ -255,8 +280,9 @@ const Broadsheet = () => {
     const excelData = sortedRows.map((r) => {
       const rowData: (string | number)[] = [
         r.numberInClass ?? "",
+        r.seatNumber ?? "",
         r.name,
-        ...r.subjectScores.map((sc) => (sc.score !== null ? sc.score : "")),
+        ...r.subjectScores.map((sc) => (sc.isExcluded ? "" : sc.score !== null ? sc.score : "")),
         r.total,
         `${r.overallPercentage}%`,
         r.remark,
@@ -310,6 +336,7 @@ const Broadsheet = () => {
 
     const headers = [
       "No.",
+      "Seat No.",
       "Student Name",
       ...subjects.map((s) => s.nameArabic || s.nameEnglish),
       "Total",
@@ -329,8 +356,9 @@ const Broadsheet = () => {
     const csvData = sortedRows.map((r) => {
       const rowData = [
         r.numberInClass ?? "",
+        `"${(r.seatNumber || "").replace(/"/g, '""')}"`,
         `"${r.name.replace(/"/g, '""')}"`,
-        ...r.subjectScores.map((sc) => (sc.score !== null ? sc.score : "")),
+        ...r.subjectScores.map((sc) => (sc.isExcluded ? "" : sc.score !== null ? sc.score : "")),
         r.total,
         `${r.overallPercentage}%`,
         `"${r.remark}"`,
@@ -603,6 +631,33 @@ const Broadsheet = () => {
                     Subject Multi-Term Breakdown
                   </button>
                 </div>
+
+                {classMeta?.isGraduating && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold inline-flex items-center gap-1">
+                      <GraduationCap className="w-3.5 h-3.5" />
+                      Graduating
+                    </span>
+                    {!classMeta.isElementary && (
+                      <span
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                          classMeta.secondaryResultMode === "combine_1st_and_3rd"
+                            ? "bg-purple-50 text-purple-800 border-purple-200"
+                            : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        }`}
+                      >
+                        {classMeta.secondaryResultMode === "combine_1st_and_3rd"
+                          ? "1st + 3rd Terms"
+                          : "Current Exam Only"}
+                      </span>
+                    )}
+                    {classMeta.sourceSchool && (
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-200 text-xs font-medium">
+                        {classMeta.sourceSchool}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Only Present Terms Toggle */}
@@ -708,6 +763,7 @@ const Broadsheet = () => {
             <thead>
               <tr className="border-b bg-stone-100/80 print:bg-stone-100">
                 <SortHeader label="No." labelAr="الرقم" sortk="numberInClass" align="text-center" />
+                <SortHeader label="Seat No." labelAr="رقم الجلوس" sortk="seatNumber" align="text-center" />
                 <SortHeader label="Student Name" labelAr="اسم الطالب" sortk="name" />
 
                 {/* Subject Columns: Arabic text only */}
@@ -825,6 +881,10 @@ const Broadsheet = () => {
                     {row.numberInClass ?? "—"}
                   </td>
 
+                  <td className="p-3 text-center text-xs font-mono font-semibold text-indigo-700 whitespace-nowrap">
+                    {row.seatNumber || "—"}
+                  </td>
+
                   <td className="p-3 font-semibold text-gray-900 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span>{row.name}</span>
@@ -845,7 +905,9 @@ const Broadsheet = () => {
                       key={sc.subject}
                       className="p-3 text-center border-l border-gray-100 font-medium text-gray-800"
                     >
-                      {viewMode === "detailed_subjects" ? (
+                      {sc.isExcluded ? (
+                        <span className="text-[10px] text-gray-300 italic">N/A</span>
+                      ) : viewMode === "detailed_subjects" ? (
                         <div className="flex justify-center gap-1.5 text-xs">
                           {sc.termScores?.map((ts) => (
                             <span

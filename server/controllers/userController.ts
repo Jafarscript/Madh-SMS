@@ -7,6 +7,7 @@ import Subject from "../models/Subject";
 import Student from "../models/Student";
 import ReportCardSetting from "../models/ReportCardSetting";
 import { AuthRequest } from "../middleware/auth";
+import { getAllGraduatingClassIds, isSuperAdmin } from "../utils/graduatingAccess";
 
 export const generatePassword = (): string => {
   // excludes visually ambiguous characters (0/O, 1/l/I) since this
@@ -222,6 +223,28 @@ export const approveTeacher = async (req: AuthRequest, res: Response) => {
     if (req.user?.role === "branch_admin" && req.user.branch) {
       if (user.branch && user.branch.toString() !== req.user.branch.toString()) {
         return res.status(403).json({ message: "Forbidden: Teacher does not belong to your branch" });
+      }
+    }
+
+    if (!isSuperAdmin(req)) {
+      const gradIds = await getAllGraduatingClassIds();
+      if (gradIds.length > 0) {
+        if (Array.isArray(classes) && classes.some((cid: any) => gradIds.includes(cid.toString()))) {
+          return res.status(403).json({
+            message: "Forbidden: Only Super Admin can assign graduating classes.",
+          });
+        }
+        if (Array.isArray(subjects) && subjects.length > 0) {
+          const hasGradSubj = await Subject.exists({
+            _id: { $in: subjects },
+            class: { $in: gradIds },
+          });
+          if (hasGradSubj) {
+            return res.status(403).json({
+              message: "Forbidden: Only Super Admin can assign graduating class subjects.",
+            });
+          }
+        }
       }
     }
 
@@ -459,6 +482,28 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
       }
       if (role === "super_admin" || role === "branch_admin") {
         return res.status(403).json({ message: "Forbidden: Cannot grant administrator roles" });
+      }
+    }
+
+    if (!isSuperAdmin(req)) {
+      const gradIds = await getAllGraduatingClassIds();
+      if (gradIds.length > 0) {
+        if (Array.isArray(classes) && classes.some((cid: any) => gradIds.includes(cid.toString()))) {
+          return res.status(403).json({
+            message: "Forbidden: Only Super Admin can assign graduating classes.",
+          });
+        }
+        if (Array.isArray(subjects) && subjects.length > 0) {
+          const hasGradSubj = await Subject.exists({
+            _id: { $in: subjects },
+            class: { $in: gradIds },
+          });
+          if (hasGradSubj) {
+            return res.status(403).json({
+              message: "Forbidden: Only Super Admin can assign graduating class subjects.",
+            });
+          }
+        }
       }
     }
 

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import { useAuth } from "../../context/AuthContext";
-import { AlertTriangle, Trash2, CheckCircle } from "lucide-react";
-import { isElementaryClass } from "../../utils/classCategoryHelper";
+import { AlertTriangle, Trash2, CheckCircle, GraduationCap, RefreshCw } from "lucide-react";
+import { isElementaryClass, isGraduatingClass } from "../../utils/classCategoryHelper";
 
 interface Branch {
   _id: string;
@@ -17,12 +17,17 @@ interface ClassItem {
   name: string;
   arm?: string;
   category?: "secondary" | "elementary";
+  isGraduating?: boolean;
+  graduatingLevel?: "elementary" | "junior_secondary" | "senior_secondary";
+  sourceSchool?: string;
+  secondaryResultMode?: "current_only" | "combine_1st_and_3rd";
   branch: { _id: string; name: string };
 }
 
 const Classes = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === "super_admin" || user?.role === "branch_admin";
+  const isSuperAdmin = user?.role === "super_admin";
 
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -31,7 +36,12 @@ const Classes = () => {
   const [category, setCategory] = useState<"secondary" | "elementary">("secondary");
   const [categoryTouched, setCategoryTouched] = useState(false);
   const [branchId, setBranchId] = useState("");
+  const [isGraduating, setIsGraduating] = useState(false);
+  const [isGraduatingTouched, setIsGraduatingTouched] = useState(false);
+  const [sourceSchool, setSourceSchool] = useState("");
+  const [secondaryResultMode, setSecondaryResultMode] = useState<"current_only" | "combine_1st_and_3rd">("current_only");
   const [loading, setLoading] = useState(false);
+  const [syncingGraduating, setSyncingGraduating] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -40,6 +50,9 @@ const Classes = () => {
   const [editArm, setEditArm] = useState("");
   const [editCategory, setEditCategory] = useState<"secondary" | "elementary">("secondary");
   const [editBranchId, setEditBranchId] = useState("");
+  const [editIsGraduating, setEditIsGraduating] = useState(false);
+  const [editSourceSchool, setEditSourceSchool] = useState("");
+  const [editSecondaryResultMode, setEditSecondaryResultMode] = useState<"current_only" | "combine_1st_and_3rd">("current_only");
   const [savingEdit, setSavingEdit] = useState(false);
 
   const [deletingClass, setDeletingClass] = useState<ClassItem | null>(null);
@@ -62,6 +75,13 @@ const Classes = () => {
     fetchData();
   }, []);
 
+  const getRonikBranchId = () => {
+    const ronik =
+      branches.find((b) => /ronik/i.test(b.name)) ||
+      branches.find((b) => /permanent/i.test(b.name));
+    return ronik?._id || "";
+  };
+
   const handleNameChange = (val: string) => {
     setName(val);
     if (!categoryTouched) {
@@ -71,6 +91,31 @@ const Classes = () => {
         setCategory("secondary");
       }
     }
+    if (isSuperAdmin && !isGraduatingTouched) {
+      const detectedGrad = isGraduatingClass(val);
+      setIsGraduating(detectedGrad);
+      if (detectedGrad && !branchId) {
+        const rId = getRonikBranchId();
+        if (rId) setBranchId(rId);
+      }
+    }
+  };
+
+  const handleSyncGraduating2026 = async () => {
+    if (!isSuperAdmin) return;
+    setSyncingGraduating(true);
+    setError("");
+    setSuccessMessage("");
+    try {
+      const res = await api.post("/classes/graduating/setup-2026");
+      await fetchData();
+      setSuccessMessage(res.data?.message || "2026 graduating classes & roster synced.");
+      setTimeout(() => setSuccessMessage(""), 6000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to sync graduating classes");
+    } finally {
+      setSyncingGraduating(false);
+    }
   };
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -79,19 +124,28 @@ const Classes = () => {
     setSuccessMessage("");
     setLoading(true);
     try {
-      // arm is genuinely optional — only send it if the admin typed one,
-      // so classes without arms don't get an empty string stored
       await api.post("/classes", {
         name,
-        branch: branchId,
+        branch: branchId || (isGraduating ? getRonikBranchId() : ""),
         category,
         ...(arm.trim() ? { arm: arm.trim() } : {}),
+        ...(isSuperAdmin && isGraduating
+          ? {
+              isGraduating: true,
+              ...(sourceSchool.trim() ? { sourceSchool: sourceSchool.trim() } : {}),
+              secondaryResultMode,
+            }
+          : {}),
       });
       setName("");
       setArm("");
       setCategory("secondary");
       setCategoryTouched(false);
       setBranchId("");
+      setIsGraduating(false);
+      setIsGraduatingTouched(false);
+      setSourceSchool("");
+      setSecondaryResultMode("current_only");
       setSuccessMessage("Class created successfully.");
       setTimeout(() => setSuccessMessage(""), 4000);
       fetchData();
@@ -106,7 +160,6 @@ const Classes = () => {
     setEditingId(classItem._id);
     setEditName(classItem.name);
     setEditArm(classItem.arm || "");
-    // If the class is explicitly elementary OR its name indicates an elementary class, set to elementary
     const effectiveCategory =
       classItem.category === "elementary" || isElementaryClass(classItem.name, classItem.category)
         ? "elementary"
@@ -115,8 +168,13 @@ const Classes = () => {
     setEditBranchId(
       typeof classItem.branch === "object" && classItem.branch
         ? classItem.branch._id
-        : (typeof classItem.branch === "string" ? classItem.branch : "")
+        : typeof classItem.branch === "string"
+        ? classItem.branch
+        : ""
     );
+    setEditIsGraduating(Boolean(classItem.isGraduating || isGraduatingClass(classItem.name)));
+    setEditSourceSchool(classItem.sourceSchool || "");
+    setEditSecondaryResultMode(classItem.secondaryResultMode || "current_only");
     setError("");
     setSuccessMessage("");
   };
@@ -127,6 +185,9 @@ const Classes = () => {
     setEditArm("");
     setEditCategory("secondary");
     setEditBranchId("");
+    setEditIsGraduating(false);
+    setEditSourceSchool("");
+    setEditSecondaryResultMode("current_only");
   };
 
   const handleSaveEdit = async (id: string) => {
@@ -146,8 +207,14 @@ const Classes = () => {
         arm: editArm.trim(),
         category: editCategory,
         branch: editBranchId,
+        ...(isSuperAdmin
+          ? {
+              isGraduating: editIsGraduating,
+              sourceSchool: editSourceSchool.trim(),
+              secondaryResultMode: editSecondaryResultMode,
+            }
+          : {}),
       });
-      // Optimistically update list so the UI reflects the category immediately
       setClasses((prev) =>
         prev.map((c) => (c._id === id ? { ...c, ...res.data, category: editCategory } : c))
       );
@@ -190,6 +257,30 @@ const Classes = () => {
     }
   };
 
+  const handleQuickToggleResultMode = async (classItem: ClassItem) => {
+    if (!isSuperAdmin) return;
+    const nextMode: "current_only" | "combine_1st_and_3rd" =
+      classItem.secondaryResultMode === "combine_1st_and_3rd" ? "current_only" : "combine_1st_and_3rd";
+    try {
+      setClasses((prev) =>
+        prev.map((c) => (c._id === classItem._id ? { ...c, secondaryResultMode: nextMode } : c))
+      );
+      await api.put(`/classes/${classItem._id}`, {
+        secondaryResultMode: nextMode,
+      });
+      await fetchData();
+      setSuccessMessage(
+        `Updated "${classItem.name}" scoring mode to ${
+          nextMode === "current_only" ? "Current Exam Only" : "Combine 1st + 3rd Terms"
+        }.`
+      );
+      setTimeout(() => setSuccessMessage(""), 4000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to update secondary scoring mode");
+      fetchData();
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deletingClass) return;
     setIsDeleting(true);
@@ -212,10 +303,27 @@ const Classes = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto">
-      <PageHeader
-        title="Classes & Arms"
-        subtitle="Manage and edit classes; add an arm only if this class is split (e.g. A / B)"
-      />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <PageHeader
+          title="Classes & Arms"
+          subtitle="Manage and edit classes; add an arm only if this class is split (e.g. A / B)"
+        />
+        {isSuperAdmin && (
+          <button
+            type="button"
+            onClick={handleSyncGraduating2026}
+            disabled={syncingGraduating}
+            className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold flex items-center gap-2 shadow-sm transition disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncingGraduating ? "animate-spin" : ""}`} />
+            <span>
+              {syncingGraduating
+                ? "Syncing Graduating Roster..."
+                : "Sync 2026 Graduating Classes (PDF Roster)"}
+            </span>
+          </button>
+        )}
+      </div>
 
       {successMessage && (
         <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2.5 text-sm font-medium">
@@ -304,6 +412,68 @@ const Classes = () => {
             </div>
           </div>
 
+          {isSuperAdmin && (
+            <div className="bg-indigo-50/70 border border-indigo-200 rounded-xl p-4 flex flex-col gap-3">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isGraduating}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsGraduatingTouched(true);
+                    setIsGraduating(checked);
+                    if (checked && !branchId) {
+                      const rId = getRonikBranchId();
+                      if (rId) setBranchId(rId);
+                    }
+                  }}
+                  className="w-4 h-4 rounded text-indigo-700 focus:ring-indigo-500"
+                />
+                <span className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                  <GraduationCap className="w-4 h-4 text-indigo-700" />
+                  Graduating Class (Super Admin Only • Handled under Ronik Branch)
+                </span>
+              </label>
+
+              {isGraduating && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-indigo-900 mb-1">
+                      Source School / External Branch (optional)
+                    </label>
+                    <input
+                      value={sourceSchool}
+                      onChange={(e) => setSourceSchool(e.target.value)}
+                      placeholder="e.g. فرع لافنوا or معهد اقرأ"
+                      className="w-full border border-indigo-200 bg-white rounded-lg px-3 py-2 text-sm"
+                    />
+                  </div>
+                  {category === "secondary" && (
+                    <div>
+                      <label className="block text-xs font-semibold text-indigo-900 mb-1">
+                        Graduating Secondary Scoring Rule
+                      </label>
+                      <select
+                        value={secondaryResultMode}
+                        onChange={(e) =>
+                          setSecondaryResultMode(
+                            e.target.value as "current_only" | "combine_1st_and_3rd"
+                          )
+                        }
+                        className="w-full border border-indigo-200 bg-white rounded-lg px-3 py-2 text-sm"
+                      >
+                        <option value="current_only">Current Exam Only (Default)</option>
+                        <option value="combine_1st_and_3rd">
+                          Combine 1st + 3rd Terms (No 2nd Term)
+                        </option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -382,6 +552,54 @@ const Classes = () => {
                     />
                   </div>
                 </div>
+                {isSuperAdmin && (
+                  <div className="bg-indigo-50/60 border border-indigo-200 rounded-xl p-3 flex flex-col gap-2.5">
+                    <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-indigo-950">
+                      <input
+                        type="checkbox"
+                        checked={editIsGraduating}
+                        onChange={(e) => setEditIsGraduating(e.target.checked)}
+                        className="w-4 h-4 rounded text-indigo-700 focus:ring-indigo-500"
+                      />
+                      <span>Graduating Class (Super Admin Only)</span>
+                    </label>
+                    {editIsGraduating && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-indigo-900 mb-1">
+                            Source School
+                          </label>
+                          <input
+                            value={editSourceSchool}
+                            onChange={(e) => setEditSourceSchool(e.target.value)}
+                            placeholder="e.g. فرع لافنوا or معهد اقرأ"
+                            className="w-full border border-indigo-200 bg-white rounded-lg px-3 py-1.5 text-sm"
+                          />
+                        </div>
+                        {editCategory === "secondary" && (
+                          <div>
+                            <label className="block text-xs font-semibold text-indigo-900 mb-1">
+                              Secondary Scoring Mode
+                            </label>
+                            <select
+                              value={editSecondaryResultMode}
+                              onChange={(e) =>
+                                setEditSecondaryResultMode(
+                                  e.target.value as "current_only" | "combine_1st_and_3rd"
+                                )
+                              }
+                              className="w-full border border-indigo-200 bg-white rounded-lg px-3 py-1.5 text-sm"
+                            >
+                              <option value="current_only">Current Exam Only</option>
+                              <option value="combine_1st_and_3rd">Combine 1st + 3rd Terms</option>
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-2 justify-end items-center mt-1">
                   <button
                     onClick={() => handleSaveEdit(c._id)}
@@ -400,13 +618,19 @@ const Classes = () => {
                 </div>
               </div>
             ) : (
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center gap-3">
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-gray-900">
                       {c.name}
                       {c.arm && <span className="text-gray-500 font-normal"> — الشعبة {c.arm}</span>}
                     </p>
+                    {(c.isGraduating || isGraduatingClass(c.name, c.isGraduating)) && (
+                      <span className="px-2.5 py-0.5 text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 rounded-full inline-flex items-center gap-1">
+                        <GraduationCap className="w-3 h-3" />
+                        Graduating • Super Admin Only
+                      </span>
+                    )}
                     {c.category === "elementary" ? (
                       <button
                         type="button"
@@ -425,11 +649,34 @@ const Classes = () => {
                         className="px-2.5 py-0.5 text-[11px] font-semibold bg-sky-50 text-sky-800 border border-sky-200 rounded-full hover:bg-sky-100 transition cursor-pointer flex items-center gap-1.5"
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-sky-500 inline-block" />
-                        Secondary (Cumulative)
+                        Secondary ({c.isGraduating ? "Graduating" : "Cumulative"})
                       </button>
                     )}
+                    {isSuperAdmin &&
+                      (c.isGraduating || isGraduatingClass(c.name, c.isGraduating)) &&
+                      c.category !== "elementary" && (
+                        <button
+                          type="button"
+                          onClick={() => handleQuickToggleResultMode(c)}
+                          title="Click to toggle between Current Exam Only and Combine 1st + 3rd Terms"
+                          className={`px-2.5 py-0.5 text-[11px] font-semibold rounded-full border transition cursor-pointer ${
+                            c.secondaryResultMode === "combine_1st_and_3rd"
+                              ? "bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100"
+                              : "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                          }`}
+                        >
+                          {c.secondaryResultMode === "combine_1st_and_3rd"
+                            ? "1st + 3rd Terms"
+                            : "Current Exam Only"}
+                        </button>
+                      )}
                   </div>
-                  <p className="text-xs font-medium text-sky-700 mt-0.5">{c.branch?.name || "No branch"}</p>
+                  <p className="text-xs font-medium text-sky-700 mt-0.5">
+                    {c.branch?.name || "No branch"}
+                    {c.sourceSchool && (
+                      <span className="text-gray-500 ml-2">• School: {c.sourceSchool}</span>
+                    )}
+                  </p>
                 </div>
                 {isAdmin && (
                   <div className="flex items-center gap-3">

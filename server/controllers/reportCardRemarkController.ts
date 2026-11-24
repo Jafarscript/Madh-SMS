@@ -6,6 +6,7 @@ import { AuthRequest } from "../middleware/auth";
 import { getCommentById } from "../constants/reportCardComments";
 import PredefinedComment from "../models/PredefinedComment";
 import { isClassResultLocked } from "./resultPublicationController";
+import { assertSuperAdminForClass } from "../utils/graduatingAccess";
 
 // PUT /api/report-card-remarks
 // body: { student, term, field, commentId? }  ← picked from the list
@@ -22,6 +23,13 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
     const studentDoc = await Student.findById(student).select("class");
     if (!studentDoc) {
       return res.status(404).json({ message: "Student not found" });
+    }
+
+    const access = await assertSuperAdminForClass(req, studentDoc.class.toString());
+    if (!access.allowed) {
+      return res.status(403).json({
+        message: "Forbidden: Only Super Admin can manage graduating class remarks.",
+      });
     }
 
     // Security: verify if class results are locked
@@ -102,7 +110,7 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
 
     const prefix = field === "classTeacherComment" ? "classTeacherComment" : "principalComment";
     const update = {
-      [`${prefix}Id`]: finalId ?? null,   // null clears any previously-picked id when switching to custom text
+      [`${prefix}Id`]: finalId ?? null,
       [`${prefix}En`]: finalEn,
       [`${prefix}Ar`]: finalAr,
       enteredBy: req.user?.id,
@@ -123,6 +131,17 @@ export const setRemark = async (req: AuthRequest, res: Response) => {
 export const getRemark = async (req: AuthRequest, res: Response) => {
   try {
     const { student, term } = req.query;
+    if (student && req.user?.role !== "super_admin") {
+      const st = await Student.findById(student).select("class");
+      if (st?.class) {
+        const access = await assertSuperAdminForClass(req, st.class.toString());
+        if (!access.allowed) {
+          return res.status(403).json({
+            message: "Forbidden: Graduating class remarks are restricted to Super Admin.",
+          });
+        }
+      }
+    }
     const remark = await ReportCardRemark.findOne({ student: student as any, term: term as any });
     res.status(200).json(remark || null);
   } catch (err) {

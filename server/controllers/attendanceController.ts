@@ -7,6 +7,7 @@ import User from "../models/User";
 import Term from "../models/Term";
 import { AuthRequest } from "../middleware/auth";
 import { isClassResultLocked } from "./resultPublicationController";
+import { isClassGraduatingDoc } from "../utils/graduatingAccess";
 
 const canAccessClass = async (req: AuthRequest, classId: string) => {
   if (req.user?.role === "super_admin") return true;
@@ -15,6 +16,7 @@ const canAccessClass = async (req: AuthRequest, classId: string) => {
     Class.findById(classId),
   ]);
   if (!user || !classDoc) return false;
+  if (isClassGraduatingDoc(classDoc)) return false;
   if (req.user?.role === "branch_admin")
     return user.branch?.toString() === classDoc.branch.toString();
   if (req.user?.role === "class_teacher")

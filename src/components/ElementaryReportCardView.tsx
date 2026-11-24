@@ -362,7 +362,7 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
                   :الإسم
                 </td>
               </tr>
-              <tr>
+              <tr className={student.seatNumber ? "border-b border-black" : ""}>
                 <td className="py-1 px-2 font-bold text-left">Class:</td>
                 <td className="py-1 px-2 font-bold text-center">
                   <span className="uppercase">{student.class}</span>
@@ -375,6 +375,20 @@ export const ElementaryReportCardView: React.FC<Props> = ({ data, onUpdateSkill 
                   :الصف
                 </td>
               </tr>
+              {student.seatNumber && (
+                <tr>
+                  <td className="py-1 px-2 font-bold text-left">Seat No:</td>
+                  <td className="py-1 px-2 font-bold text-center font-mono">
+                    {student.seatNumber}
+                  </td>
+                  <td
+                    className="py-1 px-2 font-bold text-right"
+                    style={{ fontFamily: "'Amiri', serif" }}
+                  >
+                    :رقم الجلوس
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
 

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
-import { ArrowUp, ArrowDown, ArrowUpDown, GripVertical, Check, RefreshCw } from "lucide-react";
+import { ArrowUp, ArrowDown, ArrowUpDown, GripVertical, Check, RefreshCw, Copy, GraduationCap } from "lucide-react";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import { predefinedSubjects } from "../../data/predefinedSubjects";
@@ -16,6 +16,9 @@ interface ClassItem {
   _id: string;
   name: string;
   arm?: string;
+  isGraduating?: boolean;
+  graduatingLevel?: string;
+  sourceSchool?: string;
   branch: { _id: string; name: string };
 }
 
@@ -54,6 +57,10 @@ const Subjects = () => {
   const [isReorderModalOpen, setIsReorderModalOpen] = useState(false);
   const [reorderedList, setReorderedList] = useState<Subject[]>([]);
   const [savingReorder, setSavingReorder] = useState(false);
+
+  // Clone subjects from another class or level curriculum
+  const [cloneSourceClassId, setCloneSourceClassId] = useState("");
+  const [cloningSubjects, setCloningSubjects] = useState(false);
 
   useEffect(() => {
     Promise.all([api.get("/classes"), api.get("/branches")]).then(([classRes, branchRes]) => {
@@ -245,6 +252,23 @@ const Subjects = () => {
     }
   };
 
+  const handleCloneSubjects = async () => {
+    if (!selectedClass || !isSuperAdmin) return;
+    setCloningSubjects(true);
+    setError("");
+    try {
+      const res = await api.post(`/classes/${selectedClass}/clone-subjects`, {
+        ...(cloneSourceClassId ? { sourceClassId: cloneSourceClassId } : {}),
+      });
+      await fetchSubjects();
+      showSuccess(res.data?.message || "Subjects copied successfully.");
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to copy subjects");
+    } finally {
+      setCloningSubjects(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
       <PageHeader
@@ -309,19 +333,76 @@ const Subjects = () => {
       </div>
 
       {currentClassObj && (
-        <div className="mb-6 p-3.5 bg-sky-50 border border-sky-100 rounded-xl flex items-center justify-between text-xs text-sky-900">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sky-800">Active Branch:</span>
-            <span className="px-2.5 py-1 bg-white font-medium rounded-md shadow-2xs text-sky-700 border border-sky-200">
-              {currentClassObj.branch?.name || "General"}
-            </span>
+        <div className="mb-6 space-y-3">
+          <div className="p-3.5 bg-sky-50 border border-sky-100 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs text-sky-900">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sky-800">Active Branch:</span>
+              <span className="px-2.5 py-1 bg-white font-medium rounded-md shadow-2xs text-sky-700 border border-sky-200">
+                {currentClassObj.branch?.name || "General"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-sky-800">Class:</span>
+              <span className="px-2.5 py-1 bg-white font-medium rounded-md shadow-2xs text-sky-700 border border-sky-200">
+                {currentClassObj.name} {currentClassObj.arm ? `(الشعبة ${currentClassObj.arm})` : ""}
+              </span>
+              {currentClassObj.isGraduating && (
+                <span className="px-2.5 py-1 bg-indigo-100 text-indigo-800 font-bold rounded-md border border-indigo-200 inline-flex items-center gap-1">
+                  <GraduationCap className="w-3.5 h-3.5" />
+                  Graduating • Super Admin Only
+                </span>
+              )}
+              {currentClassObj.sourceSchool && (
+                <span className="px-2.5 py-1 bg-amber-50 text-amber-900 font-medium rounded-md border border-amber-200">
+                  School: {currentClassObj.sourceSchool}
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sky-800">Class:</span>
-            <span className="px-2.5 py-1 bg-white font-medium rounded-md shadow-2xs text-sky-700 border border-sky-200">
-              {currentClassObj.name} {currentClassObj.arm ? `(الشعبة ${currentClassObj.arm})` : ""}
-            </span>
-          </div>
+
+          {currentClassObj.isGraduating && (
+            <div className="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-indigo-900">
+              Subjects for each level are maintained separately per class. For external schools that do not offer certain subjects, you can delete those subjects below or exclude individual subjects per student on the Students page.
+            </div>
+          )}
+
+          {isSuperAdmin && (
+            <div className="p-4 bg-white border border-gray-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Copy className="w-3.5 h-3.5 text-indigo-600" />
+                  Copy Subjects from Level / Another Class
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Populate subjects from another class or auto-seed this level's curriculum (skips duplicates).
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={cloneSourceClassId}
+                  onChange={(e) => setCloneSourceClassId(e.target.value)}
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-xs bg-white min-w-[200px]"
+                >
+                  <option value="">Auto-match Level Curriculum</option>
+                  {classes
+                    .filter((c) => c._id !== selectedClass)
+                    .map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name} {c.arm ? `(${c.arm})` : ""} {c.sourceSchool ? `— ${c.sourceSchool}` : ""}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleCloneSubjects}
+                  disabled={cloningSubjects}
+                  className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold transition disabled:opacity-50 shrink-0"
+                >
+                  {cloningSubjects ? "Copying..." : "Copy Subjects"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

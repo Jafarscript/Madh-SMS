@@ -7,6 +7,7 @@ import Branch from "../models/Branch";
 import User from "../models/User";
 import Term from "../models/Term";
 import { AuthRequest } from "../middleware/auth";
+import { isSuperAdmin, getAllGraduatingClassIds } from "../utils/graduatingAccess";
 
 // GET /api/dashboard?term=<termId>&branch=<branchId optional>
 export const getDashboard = async (req: AuthRequest, res: Response) => {
@@ -19,14 +20,20 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
 
     const termDoc = await Term.findById(term);
     const currentTermNum = termDoc?.termNumber || 1;
+    const userIsSuperAdmin = isSuperAdmin(req);
+    const gradClassIds = userIsSuperAdmin ? [] : await getAllGraduatingClassIds();
 
     const classFilter: Record<string, any> = {};
 
     if (req.user?.role === "branch_admin" && req.user.branch) {
       classFilter.branch = req.user.branch;
+      if (gradClassIds.length > 0) classFilter._id = { $nin: gradClassIds };
     } else if (req.user?.role === "class_teacher") {
       const teacher = await User.findById(req.user.id);
-      classFilter._id = { $in: (teacher?.classes || []).map((c) => c.toString()) };
+      const allowed = (teacher?.classes || [])
+        .map((c) => c.toString())
+        .filter((cid) => !gradClassIds.includes(cid));
+      classFilter._id = { $in: allowed };
     } else if (req.user?.role === "subject_teacher") {
       const teacher = await User.findById(req.user.id);
       const teacherClassIds = (teacher?.classes || []).map((c) => c.toString());
@@ -36,10 +43,15 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
         const subjs = await Subject.find({ _id: { $in: teacherSubjectIds } }).select("class");
         subjectClassIds = subjs.filter((s) => s.class).map((s) => s.class.toString());
       }
-      const allowedClassIds = Array.from(new Set([...teacherClassIds, ...subjectClassIds]));
+      const allowedClassIds = Array.from(new Set([...teacherClassIds, ...subjectClassIds])).filter(
+        (cid) => !gradClassIds.includes(cid)
+      );
       classFilter._id = { $in: allowedClassIds };
-    } else if (branch) {
-      classFilter.branch = branch as string;
+    } else {
+      if (branch) classFilter.branch = branch as string;
+      if (!userIsSuperAdmin && gradClassIds.length > 0) {
+        classFilter._id = { $nin: gradClassIds };
+      }
     }
 
     const classes = await ClassModel.find(classFilter).populate("branch", "name");
@@ -64,7 +76,11 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
         });
         const subjects = await Subject.find({ class: cls._id });
 
-        const expectedScoreCount = students.length * subjects.length;
+        let expectedScoreCount = 0;
+        students.forEach((st) => {
+          const excluded = new Set((st.excludedSubjects || []).map((id: any) => id.toString()));
+          expectedScoreCount += subjects.filter((sb) => !excluded.has(sb._id.toString())).length;
+        });
 
         const actualScoreCount = await Score.countDocuments({
           student: { $in: students.map((s) => s._id) } as any,
@@ -75,8 +91,11 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
         // which specific subjects still have missing entries
         const subjectCompletion = await Promise.all(
           subjects.map(async (subject) => {
+            const offeringStudents = students.filter(
+              (st) => !(st.excludedSubjects || []).some((id: any) => id.toString() === subject._id.toString())
+            );
             const entered = await Score.countDocuments({
-              student: { $in: students.map((s) => s._id) } as any,
+              student: { $in: offeringStudents.map((s) => s._id) } as any,
               subject: subject._id as any,
               term: term as any,
             });
@@ -84,8 +103,8 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
               subject: subject._id,
               nameEnglish: subject.nameEnglish,
               entered,
-              expected: students.length,
-              complete: entered === students.length,
+              expected: offeringStudents.length,
+              complete: entered === offeringStudents.length,
             };
           })
         );
@@ -94,6 +113,7 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
           class: cls._id,
           className: cls.name + (cls.arm ? ` ${cls.arm}` : ""),
           branch: (cls.branch as any)?.name,
+          isGraduating: Boolean(cls.isGraduating),
           studentCount: students.length,
           subjectCount: subjects.length,
           expectedScoreCount,
@@ -110,11 +130,10 @@ export const getDashboard = async (req: AuthRequest, res: Response) => {
     // Filter students scoped strictly to the accessible classes/branch
     const studentFilter: Record<string, any> = {
       status: { $nin: ["graduated", "transferred", "archived"] },
+      class: { $in: classIds },
     };
     if (req.user?.role === "branch_admin" && req.user.branch) {
       studentFilter.branch = req.user.branch;
-    } else if (req.user?.role === "class_teacher" || req.user?.role === "subject_teacher") {
-      studentFilter.class = { $in: classIds };
     } else if (branch) {
       studentFilter.branch = branch as string;
     }

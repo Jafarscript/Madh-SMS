@@ -40,12 +40,17 @@ interface ClassItem {
   arm?: string;
   branch?: { _id: string; name: string } | string;
   category?: "secondary" | "elementary";
+  isGraduating?: boolean;
+  sourceSchool?: string;
+  secondaryResultMode?: string;
 }
 interface Student {
   _id: string;
   name: string;
   gender: string;
   numberInClass?: number;
+  seatNumber?: string;
+  sourceSchool?: string;
 }
 interface Term {
   _id: string;
@@ -177,7 +182,8 @@ const ReportCard = () => {
     return students.filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
-        (s.numberInClass !== undefined && String(s.numberInClass).includes(q))
+        (s.numberInClass !== undefined && String(s.numberInClass).includes(q)) ||
+        (s.seatNumber && s.seatNumber.toLowerCase().includes(q))
     );
   }, [students, searchQuery]);
 
@@ -718,7 +724,7 @@ const ReportCard = () => {
                 <input
                   id="student-search-input"
                   type="text"
-                  placeholder="Search student name or #..."
+                  placeholder="Search student name, #, or seat no..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-white border border-gray-300 rounded-xl pl-8 pr-7 py-1.5 text-xs focus:ring-2 focus:ring-sky-500 outline-none"
@@ -750,6 +756,7 @@ const ReportCard = () => {
                   <option key={s._id} value={s._id}>
                     {s.numberInClass ? `${s.numberInClass}. ` : ""}
                     {s.name}
+                    {s.seatNumber ? ` [${s.seatNumber}]` : ""}
                   </option>
                 ))}
               </select>
@@ -944,14 +951,19 @@ const ReportCard = () => {
 
       {/* Selected Student Information Banner */}
       {selectedStudentObj && (
-        <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center justify-between text-xs text-gray-700">
-          <div className="flex items-center gap-2">
+        <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-700">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="font-semibold text-gray-900 text-sm">
               {selectedStudentObj.name}
             </span>
             {selectedStudentObj.numberInClass && (
               <span className="px-2 py-0.5 bg-gray-100 text-gray-600 font-mono rounded">
                 #{selectedStudentObj.numberInClass}
+              </span>
+            )}
+            {selectedStudentObj.seatNumber && (
+              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-800 border border-indigo-200 font-mono font-semibold rounded">
+                Seat: {selectedStudentObj.seatNumber}
               </span>
             )}
             <span className="text-gray-400">•</span>
@@ -966,6 +978,18 @@ const ReportCard = () => {
                   {getBranchLabel(selectedClassObj)}
                 </span>
               </>
+            )}
+            {reportData?.isGraduating && (
+              <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 font-bold rounded">
+                Graduating
+                {reportData.secondaryResultMode && reportData.secondaryResultMode !== "cascade"
+                  ? ` • ${
+                      reportData.secondaryResultMode === "combine_1st_and_3rd"
+                        ? "1st + 3rd Terms"
+                        : "Current Exam Only"
+                    }`
+                  : ""}
+              </span>
             )}
           </div>
 

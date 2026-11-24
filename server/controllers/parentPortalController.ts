@@ -10,6 +10,7 @@ import { generateSingleReportCardPdf } from "../utils/generateReportCardPdf";
 import { buildSingleReportCardHtml } from "../utils/reportCardTemplate";
 import { isStudentResultPublished } from "./resultPublicationController";
 import { isElementaryClass } from "./classController";
+import { isClassGraduatingDoc, getAllGraduatingClassIds } from "../utils/graduatingAccess";
 
 // Helper to get all linked student IDs for the logged-in parent
 const getAllLinkedStudentIds = async (userId: string): Promise<string[]> => {
@@ -35,7 +36,11 @@ export const getMyChildren = async (req: AuthRequest, res: Response) => {
       return res.status(200).json([]);
     }
 
-    const students = await Student.find({ _id: { $in: studentIds } })
+    const gradClassIds = await getAllGraduatingClassIds();
+    const students = await Student.find({
+      _id: { $in: studentIds },
+      ...(gradClassIds.length > 0 ? { class: { $nin: gradClassIds } } : {}),
+    })
       .populate("class", "name arm")
       .populate("branch", "name");
 
@@ -77,6 +82,13 @@ export const linkChild = async (req: AuthRequest, res: Response) => {
     if (!student) {
       return res.status(404).json({
         message: "No student matching the provided Admission Number or Name was found.",
+      });
+    }
+
+    const cls = await ClassModel.findById(student.class);
+    if (isClassGraduatingDoc(cls)) {
+      return res.status(403).json({
+        message: "Graduating class records are restricted to school administration.",
       });
     }
 
@@ -131,6 +143,14 @@ export const getMyChildReportCard = async (req: AuthRequest, res: Response) => {
       targetStudentId = requestedStudentId as string;
     }
 
+    const studentDoc = await Student.findById(targetStudentId).select("class");
+    if (studentDoc?.class) {
+      const cls = await ClassModel.findById(studentDoc.class);
+      if (isClassGraduatingDoc(cls)) {
+        return res.status(403).json({ message: "Graduating class results are restricted to school administration." });
+      }
+    }
+
     if (!(await isStudentResultPublished(targetStudentId, term as string))) {
       return res.status(403).json({ message: "This report card has not been published yet" });
     }
@@ -138,7 +158,6 @@ export const getMyChildReportCard = async (req: AuthRequest, res: Response) => {
     const data = await buildReportCardData(targetStudentId, term as string, gradingScale as string);
     if (!data) return res.status(404).json({ message: "Report card not found" });
 
-    const studentDoc = await Student.findById(targetStudentId).select("class");
     let isClassElementary = false;
     if (studentDoc?.class) {
       const cls = await ClassModel.findById(studentDoc.class);
@@ -184,6 +203,14 @@ export const downloadMyChildReportCardPdf = async (req: AuthRequest, res: Respon
       targetStudentId = requestedStudentId as string;
     }
 
+    const studentDoc = await Student.findById(targetStudentId).select("class");
+    if (studentDoc?.class) {
+      const cls = await ClassModel.findById(studentDoc.class);
+      if (isClassGraduatingDoc(cls)) {
+        return res.status(403).json({ message: "Graduating class results are restricted to school administration." });
+      }
+    }
+
     if (!(await isStudentResultPublished(targetStudentId, term as string))) {
       return res.status(403).json({ message: "This report card has not been published yet" });
     }
@@ -191,7 +218,6 @@ export const downloadMyChildReportCardPdf = async (req: AuthRequest, res: Respon
     const data = await buildReportCardData(targetStudentId, term as string, gradingScale as string);
     if (!data) return res.status(404).json({ message: "Report card not found" });
 
-    const studentDoc = await Student.findById(targetStudentId).select("class");
     let isClassElementary = false;
     if (studentDoc?.class) {
       const cls = await ClassModel.findById(studentDoc.class);

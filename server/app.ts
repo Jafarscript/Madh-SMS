@@ -24,10 +24,28 @@ import attendanceRoutes from "./routes/attendanceRoutes";
 import reportCardSettingRoutes from "./routes/reportCardSettingRoutes";
 import predefinedCommentRoutes from "./routes/predefinedCommentRoutes";
 import { errorHandler } from "./middleware/errorHandler";
+import { ensureGraduating2026Setup } from "./utils/seedGraduating2026";
 
 dotenv.config();
 
 export const app = express();
+
+let graduatingSetupPromise: Promise<void> | null = null;
+const triggerGraduatingSetupOnce = () => {
+  if (!graduatingSetupPromise && mongoose.connection.readyState === 1) {
+    graduatingSetupPromise = ensureGraduating2026Setup()
+      .then((res) => {
+        if (res.classesCreated > 0 || res.studentsInserted > 0 || res.subjectsSeeded > 0) {
+          console.log(
+            `[Graduating2026] Synced under ${res.branchName}: +${res.classesCreated} classes, +${res.studentsInserted} students, +${res.subjectsSeeded} subjects`
+          );
+        }
+      })
+      .catch((err) => {
+        console.error("[Graduating2026] Startup sync error:", (err as Error).message);
+      });
+  }
+};
 
 // Middlewares
 app.use(cors());
@@ -84,6 +102,7 @@ app.use(async (req, res, next) => {
 
   try {
     await connectDB();
+    triggerGraduatingSetupOnce();
     next();
   } catch (err) {
     const errorMsg = (err as Error)?.message || "Unknown database error";
