@@ -18,6 +18,7 @@ import {
 import * as XLSX from "xlsx";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
+import { compareSeatNumbers } from "../../utils/classCategoryHelper";
 
 interface ClassItem {
   _id: string;
@@ -190,6 +191,10 @@ const Broadsheet = () => {
         setCurrentTermObj(res.data.currentTerm || null);
         setSummary(res.data.summary || null);
         setClassMeta(res.data.classMeta || null);
+        if (res.data.classMeta?.isGraduating) {
+          setSortKey("seatNumber");
+          setSortAsc(true);
+        }
       })
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
@@ -218,7 +223,7 @@ const Broadsheet = () => {
     if (sortKey === "numberInClass")
       cmp = (a.numberInClass ?? 0) - (b.numberInClass ?? 0);
     if (sortKey === "seatNumber")
-      cmp = (a.seatNumber || "").localeCompare(b.seatNumber || "", undefined, { numeric: true });
+      cmp = compareSeatNumbers(a.seatNumber, b.seatNumber, "asc");
     if (sortKey === "name") cmp = a.name.localeCompare(b.name);
     if (sortKey === "total") cmp = a.total - b.total;
     if (sortKey === "overallPercentage") cmp = a.overallPercentage - b.overallPercentage;

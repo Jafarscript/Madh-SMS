@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import * as XLSX from "xlsx";
 import { AlertTriangle, Trash2, CheckCircle, FileSpreadsheet, SlidersHorizontal, GraduationCap } from "lucide-react";
 import { BulkStudentUploader } from "../../components/admin/BulkStudentUploader";
+import { compareSeatNumbers } from "../../utils/classCategoryHelper";
 
 interface ClassItem {
   _id: string;
@@ -609,6 +610,7 @@ const Students = () => {
             )}
             {(() => {
               const q = searchQuery.trim().toLowerCase();
+              const hasSeats = students.some((s) => Boolean(s.seatNumber && s.seatNumber.trim()));
               const matching = students
                 .filter(
                   (s) =>
@@ -617,7 +619,13 @@ const Students = () => {
                     (s.seatNumber && s.seatNumber.toLowerCase().includes(q)) ||
                     (s.admissionNumber && s.admissionNumber.toLowerCase().includes(q))
                 )
-                .sort((a, b) => (a.numberInClass ?? 0) - (b.numberInClass ?? 0));
+                .sort((a, b) => {
+                  if (isSelectedGraduating || hasSeats) {
+                    const seatCmp = compareSeatNumbers(a.seatNumber, b.seatNumber, "asc");
+                    if (seatCmp !== 0) return seatCmp;
+                  }
+                  return (a.numberInClass ?? 0) - (b.numberInClass ?? 0);
+                });
 
               if (students.length > 0 && matching.length === 0) {
                 return (

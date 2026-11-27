@@ -114,3 +114,17 @@ export const isGraduatingClass = (name: string, explicitFlag?: boolean): boolean
   }
   return false;
 };
+
+export const compareSeatNumbers = (
+  seatA?: string | null,
+  seatB?: string | null,
+  direction: "asc" | "desc" = "asc"
+): number => {
+  const a = (seatA || "").trim();
+  const b = (seatB || "").trim();
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  const cmp = a.localeCompare(b, "en", { numeric: true, sensitivity: "base" });
+  return direction === "desc" ? -cmp : cmp;
+};

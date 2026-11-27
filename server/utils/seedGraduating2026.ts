@@ -2,17 +2,11 @@ import Branch from "../models/Branch";
 import ClassModel from "../models/Class";
 import Student from "../models/Student";
 import { GRADUATING_ROSTER_2026 } from "../data/graduatingRoster2026";
-import { seedGraduatingClassSubjects } from "./graduatingAccess";
+import { seedGraduatingClassSubjects, sortGraduatingStudents } from "./graduatingAccess";
 
 const renumberClassStudents = async (classId: string) => {
   const students = await Student.find({ class: classId, status: "active" });
-  const collator = new Intl.Collator("ar");
-  const sorted = [...students].sort((a, b) => {
-    if (a.gender !== b.gender) {
-      return a.gender === "M" ? -1 : 1;
-    }
-    return collator.compare(a.name, b.name);
-  });
+  const sorted = sortGraduatingStudents(students, "asc");
 
   await Promise.all(
     sorted.map((st, idx) =>

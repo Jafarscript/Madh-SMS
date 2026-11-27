@@ -1,53 +1,176 @@
+import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import ReportCardSetting from "../models/ReportCardSetting";
 
 interface SendResetEmailResult {
   success: boolean;
   id?: string;
+  provider?: "smtp" | "resend";
   error?: string;
   reason?: string;
 }
+
+const stripQuotes = (val?: string | null): string =>
+  (val || "").trim().replace(/^['"]+|['"]+$/g, "").trim();
+
+const formatFromAddress = (rawFrom: string, schoolEnglish: string): string => {
+  const safeSchool = (schoolEnglish || "School Portal").replace(/[<>"]/g, "").trim();
+  const clean = stripQuotes(rawFrom);
+  if (!clean) {
+    return `${safeSchool} <onboarding@resend.dev>`;
+  }
+  const match = clean.match(/^(.*)<\s*([^<>]+?)\s*>$/);
+  if (match) {
+    const displayName = match[1].replace(/[<>"]/g, "").trim() || safeSchool;
+    const emailPart = match[2].replace(/\/+$/g, "").trim();
+    return `${displayName} <${emailPart}>`;
+  }
+  const cleanEmail = clean.replace(/\/+$/g, "").trim();
+  return `${safeSchool} <${cleanEmail}>`;
+};
+
+const resolveEmailConfig = async () => {
+  let schoolEnglish = "Institute of Arabic and Islamic Studies";
+  let schoolArabic = "معهد التعليم العربي الإسلامي";
+  let dbResendKey = "";
+  let dbResendFrom = "";
+
+  try {
+    const setting = await ReportCardSetting.findOne().lean();
+    if (setting?.schoolNameEnglish) schoolEnglish = setting.schoolNameEnglish;
+    if (setting?.schoolNameArabic) schoolArabic = setting.schoolNameArabic;
+    dbResendKey = stripQuotes(setting?.resendApiKey);
+    dbResendFrom = stripQuotes(setting?.resendFromEmail);
+  } catch {
+    // ignore DB read failure and rely on env vars
+  }
+
+  // 1. Nodemailer / SMTP config (supports Gmail or any SMTP provider)
+  const smtpUser = stripQuotes(
+    process.env.SMTP_USER || process.env.EMAIL_USER || process.env.GMAIL_USER
+  );
+  let smtpPass = stripQuotes(
+    process.env.SMTP_PASS || process.env.EMAIL_PASS || process.env.GMAIL_APP_PASSWORD
+  );
+  const smtpHost =
+    stripQuotes(process.env.SMTP_HOST) ||
+    (smtpUser ? "smtp.gmail.com" : "");
+  const smtpPort = Number(stripQuotes(process.env.SMTP_PORT)) || 465;
+  const smtpSecure =
+    process.env.SMTP_SECURE !== undefined
+      ? stripQuotes(process.env.SMTP_SECURE).toLowerCase() === "true"
+      : smtpPort === 465;
+
+  // Google displays 16-char App Passwords with spaces (e.g. "abcd efgh ijkl mnop")
+  if (smtpHost.toLowerCase().includes("gmail.com") && smtpPass) {
+    smtpPass = smtpPass.replace(/\s+/g, "");
+  }
+
+  const smtpFromRaw = stripQuotes(process.env.SMTP_FROM || process.env.EMAIL_FROM) || smtpUser;
+  const smtpFrom = smtpFromRaw ? formatFromAddress(smtpFromRaw, schoolEnglish) : "";
+
+  // 2. Resend fallback config
+  const envResendKey = stripQuotes(process.env.RESEND_API_KEY);
+  const envResendFrom = stripQuotes(process.env.RESEND_FROM_EMAIL);
+  const resendApiKey = envResendKey || dbResendKey;
+  const resendFrom = formatFromAddress(envResendFrom || dbResendFrom, schoolEnglish);
+
+  return {
+    schoolEnglish,
+    schoolArabic,
+    smtp: {
+      configured: Boolean(smtpHost && smtpUser && smtpPass),
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpSecure,
+      user: smtpUser,
+      pass: smtpPass,
+      from: smtpFrom,
+    },
+    resend: {
+      configured: Boolean(resendApiKey),
+      apiKey: resendApiKey,
+      from: resendFrom,
+    },
+  };
+};
+
+const sendWithNodemailer = async (
+  smtp: Awaited<ReturnType<typeof resolveEmailConfig>>["smtp"],
+  toEmail: string,
+  subject: string,
+  html: string,
+  text: string
+): Promise<SendResetEmailResult> => {
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtp.host,
+      port: smtp.port,
+      secure: smtp.secure,
+      auth: {
+        user: smtp.user,
+        pass: smtp.pass,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    });
+
+    const info = await transporter.sendMail({
+      from: smtp.from,
+      to: toEmail,
+      subject,
+      html,
+      text,
+    });
+
+    console.log(
+      `[EmailService] Sent via Nodemailer (${smtp.host}) to ${toEmail}. Message ID: ${info.messageId}`
+    );
+    return {
+      success: true,
+      provider: "smtp",
+      id: info.messageId,
+    };
+  } catch (err: any) {
+    console.error("[EmailService] Nodemailer SMTP error:", {
+      message: err?.message,
+      code: err?.code,
+      responseCode: err?.responseCode,
+      host: smtp.host,
+      port: smtp.port,
+      user: smtp.user,
+    });
+    return {
+      success: false,
+      provider: "smtp",
+      error: err?.message || "Failed to send email via SMTP",
+    };
+  }
+};
 
 export const sendPasswordResetEmail = async (
   toEmail: string,
   userName: string,
   resetCode: string
 ): Promise<SendResetEmailResult> => {
-  let apiKey = process.env.RESEND_API_KEY?.trim() || "";
-  let customFrom = process.env.RESEND_FROM_EMAIL?.trim() || "";
+  const config = await resolveEmailConfig();
+  const { schoolEnglish, schoolArabic, smtp, resend } = config;
 
-  // Fetch school name and email settings if available
-  let schoolEnglish = "Institute of Arabic and Islamic Studies";
-  let schoolArabic = "معهد التعليم العربي الإسلامي";
-  try {
-    const setting = await ReportCardSetting.findOne().lean();
-    if (setting?.schoolNameEnglish) schoolEnglish = setting.schoolNameEnglish;
-    if (setting?.schoolNameArabic) schoolArabic = setting.schoolNameArabic;
-    if (setting?.resendApiKey?.trim()) apiKey = setting.resendApiKey.trim();
-    if (setting?.resendFromEmail?.trim()) customFrom = setting.resendFromEmail.trim();
-  } catch {
-    // ignore
-  }
-
-  if (!apiKey) {
-    console.warn("[EmailService] RESEND_API_KEY is not defined in environment variables or database settings. Email will not be sent.");
+  if (!smtp.configured && !resend.configured) {
+    console.warn(
+      "[EmailService] Neither SMTP credentials (SMTP_USER/SMTP_PASS) nor RESEND_API_KEY are configured. Email will not be sent."
+    );
     return {
       success: false,
-      reason: "MISSING_API_KEY",
-      error: "RESEND_API_KEY is not configured. Please set it in Admin Settings or in .env file.",
+      reason: "MISSING_EMAIL_CONFIG",
+      error: "Email service is not configured on the server.",
     };
   }
 
-  try {
-    const resend = new Resend(apiKey);
+  const subject = `Your Password Reset Verification Code: ${resetCode}`;
 
-    const fromAddress =
-      customFrom ||
-      `${schoolEnglish} <onboarding@resend.dev>`;
-
-    const subject = `Your Password Reset Verification Code: ${resetCode}`;
-
-    const htmlContent = `
+  const htmlContent = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -98,9 +221,9 @@ export const sendPasswordResetEmail = async (
   </div>
 </body>
 </html>
-    `;
+  `;
 
-    const textContent = `
+  const textContent = `
 ${schoolEnglish}
 ${schoolArabic}
 
@@ -113,10 +236,18 @@ Your verification code is: ${resetCode}
 This code will expire in 15 minutes.
 
 If you did not request a password reset, please ignore this email or contact your administrator.
-    `.trim();
+  `.trim();
 
-    const { data, error } = await resend.emails.send({
-      from: fromAddress,
+  // Prefer Nodemailer SMTP when configured
+  if (smtp.configured) {
+    return sendWithNodemailer(smtp, toEmail, subject, htmlContent, textContent);
+  }
+
+  // Fallback to Resend
+  try {
+    const resendClient = new Resend(resend.apiKey);
+    const { data, error } = await resendClient.emails.send({
+      from: resend.from,
       to: [toEmail],
       subject,
       html: htmlContent,
@@ -124,73 +255,76 @@ If you did not request a password reset, please ignore this email or contact you
     });
 
     if (error) {
-      console.error("[EmailService] Resend API returned error:", error);
+      console.error("[EmailService] Resend API returned error:", {
+        error,
+        fromAddress: resend.from,
+        toEmail,
+      });
       return {
         success: false,
+        provider: "resend",
         error: error.message || "Failed to send email via Resend",
       };
     }
 
-    console.log(`[EmailService] Password reset verification code email sent successfully to ${toEmail}. Message ID: ${data?.id}`);
+    console.log(
+      `[EmailService] Password reset verification code email sent via Resend to ${toEmail}. Message ID: ${data?.id}`
+    );
     return {
       success: true,
+      provider: "resend",
       id: data?.id,
     };
   } catch (err: any) {
     console.error("[EmailService] Exception while sending email with Resend:", err);
     return {
       success: false,
+      provider: "resend",
       error: err.message || "Unexpected error while sending email",
     };
   }
 };
 
 export const sendTestEmail = async (toEmail: string): Promise<SendResetEmailResult> => {
-  let apiKey = process.env.RESEND_API_KEY?.trim() || "";
-  let customFrom = process.env.RESEND_FROM_EMAIL?.trim() || "";
+  const { schoolEnglish, smtp, resend } = await resolveEmailConfig();
 
-  let schoolEnglish = "Institute of Arabic and Islamic Studies";
-  try {
-    const setting = await ReportCardSetting.findOne().lean();
-    if (setting?.schoolNameEnglish) schoolEnglish = setting.schoolNameEnglish;
-    if (setting?.resendApiKey?.trim()) apiKey = setting.resendApiKey.trim();
-    if (setting?.resendFromEmail?.trim()) customFrom = setting.resendFromEmail.trim();
-  } catch {
-    // ignore
-  }
-
-  if (!apiKey) {
+  if (!smtp.configured && !resend.configured) {
     return {
       success: false,
-      reason: "MISSING_API_KEY",
-      error: "RESEND_API_KEY is not configured.",
+      reason: "MISSING_EMAIL_CONFIG",
+      error: "Neither SMTP credentials nor RESEND_API_KEY are configured.",
     };
   }
 
-  try {
-    const resend = new Resend(apiKey);
-    const fromAddress = customFrom || `${schoolEnglish} <onboarding@resend.dev>`;
+  const subject = `Email Test - ${schoolEnglish}`;
+  const html = `
+    <div style="font-family: sans-serif; padding: 20px; color: #1e293b;">
+      <h2 style="color: #0369a1;">Email Configuration Verified!</h2>
+      <p>This is a test email sent from <strong>${schoolEnglish}</strong>.</p>
+      <p>Your email configuration is functioning properly for password resets.</p>
+      <p style="color: #64748b; font-size: 12px; margin-top: 24px;">Sent at: ${new Date().toISOString()}</p>
+    </div>
+  `;
+  const text = `${schoolEnglish}: Your email configuration is verified and working properly. Sent at ${new Date().toISOString()}`;
 
-    const { data, error } = await resend.emails.send({
-      from: fromAddress,
+  if (smtp.configured) {
+    return sendWithNodemailer(smtp, toEmail, subject, html, text);
+  }
+
+  try {
+    const resendClient = new Resend(resend.apiKey);
+    const { data, error } = await resendClient.emails.send({
+      from: resend.from,
       to: [toEmail],
-      subject: `Resend Test Email - ${schoolEnglish}`,
-      html: `
-        <div style="font-family: sans-serif; padding: 20px; color: #1e293b;">
-          <h2 style="color: #0369a1;">Resend Email Configuration Verified!</h2>
-          <p>This is a test email sent from <strong>${schoolEnglish}</strong>.</p>
-          <p>Your Resend API key and email dispatch are functioning properly for password resets.</p>
-          <p style="color: #64748b; font-size: 12px; margin-top: 24px;">Sent at: ${new Date().toISOString()}</p>
-        </div>
-      `,
+      subject,
+      html,
     });
 
     if (error) {
-      return { success: false, error: error.message || "Failed to send test email" };
+      return { success: false, provider: "resend", error: error.message || "Failed to send test email" };
     }
-    return { success: true, id: data?.id };
+    return { success: true, provider: "resend", id: data?.id };
   } catch (err: any) {
-    return { success: false, error: err.message || "Unexpected error" };
+    return { success: false, provider: "resend", error: err.message || "Unexpected error" };
   }
 };
-

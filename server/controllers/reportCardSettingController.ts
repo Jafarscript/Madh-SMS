@@ -29,8 +29,8 @@ export const getReportCardSetting = async (_req: Request, res: Response) => {
     }
 
     const obj: any = setting.toObject();
-    // Return whether resendApiKey is active or configured (from DB or process.env)
-    const effectiveApiKey = setting.resendApiKey?.trim() || process.env.RESEND_API_KEY?.trim() || "";
+    // Return whether resendApiKey is active or configured (env var first, then DB)
+    const effectiveApiKey = process.env.RESEND_API_KEY?.trim() || setting.resendApiKey?.trim() || "";
     obj.hasResendApiKey = Boolean(effectiveApiKey);
     if (effectiveApiKey) {
       obj.resendApiKeyMasked = `${effectiveApiKey.slice(0, 4)}••••••••${effectiveApiKey.slice(-4)}`;
@@ -39,8 +39,8 @@ export const getReportCardSetting = async (_req: Request, res: Response) => {
     }
     // Also include effective from address
     obj.effectiveResendFromEmail =
-      setting.resendFromEmail?.trim() ||
       process.env.RESEND_FROM_EMAIL?.trim() ||
+      setting.resendFromEmail?.trim() ||
       "onboarding@resend.dev";
 
     res.status(200).json(obj);
@@ -95,7 +95,7 @@ export const updateReportCardSetting = async (req: AuthRequest, res: Response) =
     await setting.save();
 
     const obj: any = setting.toObject();
-    const effectiveApiKey = setting.resendApiKey?.trim() || process.env.RESEND_API_KEY?.trim() || "";
+    const effectiveApiKey = process.env.RESEND_API_KEY?.trim() || setting.resendApiKey?.trim() || "";
     obj.hasResendApiKey = Boolean(effectiveApiKey);
     if (effectiveApiKey) {
       obj.resendApiKeyMasked = `${effectiveApiKey.slice(0, 4)}••••••••${effectiveApiKey.slice(-4)}`;

@@ -15,6 +15,7 @@ import {
   isClassGraduatingDoc,
   isSuperAdmin,
   getEffectiveSecondaryResultMode,
+  sortGraduatingStudents,
 } from "../utils/graduatingAccess";
 
 export const getBroadsheet = async (req: AuthRequest, res: Response) => {
@@ -68,7 +69,11 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
     const isElementary = cls.category === "elementary" || isElementaryClass(cls.name, cls.category);
     const onlyPresentTerms = req.query.onlyPresentTerms !== "false";
 
-    const students = await Student.find({ class: classId as any }).sort({ numberInClass: 1, name: 1 });
+    const rawStudents = await Student.find({ class: classId as any }).sort({ numberInClass: 1, name: 1 });
+    const students =
+      isGraduating || rawStudents.some((s) => Boolean(s.seatNumber && s.seatNumber.trim()))
+        ? sortGraduatingStudents(rawStudents, "asc")
+        : rawStudents;
     const subjects = await Subject.find({ class: classId as any }).sort({ order: 1, nameEnglish: 1 });
 
     if (students.length === 0 || subjects.length === 0) {

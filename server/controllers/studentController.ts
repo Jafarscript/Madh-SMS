@@ -13,18 +13,30 @@ import {
   isClassGraduatingDoc,
   isSuperAdmin,
   getAllGraduatingClassIds,
+  sortGraduatingStudents,
 } from "../utils/graduatingAccess";
 
 const renumberClass = async (classId: string) => {
-  const students = await Student.find({ class: classId, status: "active" });
+  const [classDoc, students] = await Promise.all([
+    Class.findById(classId).select("name isGraduating").lean(),
+    Student.find({ class: classId, status: "active" }),
+  ]);
 
-  const collator = new Intl.Collator("ar");
-  const sorted = [...students].sort((a, b) => {
-    if (a.gender !== b.gender) {
-      return a.gender === "M" ? -1 : 1;
-    }
-    return collator.compare(a.name, b.name);
-  });
+  const hasSeatNumbers = students.some((s) => Boolean(s.seatNumber && s.seatNumber.trim()));
+  const useSeatOrder = isClassGraduatingDoc(classDoc) || hasSeatNumbers;
+
+  let sorted: typeof students;
+  if (useSeatOrder) {
+    sorted = sortGraduatingStudents(students, "asc");
+  } else {
+    const collator = new Intl.Collator("ar");
+    sorted = [...students].sort((a, b) => {
+      if (a.gender !== b.gender) {
+        return a.gender === "M" ? -1 : 1;
+      }
+      return collator.compare(a.name, b.name);
+    });
+  }
 
   await Promise.all(
     sorted.map((student, index) =>
@@ -348,6 +360,15 @@ export const getStudents = async (req: AuthRequest, res: Response) => {
     const students = await Student.find(filter)
       .populate("class", "name arm isGraduating category sourceSchool secondaryResultMode graduatingLevel")
       .sort({ numberInClass: 1, name: 1 });
+
+    const hasGradOrSeats = students.some(
+      (s: any) => isClassGraduatingDoc(s.class) || Boolean(s.seatNumber && s.seatNumber.trim())
+    );
+
+    if (req.query.class && hasGradOrSeats) {
+      return res.status(200).json(sortGraduatingStudents(students, "asc"));
+    }
+
     res.status(200).json(students);
   } catch (err) {
     res.status(500).json({ message: "Server error", error: (err as Error).message });
@@ -508,6 +529,10 @@ export const updateStudentGraduatingOptions = async (req: AuthRequest, res: Resp
     }
 
     await student.save();
+
+    if (seatNumber !== undefined) {
+      await renumberClass(student.class.toString());
+    }
 
     const populated = await Student.findById(student._id).populate(
       "class",

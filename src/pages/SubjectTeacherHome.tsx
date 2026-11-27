@@ -21,8 +21,10 @@ import {
   Lock,
   ShieldAlert,
   BookOpen,
+  ArrowUpDown,
 } from "lucide-react";
 import BulkScoreUploadModal from "../components/BulkScoreUploadModal";
+import { compareSeatNumbers } from "../utils/classCategoryHelper";
 
 interface Subject {
   _id: string;
@@ -55,6 +57,16 @@ interface ScoreEntry {
 
 type Field = "ca" | "exam" | "total";
 type FilterType = "all" | "missing" | "completed" | "at_risk";
+type StudentSortOrder = "seat_asc" | "seat_desc" | "number_asc" | "number_desc" | "name_asc";
+
+const SCORE_ENTRY_SORT_STORAGE_KEY = "scoreEntrySeatSortOrder";
+const VALID_SORT_ORDERS: StudentSortOrder[] = [
+  "seat_asc",
+  "seat_desc",
+  "number_asc",
+  "number_desc",
+  "name_asc",
+];
 
 const SubjectTeacherHome = () => {
   const { user, logout } = useAuth();
@@ -78,6 +90,23 @@ const SubjectTeacherHome = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [selectedClassFilter, setSelectedClassFilter] = useState<string>("all");
+  const [seatSortOrder, setSeatSortOrder] = useState<StudentSortOrder>(() => {
+    try {
+      const saved = localStorage.getItem(SCORE_ENTRY_SORT_STORAGE_KEY) as StudentSortOrder | null;
+      return saved && VALID_SORT_ORDERS.includes(saved) ? saved : "seat_asc";
+    } catch {
+      return "seat_asc";
+    }
+  });
+
+  const handleSortOrderChange = (nextOrder: StudentSortOrder) => {
+    setSeatSortOrder(nextOrder);
+    try {
+      localStorage.setItem(SCORE_ENTRY_SORT_STORAGE_KEY, nextOrder);
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   // Result publication & security state
   const [resultStatus, setResultStatus] = useState<"draft" | "published" | "locked">("draft");
@@ -203,12 +232,43 @@ const SubjectTeacherHome = () => {
   const selectedClassObj = selectedSubjectObj ? classesById[selectedSubjectObj.class] : null;
   const isClassLocked = resultStatus === "locked";
 
-  // stable, sorted order
+  const hasSeatNumbers = useMemo(
+    () => students.some((s) => Boolean(s.seatNumber && s.seatNumber.trim())),
+    [students]
+  );
+
+  // stable, user-configured sorted order (defaults to Seat No. ascending when seat numbers exist)
   const sortedStudents = useMemo(() => {
-    return [...students].sort(
-      (a, b) => (a.numberInClass ?? 0) - (b.numberInClass ?? 0)
-    );
-  }, [students]);
+    const list = [...students];
+    if (!hasSeatNumbers) {
+      return list.sort((a, b) => (a.numberInClass ?? 0) - (b.numberInClass ?? 0));
+    }
+
+    return list.sort((a, b) => {
+      if (seatSortOrder === "seat_asc" || seatSortOrder === "seat_desc") {
+        const dir = seatSortOrder === "seat_desc" ? "desc" : "asc";
+        const seatCmp = compareSeatNumbers(a.seatNumber, b.seatNumber, dir);
+        if (seatCmp !== 0) return seatCmp;
+        const numCmp = (a.numberInClass ?? 0) - (b.numberInClass ?? 0);
+        if (numCmp !== 0) return numCmp;
+        return a.name.localeCompare(b.name, "ar");
+      }
+      if (seatSortOrder === "number_desc") {
+        const numCmp = (b.numberInClass ?? 0) - (a.numberInClass ?? 0);
+        if (numCmp !== 0) return numCmp;
+        return compareSeatNumbers(a.seatNumber, b.seatNumber, "desc");
+      }
+      if (seatSortOrder === "name_asc") {
+        const nameCmp = a.name.localeCompare(b.name, "ar");
+        if (nameCmp !== 0) return nameCmp;
+        return compareSeatNumbers(a.seatNumber, b.seatNumber, "asc");
+      }
+      // number_asc
+      const numCmp = (a.numberInClass ?? 0) - (b.numberInClass ?? 0);
+      if (numCmp !== 0) return numCmp;
+      return compareSeatNumbers(a.seatNumber, b.seatNumber, "asc");
+    });
+  }, [students, hasSeatNumbers, seatSortOrder]);
 
   // filtered students based on search and status
   const filteredStudents = useMemo(() => {
@@ -713,7 +773,7 @@ const SubjectTeacherHome = () => {
                   />
                 </div>
                 {/* Filters */}
-                <div className="flex items-center gap-1 text-xs">
+                <div className="flex flex-wrap items-center gap-1 text-xs">
                   <button
                     onClick={() => setFilterType("all")}
                     className={`px-2.5 py-1 rounded-lg font-medium transition ${
@@ -739,6 +799,31 @@ const SubjectTeacherHome = () => {
                     Completed ({classStats.completedCount})
                   </button>
                 </div>
+
+                {/* Seat Number Ordering Control (shown whenever class has seat numbers) */}
+                {hasSeatNumbers && (
+                  <div className="flex items-center gap-1.5 bg-indigo-50/70 border border-indigo-200 rounded-xl px-2.5 py-1">
+                    <ArrowUpDown className="w-3.5 h-3.5 text-indigo-700 shrink-0" />
+                    <label
+                      htmlFor="score-entry-seat-order"
+                      className="text-[11px] font-semibold text-indigo-900 whitespace-nowrap"
+                    >
+                      Order:
+                    </label>
+                    <select
+                      id="score-entry-seat-order"
+                      value={seatSortOrder}
+                      onChange={(e) => handleSortOrderChange(e.target.value as StudentSortOrder)}
+                      className="bg-transparent text-xs font-semibold text-indigo-950 outline-none cursor-pointer pr-1"
+                    >
+                      <option value="seat_asc">Seat No. (Low → High)</option>
+                      <option value="seat_desc">Seat No. (High → Low)</option>
+                      <option value="number_asc">Class No. (1 → N)</option>
+                      <option value="number_desc">Class No. (N → 1)</option>
+                      <option value="name_asc">Name (A → Z)</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Right: Actions */}
@@ -789,6 +874,12 @@ const SubjectTeacherHome = () => {
                   <thead>
                     <tr className="text-left border-b border-slate-200 bg-slate-50">
                       <th className="p-3.5 font-semibold text-slate-600 w-14 text-center">No.</th>
+                      {hasSeatNumbers && (
+                        <th className="p-3.5 font-semibold text-indigo-800 w-28">
+                          Seat No.
+                          <span className="block text-[10px] text-indigo-500 font-normal">رقم الجلوس</span>
+                        </th>
+                      )}
                       <th className="p-3.5 font-semibold text-slate-700">Student Name</th>
                       <th className="p-3.5 font-semibold text-sky-950 w-36 bg-sky-50 border-r border-sky-100">
                         Total (100)
@@ -809,7 +900,7 @@ const SubjectTeacherHome = () => {
                   <tbody className="divide-y divide-gray-100">
                     {filteredStudents.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="text-center py-10 text-gray-400 text-xs">
+                        <td colSpan={hasSeatNumbers ? 8 : 7} className="text-center py-10 text-gray-400 text-xs">
                           No students found matching current filter/search.
                         </td>
                       </tr>
@@ -849,16 +940,22 @@ const SubjectTeacherHome = () => {
                             }`}
                           >
                             <td className="p-3.5 text-gray-400 text-center font-mono text-xs font-medium">
-                              {s.numberInClass ?? "-"}
+                              {s.numberInClass ?? rowIndex + 1}
                             </td>
+                            {hasSeatNumbers && (
+                              <td className="p-3.5 font-mono text-xs">
+                                {s.seatNumber ? (
+                                  <span className="px-2 py-0.5 font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 rounded">
+                                    {s.seatNumber}
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-300">—</span>
+                                )}
+                              </td>
+                            )}
                             <td className="p-3.5 font-medium text-gray-900">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span>{s.name}</span>
-                                {s.seatNumber && (
-                                  <span className="px-1.5 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded">
-                                    Seat: {s.seatNumber}
-                                  </span>
-                                )}
                                 {isExcluded && (
                                   <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 rounded">
                                     Not Offered
@@ -1117,7 +1214,7 @@ const SubjectTeacherHome = () => {
         <BulkScoreUploadModal
           isOpen={showBulkUpload}
           onClose={() => setShowBulkUpload(false)}
-          students={students}
+          students={sortedStudents}
           currentScores={entries}
           subjectName={selectedSubjectObj.nameEnglish}
           className={selectedClassObj.name + (selectedClassObj.arm ? ` ${selectedClassObj.arm}` : "")}

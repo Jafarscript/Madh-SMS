@@ -22,8 +22,7 @@ const ForgotPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [generatedCodeHint, setGeneratedCodeHint] = useState<string | null>(null);
-  
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
@@ -40,15 +39,15 @@ const ForgotPassword = () => {
     try {
       const cleanEmail = email.trim();
       const res = await api.post("/auth/forgot-password", { email: cleanEmail });
-      
-      setGeneratedCodeHint(res.data.resetCode || null);
-      if (res.data.resetCode) {
-        setCode(res.data.resetCode);
-      }
-      setSuccessMsg(res.data.message || `Verification code sent to ${cleanEmail}. Please enter the code below.`);
+
+      setCode("");
+      setSuccessMsg(
+        res.data.message ||
+          `If an account exists for ${cleanEmail}, a 6-digit verification code has been sent to your email inbox.`
+      );
       setStep("reset");
     } catch (err: any) {
-      setError(getFriendlyErrorMessage(err, "We couldn't find an account with that email address. Please check and try again."));
+      setError(getFriendlyErrorMessage(err, "We couldn't send a verification code right now. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -212,20 +211,6 @@ const ForgotPassword = () => {
               </form>
             ) : (
               <form onSubmit={handleResetPassword} className="space-y-4">
-                {generatedCodeHint && (
-                  <div className="bg-sky-50/70 border border-sky-200 rounded-xl p-3 text-center">
-                    <p className="text-[11px] font-bold uppercase tracking-wider text-sky-800">
-                      Verification Code
-                    </p>
-                    <p className="text-xl font-mono font-bold tracking-widest text-sky-900 my-1">
-                      {generatedCodeHint}
-                    </p>
-                    <p className="text-[10px] text-sky-700">
-                      Valid for 15 minutes. Automatically populated below.
-                    </p>
-                  </div>
-                )}
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
                     6-Digit Reset Code

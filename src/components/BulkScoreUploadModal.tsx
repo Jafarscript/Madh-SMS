@@ -6,12 +6,14 @@ interface Student {
   _id: string;
   name: string;
   numberInClass?: number;
+  seatNumber?: string;
 }
 
 interface ParsedRow {
   studentId?: string;
   studentName: string;
   numberInClass?: number;
+  seatNumber?: string;
   ca: string;
   exam: string;
   total: string;
@@ -49,20 +51,26 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
 
   if (!isOpen) return null;
 
+  const hasSeatNumbers = students.some((s) => Boolean(s.seatNumber && s.seatNumber.trim()));
+
   const downloadTemplate = () => {
-    const headers = ["NoInClass", "StudentName", "CA_40", "Exam_60", "Total_100"];
-    const sorted = [...students].sort((a, b) => (a.numberInClass || 0) - (b.numberInClass || 0));
-    
+    const headers = hasSeatNumbers
+      ? ["SeatNumber", "NoInClass", "StudentName", "CA_40", "Exam_60", "Total_100"]
+      : ["NoInClass", "StudentName", "CA_40", "Exam_60", "Total_100"];
+    const ordered = [...students];
+
     const csvContent = [
       headers.join(","),
-      ...sorted.map((s) => {
+      ...ordered.map((s) => {
         const cur = currentScores[s._id] || { ca: "", exam: "" };
-        const total = (cur.ca !== "" || cur.exam !== "") 
-          ? String((cur.ca !== "" ? Number(cur.ca) : 0) + (cur.exam !== "" ? Number(cur.exam) : 0))
-          : "";
-        // Sanitize name with quotes if it contains commas
+        const total =
+          cur.ca !== "" || cur.exam !== ""
+            ? String((cur.ca !== "" ? Number(cur.ca) : 0) + (cur.exam !== "" ? Number(cur.exam) : 0))
+            : "";
         const safeName = s.name.includes(",") ? `"${s.name}"` : s.name;
-        return `${s.numberInClass || ""},${safeName},${cur.ca},${cur.exam},${total}`;
+        return hasSeatNumbers
+          ? `${s.seatNumber || ""},${s.numberInClass || ""},${safeName},${cur.ca},${cur.exam},${total}`
+          : `${s.numberInClass || ""},${safeName},${cur.ca},${cur.exam},${total}`;
       }),
     ].join("\n");
 
@@ -109,9 +117,12 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
     };
 
     const headerParts = parseLine(rawLines[0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
-    
-    // Find column indexes
-    let noIdx = headerParts.findIndex((h) => h.includes("no") || h.includes("num") || h.includes("number"));
+
+    // Find column indexes (check seat/sit before generic number)
+    const seatIdx = headerParts.findIndex((h) => h.includes("seat") || h.includes("sit"));
+    let noIdx = headerParts.findIndex(
+      (h, idx) => idx !== seatIdx && (h.includes("no") || h.includes("num") || h.includes("number"))
+    );
     let nameIdx = headerParts.findIndex((h) => h.includes("name") || h.includes("student"));
     let caIdx = headerParts.findIndex((h) => h.includes("ca") || h.includes("test") || h.includes("cont"));
     let examIdx = headerParts.findIndex((h) => h.includes("exam") || h.includes("final"));
@@ -131,15 +142,20 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
       const cols = parseLine(line);
       if (cols.length === 0 || cols.every((c) => c === "")) return;
 
+      const rawSeat = seatIdx !== -1 ? (cols[seatIdx] || "").trim() : "";
       const rawNo = noIdx !== -1 ? Number(cols[noIdx]) : NaN;
       const rawName = nameIdx !== -1 ? cols[nameIdx] : "";
       let rawCa = caIdx !== -1 ? cols[caIdx] : "";
       let rawExam = examIdx !== -1 ? cols[examIdx] : "";
       let rawTotal = totalIdx !== -1 ? cols[totalIdx] : "";
 
-      // Match student in class
+      // Match student in class (seatNumber -> numberInClass -> name)
       let matchedStudent: Student | undefined;
-      if (!isNaN(rawNo) && rawNo > 0) {
+      if (rawSeat) {
+        const cleanSeat = rawSeat.toLowerCase();
+        matchedStudent = students.find((s) => s.seatNumber?.trim().toLowerCase() === cleanSeat);
+      }
+      if (!matchedStudent && !isNaN(rawNo) && rawNo > 0) {
         matchedStudent = students.find((s) => s.numberInClass === rawNo);
       }
       if (!matchedStudent && rawName) {

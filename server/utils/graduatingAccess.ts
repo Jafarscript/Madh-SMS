@@ -71,6 +71,36 @@ export const isSuperAdmin = (req: AuthRequest): boolean => {
   return req.user?.role === "super_admin";
 };
 
+export const compareSeatNumbers = (
+  seatA?: string | null,
+  seatB?: string | null,
+  direction: "asc" | "desc" = "asc"
+): number => {
+  const a = (seatA || "").trim();
+  const b = (seatB || "").trim();
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  const cmp = a.localeCompare(b, "en", { numeric: true, sensitivity: "base" });
+  return direction === "desc" ? -cmp : cmp;
+};
+
+export const sortGraduatingStudents = <
+  T extends { seatNumber?: string | null; numberInClass?: number | null; name?: string }
+>(
+  students: T[],
+  direction: "asc" | "desc" = "asc"
+): T[] => {
+  const collator = new Intl.Collator("ar");
+  return [...students].sort((a, b) => {
+    const seatCmp = compareSeatNumbers(a.seatNumber, b.seatNumber, direction);
+    if (seatCmp !== 0) return seatCmp;
+    const numCmp = (a.numberInClass ?? 0) - (b.numberInClass ?? 0);
+    if (numCmp !== 0) return numCmp;
+    return collator.compare(a.name || "", b.name || "");
+  });
+};
+
 export const getAllGraduatingClassIds = async (): Promise<string[]> => {
   const allClasses = await ClassModel.find().select("_id name isGraduating").lean();
   return allClasses

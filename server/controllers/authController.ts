@@ -486,15 +486,26 @@ export const forgotPassword = async (req: Request, res: Response) => {
     // Send reset code email via Resend
     const emailResult = await sendPasswordResetEmail(user.email, user.name, resetCode);
 
+    if (!emailResult.success) {
+      console.error("[Auth] Password reset email dispatch failed:", {
+        to: user.email,
+        reason: emailResult.reason,
+        error: emailResult.error,
+      });
+      user.resetPasswordCode = undefined;
+      user.resetPasswordExpires = undefined;
+      await user.save();
+
+      return res.status(502).json({
+        message: "We couldn't send the verification email right now. Please try again shortly or contact your school administrator.",
+        emailSent: false,
+      });
+    }
+
     res.status(200).json({
-      message: emailResult.success
-        ? `A 6-digit verification code has been sent to ${user.email}. Please check your email inbox.`
-        : `A password reset code has been generated. Please check your inbox or use the code below.`,
-      emailSent: emailResult.success,
+      message: `A 6-digit verification code has been sent to ${user.email}. Please check your email inbox (and spam folder).`,
+      emailSent: true,
       email: user.email,
-      name: user.name,
-      // Provide resetCode only when email sending was not successful or in development without key:
-      resetCode: emailResult.success ? undefined : resetCode,
       expiresInMinutes: 15,
     });
   } catch (err) {
