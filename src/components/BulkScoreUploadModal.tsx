@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useRef } from "react";
-import { Upload, Download, AlertCircle, CheckCircle2, X, FileSpreadsheet, RefreshCw } from "lucide-react";
+import { Upload, Download, AlertCircle, CheckCircle2, X, FileSpreadsheet, RefreshCw, ClipboardPaste } from "lucide-react";
 
 interface Student {
   _id: string;
   name: string;
   numberInClass?: number;
   seatNumber?: string;
+  admissionNumber?: string;
+  studentCode?: string;
 }
 
 interface ParsedRow {
@@ -14,6 +16,7 @@ interface ParsedRow {
   studentName: string;
   numberInClass?: number;
   seatNumber?: string;
+  matchedBy?: "seat" | "number" | "name";
   ca: string;
   exam: string;
   total: string;
@@ -32,6 +35,19 @@ interface BulkScoreUploadModalProps {
   onApply: (parsedEntries: Record<string, { ca: string; exam: string }>) => void;
 }
 
+const normalizeSeat = (val?: string | null): string =>
+  (val || "").trim().replace(/[\s\-_]+/g, "").toLowerCase();
+
+const normalizeArabic = (val?: string | null): string =>
+  (val || "")
+    .toLowerCase()
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ة/g, "ه")
+    .replace(/ى/g, "ي")
+    .replace(/[\u064B-\u065F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
 export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
   isOpen,
   onClose,
@@ -45,13 +61,15 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
   const [dragActive, setDragActive] = useState(false);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [fileName, setFileName] = useState<string>("");
+  const [pastedText, setPastedText] = useState<string>("");
+  const [showPasteBox, setShowPasteBox] = useState(false);
   const [autoSplitTotals, setAutoSplitTotals] = useState(true);
   const [hasParsed, setHasParsed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
 
-  const hasSeatNumbers = students.some((s) => Boolean(s.seatNumber && s.seatNumber.trim()));
+  const hasSeatNumbers = students.some((s) => Boolean((s.seatNumber || s.admissionNumber || s.studentCode || "").trim()));
 
   const downloadTemplate = () => {
     const headers = hasSeatNumbers
@@ -68,8 +86,9 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
             ? String((cur.ca !== "" ? Number(cur.ca) : 0) + (cur.exam !== "" ? Number(cur.exam) : 0))
             : "";
         const safeName = s.name.includes(",") ? `"${s.name}"` : s.name;
+        const seatVal = s.seatNumber || s.admissionNumber || s.studentCode || "";
         return hasSeatNumbers
-          ? `${s.seatNumber || ""},${s.numberInClass || ""},${safeName},${cur.ca},${cur.exam},${total}`
+          ? `${seatVal},${s.numberInClass || ""},${safeName},${cur.ca},${cur.exam},${total}`
           : `${s.numberInClass || ""},${safeName},${cur.ca},${cur.exam},${total}`;
       }),
     ].join("\n");
@@ -86,8 +105,8 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
   };
 
   const parseCsvText = (text: string) => {
-    // Split lines cleanly
-    const rawLines = text.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
+    const cleanText = text.replace(/^\uFEFF/, "");
+    const rawLines = cleanText.split(/\r\n|\n|\r/).filter((l) => l.trim().length > 0);
     if (rawLines.length === 0) return;
 
     // Detect delimiter: comma, tab, or semicolon
@@ -116,54 +135,173 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
       return result;
     };
 
-    const headerParts = parseLine(rawLines[0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    // Precompute normalized seat lookup across seatNumber, admissionNumber, studentCode
+    const seatLookup = new Map<string, Student>();
+    const digitsLookup = new Map<string, Student | "ambiguous">();
+    for (const s of students) {
+      for (const rawId of [s.seatNumber, s.admissionNumber, s.studentCode]) {
+        const norm = normalizeSeat(rawId);
+        if (norm) {
+          seatLookup.set(norm, s);
+          const digits = norm.replace(/[^0-9]/g, "");
+          if (digits.length >= 4) {
+            const existing = digitsLookup.get(digits);
+            if (!existing) digitsLookup.set(digits, s);
+            else if (existing !== "ambiguous" && existing._id !== s._id) {
+              digitsLookup.set(digits, "ambiguous");
+            }
+          }
+        }
+      }
+    }
 
-    // Find column indexes (check seat/sit before generic number)
-    const seatIdx = headerParts.findIndex((h) => h.includes("seat") || h.includes("sit"));
-    let noIdx = headerParts.findIndex(
-      (h, idx) => idx !== seatIdx && (h.includes("no") || h.includes("num") || h.includes("number"))
+    const firstRowCols = parseLine(rawLines[0]);
+    const headerRaw = firstRowCols.map((h) => h.trim().toLowerCase());
+    const headerParts = headerRaw.map((h) => h.replace(/[^a-z0-9]/g, ""));
+
+    // Check if first line is actually a header row or already data (e.g., user pasted without header)
+    const firstRowLooksLikeSeat =
+      normalizeSeat(firstRowCols[0]) !== "" && seatLookup.has(normalizeSeat(firstRowCols[0]));
+    const firstRowHasHeaderKeyword = headerRaw.some(
+      (h, i) =>
+        /seat|sit|name|student|ca|exam|total|score|mark|no|num|جلوس|اسم|درج|مجموع/.test(h) ||
+        /seat|sit|name|student|ca|exam|total|score|mark|no|num/.test(headerParts[i])
     );
-    let nameIdx = headerParts.findIndex((h) => h.includes("name") || h.includes("student"));
-    let caIdx = headerParts.findIndex((h) => h.includes("ca") || h.includes("test") || h.includes("cont"));
-    let examIdx = headerParts.findIndex((h) => h.includes("exam") || h.includes("final"));
-    let totalIdx = headerParts.findIndex((h) => h.includes("total") || h.includes("score") || h.includes("mark"));
+    const hasHeaderRow = !firstRowLooksLikeSeat && firstRowHasHeaderKeyword;
 
-    // Fallback if headers not named standardly
-    if (nameIdx === -1 && headerParts.length >= 2) nameIdx = 1;
-    if (noIdx === -1 && headerParts.length >= 1 && !isNaN(Number(headerParts[0]))) noIdx = 0;
-    if (caIdx === -1 && headerParts.length >= 3) caIdx = 2;
-    if (examIdx === -1 && headerParts.length >= 4) examIdx = 3;
-    if (totalIdx === -1 && headerParts.length >= 5) totalIdx = 4;
+    let seatIdx = -1;
+    let noIdx = -1;
+    let nameIdx = -1;
+    let caIdx = -1;
+    let examIdx = -1;
+    let totalIdx = -1;
 
-    const dataLines = rawLines.slice(1);
+    if (hasHeaderRow) {
+      seatIdx = headerParts.findIndex(
+        (h, idx) =>
+          h.includes("seat") ||
+          h.includes("sit") ||
+          h.includes("admission") ||
+          h.includes("studentcode") ||
+          headerRaw[idx].includes("جلوس")
+      );
+      noIdx = headerParts.findIndex(
+        (h, idx) => idx !== seatIdx && (h.includes("no") || h.includes("num") || h.includes("number"))
+      );
+      nameIdx = headerParts.findIndex(
+        (h, idx) => h.includes("name") || h.includes("student") || headerRaw[idx].includes("اسم")
+      );
+      caIdx = headerParts.findIndex((h) => h.includes("ca") || h.includes("test") || h.includes("cont"));
+      examIdx = headerParts.findIndex((h) => h.includes("exam") || h.includes("final"));
+      totalIdx = headerParts.findIndex(
+        (h, idx) =>
+          h.includes("total") ||
+          h.includes("score") ||
+          h.includes("mark") ||
+          headerRaw[idx].includes("محصل") ||
+          headerRaw[idx].includes("مجموع")
+      );
+    }
+
+    const dataLines = hasHeaderRow ? rawLines.slice(1) : rawLines;
+
+    // Auto-detect SeatNumber / Name / Total columns from sample data if header detection missed them
+    if (seatIdx === -1 && dataLines.length > 0) {
+      const sampleCols = dataLines.slice(0, 5).map(parseLine);
+      const maxCols = Math.max(...sampleCols.map((c) => c.length));
+      for (let col = 0; col < maxCols; col++) {
+        const hits = sampleCols.filter((c) => {
+          const norm = normalizeSeat(c[col]);
+          return norm !== "" && (seatLookup.has(norm) || /^[a-z]+\d{3,}$/i.test(norm));
+        }).length;
+        if (hits > 0) {
+          seatIdx = col;
+          break;
+        }
+      }
+    }
+
+    // Standard positional fallbacks if needed
+    if (nameIdx === -1 && firstRowCols.length >= 2) {
+      nameIdx = seatIdx === 1 ? 0 : 1;
+    }
+    if (caIdx === -1 && examIdx === -1 && totalIdx === -1) {
+      if (firstRowCols.length >= 5) {
+        caIdx = 2;
+        examIdx = 3;
+        totalIdx = 4;
+      } else if (firstRowCols.length === 4) {
+        caIdx = 1;
+        examIdx = 2;
+        totalIdx = 3;
+      } else if (firstRowCols.length === 3) {
+        totalIdx = 2;
+      } else if (firstRowCols.length === 2) {
+        totalIdx = 1;
+      }
+    } else if (totalIdx === -1 && firstRowCols.length >= 5) {
+      totalIdx = 4;
+    }
+
     const parsedRows: ParsedRow[] = [];
 
     dataLines.forEach((line) => {
       const cols = parseLine(line);
       if (cols.length === 0 || cols.every((c) => c === "")) return;
 
-      const rawSeat = seatIdx !== -1 ? (cols[seatIdx] || "").trim() : "";
+      let rawSeat = seatIdx !== -1 ? (cols[seatIdx] || "").trim() : "";
       const rawNo = noIdx !== -1 ? Number(cols[noIdx]) : NaN;
-      const rawName = nameIdx !== -1 ? cols[nameIdx] : "";
-      let rawCa = caIdx !== -1 ? cols[caIdx] : "";
-      let rawExam = examIdx !== -1 ? cols[examIdx] : "";
-      let rawTotal = totalIdx !== -1 ? cols[totalIdx] : "";
+      const rawName = nameIdx !== -1 && nameIdx !== seatIdx ? (cols[nameIdx] || "").trim() : "";
+      let rawCa = caIdx !== -1 ? (cols[caIdx] || "").trim() : "";
+      let rawExam = examIdx !== -1 ? (cols[examIdx] || "").trim() : "";
+      let rawTotal = totalIdx !== -1 ? (cols[totalIdx] || "").trim() : "";
 
-      // Match student in class (seatNumber -> numberInClass -> name)
-      let matchedStudent: Student | undefined;
-      if (rawSeat) {
-        const cleanSeat = rawSeat.toLowerCase();
-        matchedStudent = students.find((s) => s.seatNumber?.trim().toLowerCase() === cleanSeat);
+      // If seat column wasn't found or was empty, scan row cells for a matching seat/admission/code
+      if (!rawSeat) {
+        for (let idx = 0; idx < cols.length; idx++) {
+          if (idx === caIdx || idx === examIdx || idx === totalIdx) continue;
+          const norm = normalizeSeat(cols[idx]);
+          if (norm && seatLookup.has(norm)) {
+            rawSeat = cols[idx].trim();
+            break;
+          }
+        }
       }
+
+      // Match student in class: 1) Seat Number (seatNumber / admissionNumber / studentCode), 2) numberInClass, 3) Name
+      let matchedStudent: Student | undefined;
+      let matchedBy: "seat" | "number" | "name" | undefined;
+
+      if (rawSeat) {
+        const cleanSeat = normalizeSeat(rawSeat);
+        matchedStudent = seatLookup.get(cleanSeat);
+        if (!matchedStudent) {
+          const digits = cleanSeat.replace(/[^0-9]/g, "");
+          if (digits.length >= 4) {
+            const candidate = digitsLookup.get(digits);
+            if (candidate && candidate !== "ambiguous") {
+              matchedStudent = candidate;
+            }
+          }
+        }
+        if (matchedStudent) matchedBy = "seat";
+      }
+
       if (!matchedStudent && !isNaN(rawNo) && rawNo > 0) {
         matchedStudent = students.find((s) => s.numberInClass === rawNo);
+        if (matchedStudent) matchedBy = "number";
       }
+
       if (!matchedStudent && rawName) {
-        const cleanName = rawName.trim().toLowerCase();
-        matchedStudent = students.find((s) => s.name.trim().toLowerCase() === cleanName);
+        const cleanName = normalizeArabic(rawName);
+        matchedStudent = students.find((s) => normalizeArabic(s.name) === cleanName);
         if (!matchedStudent) {
-          matchedStudent = students.find((s) => s.name.toLowerCase().includes(cleanName) || cleanName.includes(s.name.toLowerCase()));
+          matchedStudent = students.find((s) => {
+            const sn = normalizeArabic(s.name);
+            return sn.includes(cleanName) || cleanName.includes(sn);
+          });
         }
+        if (matchedStudent) matchedBy = "name";
       }
 
       // Auto-split total if enabled and CA/Exam are empty
@@ -188,7 +326,8 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
 
       if (!matchedStudent) {
         status = "error";
-        errorMessage = `Could not match student '${rawName || `#${rawNo}`}' in this class`;
+        const label = [rawSeat, rawName, !isNaN(rawNo) ? `#${rawNo}` : ""].filter(Boolean).join(" / ");
+        errorMessage = `Could not match '${label || `Row #${parsedRows.length + 1}`}' by Seat No., Class No., or Name`;
       } else {
         const caNum = rawCa !== "" ? Number(rawCa) : null;
         const examNum = rawExam !== "" ? Number(rawExam) : null;
@@ -209,6 +348,10 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
         studentId: matchedStudent?._id,
         studentName: matchedStudent ? matchedStudent.name : (rawName || `Row #${parsedRows.length + 1}`),
         numberInClass: matchedStudent ? matchedStudent.numberInClass : (!isNaN(rawNo) ? rawNo : undefined),
+        seatNumber: matchedStudent
+          ? (matchedStudent.seatNumber || matchedStudent.admissionNumber || matchedStudent.studentCode || rawSeat)
+          : rawSeat,
+        matchedBy,
         ca: rawCa,
         exam: rawExam,
         total: rawTotal,
@@ -290,7 +433,7 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
                   1. Download Student Roster Template
                 </h4>
                 <p className="text-xs text-emerald-800 mt-1 leading-relaxed">
-                  Download a pre-filled CSV with your class student names and IDs ready for score entry.
+                  Download a pre-filled CSV with your class student names, seat numbers, and IDs ready for score entry.
                 </p>
               </div>
               <button
@@ -332,8 +475,49 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
               <p className="text-xs font-semibold text-gray-800">
                 {fileName ? fileName : "2. Click or Drag & Drop completed CSV here"}
               </p>
-              <p className="text-[11px] text-gray-500 mt-0.5">Supports CSV files exported from Excel or Sheets</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Matches by Seat Number first, then Class No. or Name</p>
             </div>
+          </div>
+
+          {/* Direct Paste Option */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                <ClipboardPaste className="w-4 h-4 text-emerald-700" />
+                Or paste CSV / spreadsheet rows directly (no file needed)
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPasteBox((v) => !v)}
+                className="text-xs font-semibold text-emerald-800 hover:text-emerald-950 underline"
+              >
+                {showPasteBox ? "Hide Paste Box" : "Paste CSV Text"}
+              </button>
+            </div>
+            {showPasteBox && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  rows={5}
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  placeholder={"SeatNumber,StudentName,CA_40,Exam_60,Total_100\nM108526,مريم شويودي,,,50"}
+                  className="w-full rounded-lg border border-slate-300 bg-white p-2.5 text-xs font-mono focus:ring-2 focus:ring-emerald-600 outline-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={!pastedText.trim()}
+                    onClick={() => {
+                      setFileName("Pasted CSV");
+                      parseCsvText(pastedText);
+                    }}
+                    className="px-4 py-1.5 bg-emerald-800 hover:bg-emerald-900 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition"
+                  >
+                    Parse Pasted Scores
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Options */}
@@ -379,9 +563,10 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
               </div>
 
               <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs max-h-64 overflow-y-auto overflow-x-auto custom-scrollbar">
-                <table className="w-full min-w-[500px] text-xs text-left">
+                <table className="w-full min-w-[580px] text-xs text-left">
                   <thead className="bg-gray-100 text-gray-600 sticky top-0">
                     <tr>
+                      <th className="py-2 px-3 w-24">Seat No.</th>
                       <th className="py-2 px-3 w-12 text-center">No</th>
                       <th className="py-2 px-3">Student Name</th>
                       <th className="py-2 px-3 w-20 text-center">CA (40)</th>
@@ -402,6 +587,9 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
                             : "hover:bg-gray-50"
                         }
                       >
+                        <td className="py-2 px-3 font-mono text-gray-700">
+                          {r.seatNumber || "-"}
+                        </td>
                         <td className="py-2 px-3 text-center text-gray-400 font-mono">
                           {r.numberInClass ?? "-"}
                         </td>
@@ -420,7 +608,12 @@ export const BulkScoreUploadModal: React.FC<BulkScoreUploadModalProps> = ({
                         <td className="py-2 px-3">
                           {r.status === "valid" && (
                             <span className="text-emerald-700 font-medium inline-flex items-center gap-1 text-[11px]">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Ready
+                              <CheckCircle2 className="w-3.5 h-3.5" />{" "}
+                              {r.matchedBy === "seat"
+                                ? "Ready (Seat No.)"
+                                : r.matchedBy === "number"
+                                ? "Ready (No.)"
+                                : "Ready (Name)"}
                             </span>
                           )}
                           {r.status === "warning" && (

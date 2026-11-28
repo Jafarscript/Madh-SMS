@@ -42,6 +42,8 @@ interface Student {
   name: string;
   numberInClass?: number;
   seatNumber?: string;
+  admissionNumber?: string;
+  studentCode?: string;
   excludedSubjects?: string[];
 }
 interface Term {
