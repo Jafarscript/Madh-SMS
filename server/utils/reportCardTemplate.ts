@@ -1066,7 +1066,7 @@ const toArabicNumerals = (val: number | string | null | undefined): string => {
 };
 
 const getArabicGradeRemark = (grade: string | null | undefined, percentage: number): string => {
-  if (percentage < 50 || grade === "Fail" || grade === "Poor" || grade === "F") return "راسب";
+  if (percentage < 40 || grade === "Fail" || grade === "Poor" || grade === "F") return "راسب";
   if (percentage >= 85 || grade === "Excellent" || grade === "A") return "ممتاز";
   if (percentage >= 75 || grade === "V. Good" || grade === "V.Good" || grade === "B") return "جيد جداً";
   if (percentage >= 65 || grade === "Good" || grade === "C") return "جيد";
@@ -1078,7 +1078,7 @@ const getElementaryGrade = (score: number | null | undefined, existingGrade?: st
     if (score >= 85) return "Excellent";
     if (score >= 75) return "V.Good";
     if (score >= 65) return "Good";
-    if (score >= 50) return "Fair";
+    if (score >= 40) return "Fair";
     return "Fail";
   }
   if (existingGrade) {
@@ -1139,7 +1139,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
       ? "V.Good"
       : overallPercentage >= 65
       ? "Good"
-      : overallPercentage >= 50
+      : overallPercentage >= 40
       ? "Fair"
       : "Fail";
   const fallbackRemarkArabic =
@@ -1149,7 +1149,7 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
       ? "جيد جداً"
       : overallPercentage >= 65
       ? "جيد"
-      : overallPercentage >= 50
+      : overallPercentage >= 40
       ? "مقبول"
       : "راسب";
 
@@ -1547,8 +1547,8 @@ const buildElementarySheetHtml = (data: ReportCardData): string => {
             <div>85 - 100 = Excellent</div>
             <div>75 - 84 = V.Good</div>
             <div>65 - 74 = Good</div>
-            <div>50 - 64 = Fair</div>
-            <div>1 - 49 = Fail</div>
+            <div>40 - 64 = Fair</div>
+            <div>0 - 39 = Fail</div>
           </div>
 
           <div class="seal-container">

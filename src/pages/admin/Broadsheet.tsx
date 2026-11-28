@@ -15,10 +15,34 @@ import {
   GraduationCap,
   Edit3,
 } from "lucide-react";
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
 import api from "../../api/axios";
 import PageHeader from "../../components/PageHeader";
 import { compareSeatNumbers } from "../../utils/classCategoryHelper";
+
+const SCHOOL_NAME_ARABIC = "معهد التعليم العربي الإسلامي للجمعية الخيرية";
+
+const getArabicTermOrdinal = (termNumber?: number): string => {
+  if (termNumber === 1) return "الأولى";
+  if (termNumber === 2) return "الثانية";
+  if (termNumber === 3) return "الثالثة";
+  return "";
+};
+
+const getHijriYearFromSession = (session?: string): string => {
+  const match = (session || "").match(/(\d{4})/);
+  const startYear = match ? parseInt(match[1], 10) : new Date().getFullYear();
+  try {
+    const formatted = new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", {
+      year: "numeric",
+    }).format(new Date(startYear, 8, 1));
+    const digits = formatted.match(/\d{4}/)?.[0];
+    if (digits) return digits;
+  } catch {
+    // Fallback calculation below
+  }
+  return String(Math.round(((startYear - 622) * 33) / 32));
+};
 
 interface ClassItem {
   _id: string;
@@ -258,29 +282,38 @@ const Broadsheet = () => {
     window.print();
   };
 
-  // True Excel export (.xlsx) with 100% Arabic Unicode encoding support
+  // True Excel export (.xlsx) with RTL, Arabic header, colored headers, bold text, and red failing cells
   const handleExportExcel = () => {
     if (sortedRows.length === 0) return;
 
-    // Headers with Arabic subject names only, separated English & Arabic remark columns
-    const headers = [
-      "No. (الرقم)",
-      "Seat No. (رقم الجلوس)",
-      "Student Name (اسم الطالب)",
+    const failThreshold = classMeta?.isElementary ? 40 : 50;
+    const { schoolName, examSubtitle } = getBroadsheetHeaderText();
+
+    const baseHeaders = [
+      "الرقم",
+      "رقم الجلوس",
+      "اسم الطالب",
       ...subjects.map((s) => s.nameArabic || s.nameEnglish),
-      "Total (المجموع)",
-      "Overall % (النسبة)",
-      "Remark (English)",
-      "التقدير (Arabic)",
-      "Position (الترتيب)",
+      "المجموع",
+      "النسبة",
+      "التقدير",
+      "الترتيب",
     ];
 
+    const extraHeaders: string[] = [];
     if (viewMode === "prior_summary") {
       sessionTerms.forEach((st) => {
-        headers.push(`Term ${st.termNumber} Total`, `Term ${st.termNumber} %`, `Term ${st.termNumber} Pos`);
+        extraHeaders.push(`الفترة ${st.termNumber} المجموع`, `الفترة ${st.termNumber} %`, `الفترة ${st.termNumber} الترتيب`);
       });
-      headers.push("Cumulative Average %", "Cumulative Remark (English)", "التقدير التراكمي (Arabic)", "Cumulative Position");
+      extraHeaders.push("المعدل التراكمي %", "التقدير التراكمي", "الترتيب التراكمي");
     }
+
+    const headers = [...baseHeaders, ...extraHeaders];
+    const totalCols = headers.length;
+    const subjectStartCol = 3;
+    const subjectEndCol = 3 + subjects.length - 1;
+    const pctColIdx = 3 + subjects.length + 1;
+    const remarkColIdx = 3 + subjects.length + 2;
 
     const excelData = sortedRows.map((r) => {
       const rowData: (string | number)[] = [
@@ -290,9 +323,8 @@ const Broadsheet = () => {
         ...r.subjectScores.map((sc) => (sc.isExcluded ? "" : sc.score !== null ? sc.score : "")),
         r.total,
         `${r.overallPercentage}%`,
-        r.remark,
-        r.remarkArabic,
-        r.position,
+        r.remarkArabic || r.remark,
+        r.position ?? "",
       ];
 
       if (viewMode === "prior_summary") {
@@ -302,8 +334,7 @@ const Broadsheet = () => {
         });
         rowData.push(
           r.cumulativePercentage !== undefined ? `${r.cumulativePercentage}%` : "",
-          r.cumulativeRemark || "",
-          r.cumulativeRemarkArabic || "",
+          r.cumulativeRemarkArabic || r.cumulativeRemark || "",
           r.cumulativePosition ?? ""
         );
       }
@@ -311,20 +342,135 @@ const Broadsheet = () => {
       return rowData;
     });
 
-    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...excelData]);
+    const aoa: (string | number)[][] = [
+      [schoolName, ...Array(Math.max(0, totalCols - 1)).fill("")],
+      [examSubtitle, ...Array(Math.max(0, totalCols - 1)).fill("")],
+      headers,
+      ...excelData,
+    ];
 
-    // Auto-fit column widths for clear visibility in Excel
+    const worksheet: any = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Merge title rows across all columns
+    worksheet["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: totalCols - 1 } },
+    ];
+
+    // Right-to-Left worksheet view
+    worksheet["!views"] = [{ RTL: true }];
+
+    const thinBorder = {
+      top: { style: "thin", color: { rgb: "CBD5E1" } },
+      bottom: { style: "thin", color: { rgb: "CBD5E1" } },
+      left: { style: "thin", color: { rgb: "CBD5E1" } },
+      right: { style: "thin", color: { rgb: "CBD5E1" } },
+    };
+
+    const headerBorder = {
+      top: { style: "thin", color: { rgb: "FFFFFF" } },
+      bottom: { style: "medium", color: { rgb: "FFFFFF" } },
+      left: { style: "thin", color: { rgb: "FFFFFF" } },
+      right: { style: "thin", color: { rgb: "FFFFFF" } },
+    };
+
+    // Style top title rows (Row 0 & Row 1)
+    for (let c = 0; c < totalCols; c++) {
+      const addr0 = XLSX.utils.encode_cell({ r: 0, c });
+      if (worksheet[addr0]) {
+        worksheet[addr0].s = {
+          font: { name: "Arial", sz: 16, bold: true, color: { rgb: "0F172A" } },
+          alignment: { horizontal: "center", vertical: "center" },
+        };
+      }
+      const addr1 = XLSX.utils.encode_cell({ r: 1, c });
+      if (worksheet[addr1]) {
+        worksheet[addr1].s = {
+          font: { name: "Arial", sz: 13, bold: true, color: { rgb: "1E293B" } },
+          alignment: { horizontal: "center", vertical: "center" },
+        };
+      }
+    }
+
+    // Style header row (Row 2) - subject columns emerald, other headers navy, all bold white text
+    for (let c = 0; c < totalCols; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 2, c });
+      const isSubjectCol = c >= subjectStartCol && c <= subjectEndCol;
+      if (worksheet[addr]) {
+        worksheet[addr].s = {
+          font: { name: "Arial", sz: 11, bold: true, color: { rgb: "FFFFFF" } },
+          fill: { patternType: "solid", fgColor: { rgb: isSubjectCol ? "065F46" : "1E3A8A" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: headerBorder,
+        };
+      }
+    }
+
+    // Style data rows (Row 3+) - all text bold; scores < failThreshold (and failing remark) in red bg + white bold text
+    excelData.forEach((rowArr, rIdx) => {
+      const excelRow = rIdx + 3;
+      const sourceRow = sortedRows[rIdx];
+      const isOverallFail =
+        sourceRow.overallPercentage < failThreshold ||
+        sourceRow.remarkArabic === "راسب" ||
+        sourceRow.remark === "Fail";
+
+      for (let c = 0; c < totalCols; c++) {
+        const addr = XLSX.utils.encode_cell({ r: excelRow, c });
+        if (!worksheet[addr]) continue;
+
+        let isRedCell = false;
+        if (c >= subjectStartCol && c <= subjectEndCol) {
+          const sc = sourceRow.subjectScores[c - subjectStartCol];
+          if (sc && !sc.isExcluded && sc.score !== null && sc.score < failThreshold) {
+            isRedCell = true;
+          }
+        } else if ((c === pctColIdx || c === remarkColIdx) && isOverallFail) {
+          isRedCell = true;
+        }
+
+        worksheet[addr].s = {
+          font: {
+            name: "Arial",
+            sz: 11,
+            bold: true,
+            color: { rgb: isRedCell ? "FFFFFF" : "0F172A" },
+          },
+          fill: isRedCell
+            ? { patternType: "solid", fgColor: { rgb: "DC2626" } }
+            : rIdx % 2 === 1
+            ? { patternType: "solid", fgColor: { rgb: "F8FAFC" } }
+            : undefined,
+          alignment: {
+            horizontal: c === 2 ? "right" : "center",
+            vertical: "center",
+          },
+          border: thinBorder,
+        };
+      }
+    });
+
+    // Row heights
+    worksheet["!rows"] = [
+      { hpt: 30 },
+      { hpt: 24 },
+      { hpt: 32 },
+      ...excelData.map(() => ({ hpt: 22 })),
+    ];
+
+    // Auto-fit column widths
     const colWidths = headers.map((h, i) => {
       let maxLen = h.length;
       excelData.forEach((row) => {
         const valStr = String(row[i] ?? "");
         if (valStr.length > maxLen) maxLen = valStr.length;
       });
-      return { wch: Math.max(maxLen + 4, 12) };
+      return { wch: Math.max(maxLen + 5, i === 2 ? 26 : 12) };
     });
     worksheet["!cols"] = colWidths;
 
     const workbook = XLSX.utils.book_new();
+    workbook.Workbook = { Views: [{ RTL: true }] };
     XLSX.utils.book_append_sheet(workbook, worksheet, "Broadsheet");
 
     const classNameStr = selectedClassObj?.name || "Class";
@@ -411,6 +557,36 @@ const Broadsheet = () => {
       ? selectedClassObj.branch
       : "";
 
+  const failThreshold = classMeta?.isElementary ? 40 : 50;
+
+  const getBroadsheetHeaderText = () => {
+    const termOrd = getArabicTermOrdinal(currentTermObj?.termNumber);
+    const rawClassName = (selectedClassObj?.name || "").trim();
+    const classTitle = rawClassName.startsWith("الصف")
+      ? rawClassName
+      : rawClassName
+      ? `الصف ${rawClassName}`
+      : "";
+    const armSuffix = selectedClassObj?.arm ? ` (${selectedClassObj.arm})` : "";
+    const sessionDisplay = (currentTermObj?.session || "").replace("/", " / ");
+    const hijriYear = getHijriYearFromSession(currentTermObj?.session);
+
+    const examSubtitle = [
+      "نتيجة امتحان",
+      termOrd ? `الفترة ${termOrd}` : "",
+      classTitle ? `ل${classTitle}${armSuffix}` : "",
+      sessionDisplay ? `للعام الدراسي ${sessionDisplay}` : "",
+      hijriYear ? `الموافق ${hijriYear} هـ` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    return {
+      schoolName: SCHOOL_NAME_ARABIC,
+      examSubtitle,
+    };
+  };
+
   const priorTermsList = currentTermObj
     ? sessionTerms.filter((st) => st.termNumber < currentTermObj.termNumber)
     : [];
@@ -428,7 +604,7 @@ const Broadsheet = () => {
   }) => (
     <th
       onClick={() => handleSort(sortk)}
-      className={`p-3 font-semibold text-gray-700 cursor-pointer select-none whitespace-nowrap hover:bg-black/5 transition ${align}`}
+      className={`p-3 font-semibold text-gray-700 cursor-pointer select-none whitespace-nowrap hover:bg-black/5 transition print:bg-[#1e3a8a] print:text-white print:font-bold print:border print:border-slate-300 [&_*]:print:text-white [&_*]:print:font-bold ${align}`}
     >
       <div>{label}</div>
       {labelAr && (
@@ -437,13 +613,33 @@ const Broadsheet = () => {
         </div>
       )}
       {sortKey === sortk && (
-        <span className="text-sky-600 text-xs ml-1">{sortAsc ? "▲" : "▼"}</span>
+        <span className="text-sky-600 text-xs ml-1 print:hidden">{sortAsc ? "▲" : "▼"}</span>
       )}
     </th>
   );
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto">
+      <style>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm;
+          }
+          body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .broadsheet-print-area {
+            direction: rtl !important;
+          }
+          .broadsheet-print-area table {
+            direction: rtl !important;
+            width: 100% !important;
+            font-weight: 700 !important;
+          }
+        }
+      `}</style>
       <div className="print:hidden">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
           <PageHeader
@@ -752,33 +948,44 @@ const Broadsheet = () => {
       {!loading && rows.length > 0 && (
         <div
           ref={printableRef}
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto custom-scrollbar print:shadow-none print:border-none print:p-0"
+          className="broadsheet-print-area bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto custom-scrollbar print:shadow-none print:border-none print:p-0 print:overflow-visible"
         >
-          {/* Header visible when printing */}
-          <div className="hidden print:block p-6 border-b text-center">
-            <h1 className="text-2xl font-bold text-gray-900">CLASS BROADSHEET & MASTER GRADEBOOK</h1>
-            <p className="text-sm text-gray-600 mt-1">
-              Class: {selectedClassObj?.name} {selectedClassObj?.arm ? `(${selectedClassObj.arm})` : ""}{" "}
-              {selectedBranchName ? `| Branch: ${selectedBranchName}` : ""} | Session:{" "}
-              {currentTermObj?.session} — Term {currentTermObj?.termNumber}
+          {/* Header visible ONLY when printing/saving as PDF */}
+          <div className="hidden print:block px-4 py-4 border-b-2 border-slate-800 text-center" dir="rtl">
+            <h1
+              className="text-2xl font-bold text-slate-950 leading-snug"
+              style={{ fontFamily: "Amiri, serif" }}
+            >
+              {getBroadsheetHeaderText().schoolName}
+            </h1>
+            <p
+              className="text-base font-bold text-slate-900 mt-1"
+              style={{ fontFamily: "Amiri, serif" }}
+            >
+              {getBroadsheetHeaderText().examSubtitle}
             </p>
+            {selectedBranchName && (
+              <p className="text-xs font-bold text-slate-700 mt-1">
+                {selectedBranchName}
+              </p>
+            )}
           </div>
 
-          <table className="text-sm w-full min-w-max border-collapse">
+          <table className="text-sm w-full min-w-max border-collapse print:text-xs print:font-bold">
             <thead>
-              <tr className="border-b bg-stone-100/80 print:bg-stone-100">
+              <tr className="border-b bg-stone-100/80 print:bg-[#1e3a8a]">
                 <SortHeader label="No." labelAr="الرقم" sortk="numberInClass" align="text-center" />
                 <SortHeader label="Seat No." labelAr="رقم الجلوس" sortk="seatNumber" align="text-center" />
-                <SortHeader label="Student Name" labelAr="اسم الطالب" sortk="name" />
+                <SortHeader label="Student Name" labelAr="اسم الطالب" sortk="name" align="text-left print:text-right" />
 
                 {/* Subject Columns: Arabic text only */}
                 {subjects.map((s) => (
                   <th
                     key={s._id}
-                    className="p-3 font-semibold text-gray-800 whitespace-nowrap text-center border-l border-stone-200/60 min-w-[95px]"
+                    className="p-3 font-semibold text-gray-800 whitespace-nowrap text-center border-l border-stone-200/60 min-w-[95px] print:bg-[#065f46] print:text-white print:font-bold print:border print:border-slate-300 [&_*]:print:text-white [&_*]:print:font-bold"
                   >
                     <div
-                      className="text-base text-emerald-950 font-bold leading-tight"
+                      className="text-base text-emerald-950 font-bold leading-tight print:text-white print:text-sm"
                       style={{ fontFamily: "Amiri, serif" }}
                       dir="rtl"
                     >
@@ -787,7 +994,7 @@ const Broadsheet = () => {
                     {viewMode === "detailed_subjects" && (
                       <div className="flex justify-center gap-1 text-[10px] text-gray-400 font-normal mt-1">
                         {sessionTerms.map((st) => (
-                          <span key={st._id} className="px-1 bg-stone-200 rounded">
+                          <span key={st._id} className="px-1 bg-stone-200 print:bg-emerald-700 rounded">
                             T{st.termNumber}
                           </span>
                         ))}
@@ -840,7 +1047,7 @@ const Broadsheet = () => {
                     {priorTermsList.map((pt) => (
                       <th
                         key={pt._id}
-                        className="p-3 font-semibold text-indigo-900 bg-indigo-50/50 whitespace-nowrap text-center border-l border-indigo-100"
+                        className="p-3 font-semibold text-indigo-900 bg-indigo-50/50 whitespace-nowrap text-center border-l border-indigo-100 print:bg-[#1e3a8a] print:text-white print:font-bold print:border print:border-slate-300 [&_*]:print:text-white [&_*]:print:font-bold"
                       >
                         <div className="text-xs font-bold">Term {pt.termNumber}</div>
                         <div className="text-[10px] text-indigo-600 font-normal">Tot / % / Pos</div>
@@ -852,11 +1059,11 @@ const Broadsheet = () => {
                       sortk="cumulativeAverage"
                       align="text-center"
                     />
-                    <th className="p-3 font-semibold text-gray-700 text-center whitespace-nowrap border-l border-emerald-100 bg-emerald-50/40">
+                    <th className="p-3 font-semibold text-gray-700 text-center whitespace-nowrap border-l border-emerald-100 bg-emerald-50/40 print:bg-[#1e3a8a] print:text-white print:font-bold print:border print:border-slate-300 [&_*]:print:text-white [&_*]:print:font-bold">
                       <div>Cumul. Remark</div>
                       <div className="text-[11px] text-gray-500 font-normal">English</div>
                     </th>
-                    <th className="p-3 font-semibold text-emerald-900 bg-emerald-50/40 text-center whitespace-nowrap border-l border-emerald-100">
+                    <th className="p-3 font-semibold text-emerald-900 bg-emerald-50/40 text-center whitespace-nowrap border-l border-emerald-100 print:bg-[#1e3a8a] print:text-white print:font-bold print:border print:border-slate-300 [&_*]:print:text-white [&_*]:print:font-bold">
                       <div
                         className="text-sm text-emerald-800 font-bold"
                         style={{ fontFamily: "Amiri, serif" }}
@@ -882,15 +1089,15 @@ const Broadsheet = () => {
                   key={row.student}
                   className="hover:bg-sky-50/40 transition print:hover:bg-transparent"
                 >
-                  <td className="p-3 text-center text-xs font-bold text-gray-500">
+                  <td className="p-3 text-center text-xs font-bold text-gray-500 print:text-slate-950 print:font-bold print:border print:border-slate-300">
                     {row.numberInClass ?? "—"}
                   </td>
 
-                  <td className="p-3 text-center text-xs font-mono font-semibold text-indigo-700 whitespace-nowrap">
+                  <td className="p-3 text-center text-xs font-mono font-semibold text-indigo-700 whitespace-nowrap print:text-slate-950 print:font-bold print:border print:border-slate-300">
                     {row.seatNumber || "—"}
                   </td>
 
-                  <td className="p-3 font-semibold text-gray-900 whitespace-nowrap">
+                  <td className="p-3 font-semibold text-gray-900 whitespace-nowrap print:text-slate-950 print:font-bold print:border print:border-slate-300 print:text-right">
                     <div className="flex items-center gap-2">
                       <span>{row.name}</span>
                       {!row.allSubjectsEntered && (
@@ -905,20 +1112,28 @@ const Broadsheet = () => {
                   </td>
 
                   {/* Subject Scores */}
-                  {row.subjectScores.map((sc) => (
+                  {row.subjectScores.map((sc) => {
+                    const isFailingScore = !sc.isExcluded && sc.score !== null && sc.score < failThreshold;
+                    return (
                     <td
                       key={sc.subject}
-                      className="p-3 text-center border-l border-gray-100 font-medium text-gray-800"
+                      className={`p-3 text-center border-l border-gray-100 font-medium print:font-bold print:border print:border-slate-300 ${
+                        isFailingScore
+                          ? "bg-red-600 text-white font-bold print:bg-red-600 print:text-white"
+                          : "text-gray-800 print:text-slate-950"
+                      }`}
                     >
                       {sc.isExcluded ? (
-                        <span className="text-[10px] text-gray-300 italic">N/A</span>
+                        <span className="text-[10px] text-gray-300 italic print:text-slate-500">N/A</span>
                       ) : viewMode === "detailed_subjects" ? (
                         <div className="flex justify-center gap-1.5 text-xs">
                           {sc.termScores?.map((ts) => (
                             <span
                               key={ts.termNumber}
-                              className={`px-1 py-0.5 rounded text-[11px] ${
-                                ts.termId === currentTermObj?._id
+                              className={`px-1 py-0.5 rounded text-[11px] print:font-bold ${
+                                ts.score !== null && ts.score < failThreshold
+                                  ? "bg-red-600 text-white font-bold"
+                                  : ts.termId === currentTermObj?._id
                                   ? "font-bold text-sky-900 bg-sky-100"
                                   : "text-gray-600 bg-gray-100"
                               }`}
@@ -928,38 +1143,53 @@ const Broadsheet = () => {
                           ))}
                         </div>
                       ) : (
-                        <span>
+                        <span className={isFailingScore ? "font-bold text-white" : "print:font-bold"}>
                           {sc.score !== null ? (
                             sc.score
                           ) : (
-                            <span className="text-gray-300">—</span>
+                            <span className="text-gray-300 print:text-slate-400">—</span>
                           )}
                         </span>
                       )}
                     </td>
-                  ))}
+                    );
+                  })}
 
                   {/* Total */}
-                  <td className="p-3 text-center font-bold text-gray-900 border-l border-gray-100">
+                  <td className="p-3 text-center font-bold text-gray-900 border-l border-gray-100 print:text-slate-950 print:font-bold print:border print:border-slate-300">
                     {row.total}
                   </td>
 
                   {/* Overall Percentage */}
-                  <td className="p-3 text-center font-bold text-sky-800 border-l border-gray-100">
+                  <td
+                    className={`p-3 text-center font-bold border-l border-gray-100 print:font-bold print:border print:border-slate-300 ${
+                      row.overallPercentage < failThreshold
+                        ? "bg-red-600 text-white print:bg-red-600 print:text-white"
+                        : "text-sky-800 print:text-slate-950"
+                    }`}
+                  >
                     {row.overallPercentage}%
                   </td>
 
                   {/* Remark (English Column) */}
-                  <td className="p-3 text-center border-l border-gray-100 whitespace-nowrap text-xs font-semibold text-gray-700">
+                  <td className="p-3 text-center border-l border-gray-100 whitespace-nowrap text-xs font-semibold text-gray-700 print:text-slate-950 print:font-bold print:border print:border-slate-300">
                     {row.remark}
                   </td>
 
                   {/* Remarks (Arabic Column) */}
-                  <td className="p-3 text-center border-l border-gray-100 whitespace-nowrap">
+                  <td
+                    className={`p-3 text-center border-l border-gray-100 whitespace-nowrap print:font-bold print:border print:border-slate-300 ${
+                      row.remarkArabic === "راسب" || row.overallPercentage < failThreshold
+                        ? "print:bg-red-600 print:text-white"
+                        : ""
+                    }`}
+                  >
                     <span
-                      className={`inline-block px-3 py-1 rounded-full text-sm font-bold border shadow-2xs ${getRemarkBadgeColor(
-                        row.remarkArabic
-                      )}`}
+                      className={`inline-block px-3 py-1 rounded-full text-sm font-bold border shadow-2xs print:border-none print:shadow-none print:px-1 print:py-0 ${
+                        row.remarkArabic === "راسب" || row.overallPercentage < failThreshold
+                          ? "bg-red-600 text-white border-red-700"
+                          : getRemarkBadgeColor(row.remarkArabic)
+                      }`}
                       style={{ fontFamily: "Amiri, serif" }}
                       dir="rtl"
                     >
@@ -968,8 +1198,8 @@ const Broadsheet = () => {
                   </td>
 
                   {/* Current Position */}
-                  <td className="p-3 text-center font-bold text-emerald-900 border-l border-gray-100">
-                    <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <td className="p-3 text-center font-bold text-emerald-900 border-l border-gray-100 print:text-slate-950 print:font-bold print:border print:border-slate-300">
+                    <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 print:bg-transparent print:border-none print:text-slate-950 print:font-bold">
                       {row.position}
                     </span>
                   </td>
@@ -984,44 +1214,60 @@ const Broadsheet = () => {
                         return (
                           <td
                             key={pt._id}
-                            className="p-3 text-center border-l border-indigo-100 bg-indigo-50/20 text-xs"
+                            className="p-3 text-center border-l border-indigo-100 bg-indigo-50/20 text-xs print:bg-transparent print:text-slate-950 print:font-bold print:border print:border-slate-300"
                           >
                             {tSum ? (
                               <div>
-                                <span className="font-semibold text-gray-800">
+                                <span className="font-semibold text-gray-800 print:text-slate-950 print:font-bold">
                                   {tSum.total}
                                 </span>{" "}
-                                <span className="text-indigo-700">({tSum.overallPercentage}%)</span>{" "}
-                                <span className="text-gray-500 text-[10px]">
+                                <span className="text-indigo-700 print:text-slate-950 print:font-bold">({tSum.overallPercentage}%)</span>{" "}
+                                <span className="text-gray-500 text-[10px] print:text-slate-950 print:font-bold">
                                   #{tSum.position ?? "—"}
                                 </span>
                               </div>
                             ) : (
-                              <span className="text-gray-300">—</span>
+                              <span className="text-gray-300 print:text-slate-400">—</span>
                             )}
                           </td>
                         );
                       })}
 
                       {/* Cumulative Session Percentage */}
-                      <td className="p-3 text-center font-bold text-emerald-800 border-l border-emerald-100 bg-emerald-50/20">
+                      <td
+                        className={`p-3 text-center font-bold border-l border-emerald-100 bg-emerald-50/20 print:font-bold print:border print:border-slate-300 ${
+                          row.cumulativePercentage !== undefined && row.cumulativePercentage < failThreshold
+                            ? "bg-red-600 text-white print:bg-red-600 print:text-white"
+                            : "text-emerald-800 print:bg-transparent print:text-slate-950"
+                        }`}
+                      >
                         {row.cumulativePercentage !== undefined
                           ? `${row.cumulativePercentage}%`
                           : "—"}
                       </td>
 
                       {/* Cumulative Remark (English Column) */}
-                      <td className="p-3 text-center border-l border-emerald-100 bg-emerald-50/20 text-xs font-semibold text-gray-700 whitespace-nowrap">
+                      <td className="p-3 text-center border-l border-emerald-100 bg-emerald-50/20 text-xs font-semibold text-gray-700 whitespace-nowrap print:bg-transparent print:text-slate-950 print:font-bold print:border print:border-slate-300">
                         {row.cumulativeRemark || "—"}
                       </td>
 
                       {/* Cumulative Remark (Arabic Column - التقدير التراكمي) */}
-                      <td className="p-3 text-center border-l border-emerald-100 bg-emerald-50/20 whitespace-nowrap">
+                      <td
+                        className={`p-3 text-center border-l border-emerald-100 bg-emerald-50/20 whitespace-nowrap print:font-bold print:border print:border-slate-300 ${
+                          row.cumulativeRemarkArabic === "راسب" ||
+                          (row.cumulativePercentage !== undefined && row.cumulativePercentage < failThreshold)
+                            ? "print:bg-red-600 print:text-white"
+                            : "print:bg-transparent"
+                        }`}
+                      >
                         {row.cumulativeRemarkArabic ? (
                           <span
-                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border ${getRemarkBadgeColor(
-                              row.cumulativeRemarkArabic
-                            )}`}
+                            className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border print:border-none print:px-1 print:py-0 ${
+                              row.cumulativeRemarkArabic === "راسب" ||
+                              (row.cumulativePercentage !== undefined && row.cumulativePercentage < failThreshold)
+                                ? "bg-red-600 text-white border-red-700"
+                                : getRemarkBadgeColor(row.cumulativeRemarkArabic)
+                            }`}
                             style={{ fontFamily: "Amiri, serif" }}
                             dir="rtl"
                           >
@@ -1033,8 +1279,8 @@ const Broadsheet = () => {
                       </td>
 
                       {/* Cumulative Position */}
-                      <td className="p-3 text-center font-bold text-emerald-900 border-l border-emerald-100 bg-emerald-50/20">
-                        <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300">
+                      <td className="p-3 text-center font-bold text-emerald-900 border-l border-emerald-100 bg-emerald-50/20 print:bg-transparent print:text-slate-950 print:font-bold print:border print:border-slate-300">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300 print:bg-transparent print:border-none print:text-slate-950 print:font-bold">
                           {row.cumulativePosition ?? "—"}
                         </span>
                       </td>

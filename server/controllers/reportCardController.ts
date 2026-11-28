@@ -246,7 +246,7 @@ export const buildReportCardData = async (
           grade = "Good";
           remark = "Good";
           remarkArabic = "جيد";
-        } else if (scoreForGrading >= 50) {
+        } else if (scoreForGrading >= 40) {
           grade = "Fair";
           remark = "Fair";
           remarkArabic = "مقبول";
@@ -479,7 +479,7 @@ export const buildReportCardData = async (
             ? { grade: "V.Good", remark: "V. Good", remarkArabic: "جيد جداً" }
             : effectiveOverallPercentage >= 65
             ? { grade: "Good", remark: "Good", remarkArabic: "جيد" }
-            : effectiveOverallPercentage >= 50
+            : effectiveOverallPercentage >= 40
             ? { grade: "Fair", remark: "Fair", remarkArabic: "مقبول" }
             : { grade: "Fail", remark: "Fail", remarkArabic: "راسب" })
         : getGradeRemark(effectiveOverallPercentage))
@@ -519,7 +519,7 @@ export const buildReportCardData = async (
     position: isEnrolledInCurrentTerm ? position : null,
     result: !isEnrolledInCurrentTerm
       ? "Not Enrolled"
-      : effectiveOverallPercentage >= 50
+      : effectiveOverallPercentage >= (isElementary ? 40 : 50)
         ? "Pass"
         : "Fail",
     totalStudentsInClass,

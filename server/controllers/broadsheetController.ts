@@ -129,6 +129,14 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
     }
 
     const getGradeRemark = (scorePercentage: number) => {
+      if (isElementary) {
+        if (scorePercentage >= 85) return { grade: "Excellent", remark: "Excellent", remarkArabic: "ممتاز" };
+        if (scorePercentage >= 75) return { grade: "V.Good", remark: "V. Good", remarkArabic: "جيد جداً" };
+        if (scorePercentage >= 65) return { grade: "Good", remark: "Good", remarkArabic: "جيد" };
+        if (scorePercentage >= 40) return { grade: "Fair", remark: "Fair", remarkArabic: "مقبول" };
+        return { grade: "Fail", remark: "Fail", remarkArabic: "راسب" };
+      }
+
       if (gradingScale && gradingScale.bands && gradingScale.bands.length > 0) {
         const sortedBands = [...gradingScale.bands].sort((a, b) => b.minScore - a.minScore);
         let band = sortedBands.find(
@@ -150,7 +158,7 @@ export const getBroadsheet = async (req: AuthRequest, res: Response) => {
       }
 
       if (scorePercentage >= 85) return { grade: "A1", remark: "Excellent", remarkArabic: "ممتاز" };
-      if (scorePercentage >= 75) return { grade: "B2", remark: "Very Good", remarkArabic: "جيد جدا" };
+      if (scorePercentage >= 75) return { grade: "B2", remark: "Very Good", remarkArabic: "جيد جداً" };
       if (scorePercentage >= 60) return { grade: "C4", remark: "Good", remarkArabic: "جيد" };
       if (scorePercentage >= 50) return { grade: "D7", remark: "Pass", remarkArabic: "مقبول" };
       return { grade: "F9", remark: "Fail", remarkArabic: "راسب" };
